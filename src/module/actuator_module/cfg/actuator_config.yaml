@@ -1,0 +1,38 @@
+actuator:
+  arm:
+    name: "geniarm"
+    port: "can0"
+    joint_limits:
+      lower: [-2.61, -0.001, -3.7, -1.5708, -1.5708, -1.5708]
+      upper: [2.61, 3.7, 0.001, 1.5708, 1.5708, 1.5708]
+    joints:
+      - name: "joint1"
+        motor_id: 0x01
+        feedback_id: 0x11
+        model: "DM4340P"
+      - name: "joint2"
+        motor_id: 0x02
+        feedback_id: 0x12
+        model: "DM4340P"
+      - name: "joint3"
+        motor_id: 0x03
+        feedback_id: 0x13
+        model: "DM4340P"
+      - name: "joint4"
+        motor_id: 0x04
+        feedback_id: 0x14
+        model: "DM4310"
+      - name: "joint5"
+        motor_id: 0x05
+        feedback_id: 0x15
+        model: "DM4310"
+      - name: "joint6"
+        motor_id: 0x06
+        feedback_id: 0x16
+        model: "DM4310"
+  gripper:
+    name: "geniarm_gripper"
+    port: "can0"
+    motor_id: 0x07
+    feedback_id: 0x17
+    model: "DM4310"
