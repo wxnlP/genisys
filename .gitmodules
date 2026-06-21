@@ -1,0 +1,4 @@
+[submodule "src/module/robotic_arm_sdk"]
+	path = src/module/robotic_arm_sdk
+	url = https://github.com/wxnlP/robotic_arm_sdk.git
+	branch = framework_feat

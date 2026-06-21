@@ -1,0 +1,83 @@
+dynamics:
+  gravity: [0.0, 0.0, -9.81]
+  # 所有坐标在对应连杆坐标系 {i} 中表达（与 MDH 一致）
+  # mass : 连杆质量 (kg)
+  # com  : 质心在连杆坐标系 {i} 中的位置 (m)
+  # inertia : 绕质心的惯性张量 (kg·m²)，对称矩阵只需 6 个独立分量
+  links:
+    - name: "link1"
+      mass: 2.5
+      com: [0.0, 0.02, 0.06]
+      inertia:
+        ixx: 0.012
+        iyy: 0.008
+        izz: 0.015
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "link2"
+      mass: 3.2
+      com: [0.13, 0.0, 0.04]
+      inertia:
+        ixx: 0.025
+        iyy: 0.030
+        izz: 0.018
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "link3"
+      mass: 2.8
+      com: [0.12, 0.0, 0.03]
+      inertia:
+        ixx: 0.020
+        iyy: 0.022
+        izz: 0.014
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "link4"
+      mass: 1.0
+      com: [0.0, 0.02, 0.05]
+      inertia:
+        ixx: 0.005
+        iyy: 0.004
+        izz: 0.006
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "link5"
+      mass: 0.8
+      com: [0.0, 0.0, 0.04]
+      inertia:
+        ixx: 0.003
+        iyy: 0.003
+        izz: 0.004
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "link6"
+      mass: 0.5
+      com: [0.0, 0.0, 0.02]
+      inertia:
+        ixx: 0.001
+        iyy: 0.001
+        izz: 0.001
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+  # ---- 关节摩擦参数 ----
+  # coulomb : 库仑摩擦系数 (N·m)
+  # viscous : 粘性摩擦系数 (N·m·s/rad)
+  friction:
+    joint1: {coulomb: 0.15, viscous: 0.08}
+    joint2: {coulomb: 0.20, viscous: 0.10}
+    joint3: {coulomb: 0.12, viscous: 0.06}
+    joint4: {coulomb: 0.05, viscous: 0.03}
+    joint5: {coulomb: 0.05, viscous: 0.03}
+    joint6: {coulomb: 0.03, viscous: 0.02}
