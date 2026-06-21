@@ -36,6 +36,8 @@ cmake -B build -G Ninja \
     -DAIMRT_BUILD_WITH_PROTOBUF=ON\
     -DAIMRT_BUILD_ROS2_PLUGIN=ON\
     -DAIMRT_BUILD_PROTOCOLS=ON\
+    -DSDK_BUILD_WITH_EXAMPLES=OFF \
+    -DDMDRIVER_BUILD_WITH_EXAMPLE=OFF \
     $@
 
 cmake --build build --config Release --target install --parallel $(nproc)

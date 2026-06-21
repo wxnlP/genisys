@@ -39,3 +39,17 @@ target_link_libraries(
 if(ROBOTIC_ARM_BUILD_TESTS AND test_files)
   add_gtest_target(TEST_TARGET ${CUR_TARGET_NAME} TEST_SRC ${test_files})
 endif()
+
+# Install config files
+install(
+  DIRECTORY cfg/
+  DESTINATION bin/cfg/${CUR_DIR}
+  USE_SOURCE_PERMISSIONS
+)
+
+# install config files to build dir
+install(
+  DIRECTORY cfg/
+  DESTINATION ${CMAKE_BINARY_DIR}/cfg/${CUR_DIR}
+  USE_SOURCE_PERMISSIONS
+)

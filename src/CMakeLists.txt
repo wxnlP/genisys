@@ -10,6 +10,8 @@ add_subdirectory(protocols/ros2_proto)
 add_subdirectory(module/control_module)
 add_subdirectory(module/actuator_module)
 add_subdirectory(module/sim_module)
+add_subdirectory(module/robotic_arm_sdk/actuator)
+add_subdirectory(module/robotic_arm_sdk/arm_control)
 
 # pkg
 add_subdirectory(pkg/arm_control_pkg)
