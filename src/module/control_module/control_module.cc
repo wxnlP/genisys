@@ -67,14 +67,11 @@ bool ControlModule::Start() {
 
 void ControlModule::Shutdown() {
   try {
-    // 1. 设置关闭标志，阻止后续 channel 回调访问成员
-    is_shutting_down_.store(true);
-
-    // 2. 停止发布循环
+    // 1. 停止发布循环和 channel 回调（与 DcuDriverModule 模式一致）
     is_running_.store(false);
     stop_sig_.get_future().wait();
 
-    // 3. 等待已排队的 channel 回调执行完毕
+    // 2. 等待已排队的 channel 回调执行完毕
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
   } catch (const std::exception& e) {
     AIMRT_ERROR("control_module Shutdown failed, {}", e.what());
@@ -161,7 +158,7 @@ void ControlModule::ControlLoop() {
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {
-  if (is_shutting_down_.load()) return;
+  if (!is_running_.load()) return;
 
   ArmMotion::JointState joint_state;
   int n = msg->joints_size();

@@ -39,7 +39,6 @@ class ActuatorModule : public aimrt::ModuleBase {
   aimrt::executor::ExecutorRef pub_executor_;
 
   std::atomic_bool is_running_{false};
-  std::atomic_bool is_shutting_down_{false};
   std::promise<void> stop_sig_;
 
   std::string topic_sub_joint_cmd_;

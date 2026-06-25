@@ -41,7 +41,6 @@ class ControlModule : public aimrt::ModuleBase {
   aimrt::executor::ExecutorRef cycle_control_executor_;
 
   std::atomic_bool is_running_{false};
-  std::atomic_bool is_shutting_down_{false};
   std::promise<void> stop_sig_;
 
   std::string topic_pub_joint_cmd_;
