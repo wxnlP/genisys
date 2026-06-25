@@ -125,7 +125,7 @@ void ControlModule::ControlLoop() {
       if (gripper_controller_->GetGripperCommand(gripper_cmd) == -1) {
         // 无规划轨迹 — 复用上一帧指令保持
         if (last_gripper_cmd_.stiffness > 0.0) {
-          joint_cmd = last_gripper_cmd_;
+          gripper_cmd = last_gripper_cmd_;
         } else {
           // 尚无有效历史指令，跳过
           std::this_thread::sleep_until(next_loop_time + period);
@@ -133,7 +133,7 @@ void ControlModule::ControlLoop() {
           continue;
         }
       } else {
-        last_gripper_cmd_ = joint_cmd;
+        last_gripper_cmd_ = gripper_cmd;
       }
       auto* joint = joint_cmd_msg.add_joints();
       joint->set_name(joint_names_.back());
