@@ -1,5 +1,6 @@
 #include "actuator_module/actuator_module.h"
 #include <fmt/ranges.h>
+#include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "yaml-cpp/yaml.h"
 
@@ -71,11 +72,17 @@ bool ActuatorModule::Start() {
 
 void ActuatorModule::Shutdown() {
   try {
-    // 停止发布循环
+    // 1. 设置关闭标志，阻止后续 channel 回调访问成员
+    is_shutting_down_.store(true);
+
+    // 2. 停止发布循环
     is_running_.store(false);
     stop_sig_.get_future().wait();
 
-    // 失能各执行器
+    // 3. 等待已排队的 channel 回调执行完毕（检测到 is_shutting_down_ 后立即返回）
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // 4. 失能各执行器
     if (arm_actuator_) {
       arm_actuator_->Disable();
     }
@@ -83,7 +90,7 @@ void ActuatorModule::Shutdown() {
       gripper_actuator_->Disable();
     }
 
-    // 关闭内部线程
+    // 5. 关闭内部线程
     if (actuator_manager_) {
       actuator_manager_->Shutdown();
     }
@@ -152,6 +159,7 @@ void ActuatorModule::PublishLoop() {
 }
 
 void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandArray>& msg) {
+  if (is_shutting_down_.load()) return;
   AIMRT_INFO("Received joint command message with {} joints.", msg->joints_size());
   int n = msg->joints_size();
   // int expected = gripper_actuator_ ? 7 : 6;

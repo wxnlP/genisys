@@ -1,5 +1,6 @@
 #include "control_module/control_module.h"
 #include <fmt/ranges.h>
+#include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "yaml-cpp/yaml.h"
 
@@ -66,9 +67,15 @@ bool ControlModule::Start() {
 
 void ControlModule::Shutdown() {
   try {
-    // 停止发布循环
+    // 1. 设置关闭标志，阻止后续 channel 回调访问成员
+    is_shutting_down_.store(true);
+
+    // 2. 停止发布循环
     is_running_.store(false);
     stop_sig_.get_future().wait();
+
+    // 3. 等待已排队的 channel 回调执行完毕
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
   } catch (const std::exception& e) {
     AIMRT_ERROR("control_module Shutdown failed, {}", e.what());
   }
@@ -154,6 +161,8 @@ void ControlModule::ControlLoop() {
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {
+  if (is_shutting_down_.load()) return;
+
   ArmMotion::JointState joint_state;
   int n = msg->joints_size();
   // int expected = gripper_controller_ ? 7 : 6;
