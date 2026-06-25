@@ -14,9 +14,9 @@ aimrt:
       - path: ./libarm_control_pkg.so
         disable_modules: ['SimModule']
     modules:
-      - name: ControlModule
-        log_lvl: INFO
       - name: ActuatorModule
+        log_lvl: INFO
+      - name: ControlModule
         log_lvl: INFO
   executor:
     executors:
