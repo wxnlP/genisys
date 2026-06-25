@@ -122,26 +122,27 @@ void ControlModule::ControlLoop() {
       joint->set_damping(joint_cmd.damping[i]);
     }
     if (gripper_controller_) {
+      bool has_gripper_cmd = true;
       if (gripper_controller_->GetGripperCommand(gripper_cmd) == -1) {
         // 无规划轨迹 — 复用上一帧指令保持
         if (last_gripper_cmd_.stiffness > 0.0) {
           gripper_cmd = last_gripper_cmd_;
         } else {
-          // 尚无有效历史指令，跳过
-          std::this_thread::sleep_until(next_loop_time + period);
-          next_loop_time += period;
-          continue;
+          // 尚无有效历史指令，仅跳过夹爪部分，手臂关节照常下发
+          has_gripper_cmd = false;
         }
       } else {
         last_gripper_cmd_ = gripper_cmd;
       }
-      auto* joint = joint_cmd_msg.add_joints();
-      joint->set_name(joint_names_.back());
-      joint->set_position(gripper_cmd.position);
-      joint->set_velocity(gripper_cmd.velocity);
-      joint->set_effort(gripper_cmd.effort);
-      joint->set_stiffness(gripper_cmd.stiffness);
-      joint->set_damping(gripper_cmd.damping);
+      if (has_gripper_cmd) {
+        auto* joint = joint_cmd_msg.add_joints();
+        joint->set_name(joint_names_.back());
+        joint->set_position(gripper_cmd.position);
+        joint->set_velocity(gripper_cmd.velocity);
+        joint->set_effort(gripper_cmd.effort);
+        joint->set_stiffness(gripper_cmd.stiffness);
+        joint->set_damping(gripper_cmd.damping);
+      }
     }
 
     aimrt::channel::Publish(pub_joint_cmd_, joint_cmd_msg);
