@@ -156,11 +156,11 @@ void ControlModule::ControlLoop() {
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {
   ArmMotion::JointState joint_state;
   int n = msg->joints_size();
-  int expected = gripper_controller_ ? 7 : 6;
-  if (n < expected) {
-    AIMRT_ERROR("关节数量 {} < {}, 检查 {} channel", n, expected, topic_sub_joint_state_);
-    return;
-  }
+  // int expected = gripper_controller_ ? 7 : 6;
+  // if (n < expected) {
+  //   AIMRT_ERROR("关节数量 {} < {}, 检查 {} channel", n, expected, topic_sub_joint_state_);
+  //   return;
+  // }
 
   for (int i = 0; i < 6; ++i) {
     joint_state.position[i] = msg->joints(i).position();

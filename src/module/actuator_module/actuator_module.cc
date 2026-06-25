@@ -154,11 +154,11 @@ void ActuatorModule::PublishLoop() {
 void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandArray>& msg) {
   AIMRT_INFO("Received joint command message with {} joints.", msg->joints_size());
   int n = msg->joints_size();
-  int expected = gripper_actuator_ ? 7 : 6;
-  if (n < expected) {
-    AIMRT_ERROR("关节数量 {} < {}, 检查 {} channel", n, expected, topic_sub_joint_cmd_);
-    return;
-  }
+  // int expected = gripper_actuator_ ? 7 : 6;
+  // if (n < expected) {
+  //   AIMRT_ERROR("关节数量 {} < {}, 检查 {} channel", n, expected, topic_sub_joint_cmd_);
+  //   return;
+  // }
 
   ArmCtrlBase::JointCommand joint_cmd;
   for (int i = 0; i < 6; ++i) {
