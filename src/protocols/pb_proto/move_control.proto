@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+import "error.proto";
+import "quaternion.proto";
+import "vector3.proto";
+
+package robotic_arm.protocols;
+
+message Pose {
+  aimrt.protocols.geometry.Quaternion orientation = 1;
+  aimrt.protocols.geometry.Vector3 position = 2;
+}
+
+message Joint {
+  repeated double position = 1;
+}
+
+message MoveLRequest {
+  Pose pose = 1;
+  double v = 2;
+  double a = 3;
+}
+
+message MoveJRequest {
+  Joint position = 1;
+  double v = 2;
+  double a = 3;
+}
+
+message MoveLMutiRequest {
+  repeated Pose pose = 1;
+  double r = 2;
+  double v = 3;
+  double a = 4;
+}
+
+message MoveJMutiRequest {
+  repeated Joint position = 1;
+  double r = 2;
+  double v = 3;
+  double a = 4;
+}
+
+message MoveResponse {
+  aimrt.protocols.common.Error error = 1;
+}
+
+service MoveControlService {
+  rpc MoveL(MoveLRequest) returns (MoveResponse);
+  rpc MoveJ(MoveJRequest) returns (MoveResponse);
+  rpc MoveLMuti(MoveLMutiRequest) returns (MoveResponse);
+  rpc MoveJMuti(MoveJMutiRequest) returns (MoveResponse);
+}

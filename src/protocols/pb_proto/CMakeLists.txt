@@ -13,8 +13,20 @@ set(CUR_TARGET_ALIAS_NAME ${CUR_SUPERIOR_NAMESPACE}::${CUR_DIR})
 add_protobuf_gencode_target_for_proto_path(
   TARGET_NAME ${CUR_TARGET_NAME}_pb_gencode
   PROTO_PATH ${CMAKE_CURRENT_SOURCE_DIR}
-  GENCODE_PATH ${CMAKE_CURRENT_BINARY_DIR})
+  GENCODE_PATH ${CMAKE_CURRENT_BINARY_DIR}
+  DEP_PROTO_TARGETS aimrt::protocols::common_pb_gencode
+                    aimrt::protocols::geometry_pb_gencode)
 add_library(${CUR_TARGET_ALIAS_NAME}_pb_gencode ALIAS ${CUR_TARGET_NAME}_pb_gencode)
+
+add_protobuf_aimrt_rpc_gencode_target_for_proto_files(
+  TARGET_NAME       ${CUR_TARGET_NAME}_move_rpc_gencode
+  PROTO_FILES       ${CMAKE_CURRENT_SOURCE_DIR}/move_control.proto
+  GENCODE_PATH      ${CMAKE_CURRENT_BINARY_DIR}
+  DEP_PROTO_TARGETS ${CUR_TARGET_NAME}_pb_gencode
+                    aimrt::protocols::common_pb_gencode
+                    aimrt::protocols::geometry_pb_gencode
+)
+add_library(${CUR_TARGET_ALIAS_NAME}_move_rpc_gencode ALIAS ${CUR_TARGET_NAME}_move_rpc_gencode)
 
 # Set installation
 install(
@@ -30,3 +42,12 @@ install(
   ARCHIVE DESTINATION lib
           FILE_SET HEADERS
           DESTINATION include/${CUR_TARGET_NAME}_pb_gencode)
+
+
+set_property(TARGET ${CUR_TARGET_NAME}_move_rpc_gencode PROPERTY EXPORT_NAME ${CUR_TARGET_ALIAS_NAME}_move_rpc_gencode)
+install(
+  TARGETS ${CUR_TARGET_NAME}_move_rpc_gencode
+  EXPORT ${INSTALL_CONFIG_NAME}
+  ARCHIVE DESTINATION lib
+          FILE_SET HEADERS
+          DESTINATION include/${CUR_TARGET_NAME}_move_rpc_gencode)

@@ -1,5 +1,6 @@
 #include "control_module/control_module.h"
-
+#include <fmt/ranges.h>
+#include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "yaml-cpp/yaml.h"
 
 namespace robotic_arm::control_module {
@@ -13,12 +14,32 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     auto file_path = core_.GetConfigurator().GetConfigFilePath();
     if (!file_path.empty()) {
       YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
-      for (const auto& itr : cfg_node) {
-        std::string k = itr.first.as<std::string>();
-        std::string v = itr.second.as<std::string>();
-        AIMRT_INFO("cfg [{} : {}]", k, v);
-      }
+      control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
+      topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
+      topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
+      control_frequency_ = cfg_node["control_frequency"].as<double>();
+      auto robot_cfg_file = cfg_node["config_file"].as<std::string>();
+
+      arm_manager_ = std::make_shared<ArmManager>(robot_cfg_file);
+      arm_controller_ = arm_manager_->GetArmController();
+      gripper_controller_ = arm_manager_->GetGripperController();
     }
+
+    arm_manager_->GetJointNames(joint_names_);
+    AIMRT_INFO("\n---\n控制器器关节名称：{}\n---", joint_names_);
+
+    cycle_control_executor_ = core_.GetExecutorManager().GetExecutor(control_executor_name_);
+
+    pub_joint_cmd_ = core_.GetChannelHandle().GetPublisher(topic_pub_joint_cmd_);
+    aimrt::channel::RegisterPublishType<JointCommandArray>(pub_joint_cmd_);
+
+    sub_joint_state_ = core_.GetChannelHandle().GetSubscriber(topic_sub_joint_state_);
+    aimrt::channel::Subscribe<JointStateArray>(
+        sub_joint_state_, std::bind(&ControlModule::JointStateCallback, this, std::placeholders::_1));
+
+    // 创建 RPC 服务，传入控制器指针
+    move_control_service_ = std::make_shared<MoveControlServiceImpl>(arm_controller_, gripper_controller_);
+    core_.GetRpcHandle().RegisterService(move_control_service_.get());
 
   } catch (const std::exception& e) {
     AIMRT_ERROR("Init failed, {}", e.what());
@@ -31,12 +52,108 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 }
 
 bool ControlModule::Start() {
+  try {
+    is_running_.store(true);
+    cycle_control_executor_.Execute(std::bind(&ControlModule::ControlLoop, this));
+
+  } catch (const std::exception& e) {
+    AIMRT_ERROR("control_module Start failed, {}", e.what());
+    return false;
+  }
   AIMRT_INFO("control_module Started succeeded.");
   return true;
 }
 
 void ControlModule::Shutdown() {
+  try {
+    // 停止发布循环
+    is_running_.store(false);
+    stop_sig_.get_future().wait();
+  } catch (const std::exception& e) {
+    AIMRT_ERROR("control_module Shutdown failed, {}", e.what());
+  }
   AIMRT_INFO("control_module Shutdown succeeded.");
+}
+
+void ControlModule::ControlLoop() {
+  // 计算周期
+  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / control_frequency_ * 1000000000));
+  // 记录下一次循环时间
+  auto next_loop_time = std::chrono::steady_clock::now();
+  // 序列
+  uint64_t seq_count_ = 0;
+
+  JointCommandArray joint_cmd_msg;
+  ArmMotion::JointCommand joint_cmd;
+  GripperController::GripperCommand gripper_cmd;
+
+  while (is_running_.load()) {
+    joint_cmd_msg.Clear();
+    auto now = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
+    auto time_ns = duration.count();
+
+    auto* header = joint_cmd_msg.mutable_header();
+    header->set_time_stamp(time_ns);
+    header->set_frame_id("base_link");
+    header->set_sequence_num(seq_count_++);
+
+    if (!arm_controller_->GetJointCommand(joint_cmd)) {
+      AIMRT_DEBUG("机械臂本体无规划指令，保持静止");
+    }
+    for (int i = 0; i < 6; ++i) {
+      auto* joint = joint_cmd_msg.add_joints();
+      joint->set_name(joint_names_[i]);
+      joint->set_position(joint_cmd.position[i]);
+      joint->set_velocity(joint_cmd.velocity[i]);
+      joint->set_effort(joint_cmd.effort[i]);
+      joint->set_stiffness(joint_cmd.stiffness[i]);
+      joint->set_damping(joint_cmd.damping[i]);
+    }
+    if (gripper_controller_) {
+      if (gripper_controller_->GetGripperCommand(gripper_cmd) == -1) {
+        AIMRT_DEBUG("夹爪无规划指令，保持静止");
+      }
+      auto* joint = joint_cmd_msg.add_joints();
+      joint->set_name(joint_names_.back());
+      joint->set_position(gripper_cmd.position);
+      joint->set_velocity(gripper_cmd.velocity);
+      joint->set_effort(gripper_cmd.effort);
+      joint->set_stiffness(gripper_cmd.stiffness);
+      joint->set_damping(gripper_cmd.damping);
+    }
+
+    aimrt::channel::Publish(pub_joint_cmd_, joint_cmd_msg);
+
+    next_loop_time += period;
+
+    std::this_thread::sleep_until(next_loop_time);
+  }
+  stop_sig_.set_value();
+}
+
+void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {
+  ArmMotion::JointState joint_state;
+  int n = msg->joints_size();
+  int expected = gripper_controller_ ? 7 : 6;
+  if (n < expected) {
+    AIMRT_ERROR("关节数量 {} < {}, 检查 {} channel", n, expected, topic_sub_joint_state_);
+    return;
+  }
+
+  for (int i = 0; i < 6; ++i) {
+    joint_state.position[i] = msg->joints(i).position();
+    joint_state.velocity[i] = msg->joints(i).velocity();
+    joint_state.effort[i] = msg->joints(i).effort();
+  }
+
+  // 更新机械臂控制的状态
+  arm_controller_->SetJointState(joint_state);
+  // 更新夹爪控制器的状态
+  if (gripper_controller_) {
+    auto joint = msg->joints(6);
+    gripper_controller_->SetGripperState(joint.position(), joint.velocity(), joint.effort());
+  }
 }
 
 }  // namespace robotic_arm::control_module

@@ -3,6 +3,12 @@ aimrt:
     core_lvl: INFO # Trace/Debug/Info/Warn/Error/Fatal/Off
     backends:
       - type: console
+      - type: rotate_file # 文件
+        options:
+          path: ./log
+          filename: geniarm_ctrl.log
+          max_file_size_m: 4
+          max_file_num: 10
   module:
     pkgs:
       - path: ./libarm_control_pkg.so
@@ -12,5 +18,76 @@ aimrt:
         log_lvl: INFO
       - name: ActuatorModule
         log_lvl: INFO
+  executor:
+    executors:
+      - name: actuator_pub_executor
+        type: simple_thread
+      - name: control_executor
+        type: simple_thread
+      - name: work_executor
+        type: asio_thread
+        options:
+          thread_num: 4
+  plugin:
+    plugins:
+      # - name: ros2_plugin
+      #   path: ./libaimrt_ros2_plugin.so
+      #   options:
+      #     node_name: pid_sim_demo
+      #     executor_type: MultiThreaded
+      #     executor_thread_num: 4
+      # - name: echo_plugin
+      #   path: ./libaimrt_echo_plugin.so
+      #   options:
+      #     type_support_pkgs:
+      #       - path: ./libhardware_type_supprot_pkg.so        
+      #     topic_meta_list:
+      #       - topic_name: /inverted_pendulum/joint_state
+      #         msg_type: ros2:aimrt_msgs/msg/JointStateArray
+      #         echo_type: json
+      - name: net_plugin
+        path: ./libaimrt_net_plugin.so
+        options:
+          thread_num: 4
+          http_options:
+            listen_ip: 127.0.0.1
+            listen_port: 50080
+  channel:
+    backends:
+      - type: local # 官方支持local后端
+        options:
+          subscriber_use_inline_executor: false
+          subscriber_executor: work_executor
+    pub_topics_options:
+      - topic_name: "(.*)" # 正则表达式
+        enable_backends: [local]
+        enable_filters: []
+    sub_topics_options:
+      - topic_name: "(.*)" # 正则表达式
+        enable_backends: [local]
+        enable_filters: []
+  rpc:
+    backends:
+      - type: http
+    clients_options:
+      - func_name: "(.*)"
+        enable_backends: []
+        enable_filters: []
+    servers_options:
+      - func_name: "(.*)"
+        enable_backends: [http]
+        enable_filters: []
 
 # Module custom configuration
+ActuatorModule:
+  config_file: actuator_module/geniarm_actuator_cfg.yaml
+  topic_sub_joint_cmd: /geniarm/joint_cmd
+  topic_pub_joint_state: /geniarm/joint_state
+  pub_executor_name: actuator_pub_executor
+  pub_frequency: 500 
+ControlModule:
+  config_file: control_module/geniarm_body_cfg.yaml
+  topic_pub_joint_cmd: /geniarm/joint_cmd
+  topic_sub_joint_state: /geniarm/joint_state
+  control_executor_name: control_executor
+  control_frequency: 500

@@ -30,12 +30,13 @@ cmake -B build -G Ninja \
     -Dcpptoml_DOWNLOAD_URL=https://gitee.com/AimRT/cpptoml/repository/archive/v0.1.0.zip \
     -Dmcap_DOWNLOAD_URL=https://gitee.com/AimRT/mcap/repository/archive/releases/cpp/v2.0.0.zip \
     -Dlz4_DOWNLOAD_URL=https://gitee.com/mirrors/LZ4_old1/repository/archive/v1.10.0.zip \
-    -Dzstd_DOWNLOAD_URL=https://gitee.com/mirrors/facebook-zstd/repository/archive/v1.5.7.zip\
-    -DCMAKE_INSTALL_PREFIX=./build/install\
-    -DAIMRT_BUILD_WITH_ROS2=ON\
-    -DAIMRT_BUILD_WITH_PROTOBUF=ON\
-    -DAIMRT_BUILD_ROS2_PLUGIN=ON\
-    -DAIMRT_BUILD_PROTOCOLS=ON\
+    -Dzstd_DOWNLOAD_URL=https://gitee.com/mirrors/facebook-zstd/repository/archive/v1.5.7.zip \
+    -DCMAKE_INSTALL_PREFIX=./build/install \
+    -DAIMRT_BUILD_WITH_ROS2=ON \
+    -DAIMRT_BUILD_WITH_PROTOBUF=ON \
+    -DAIMRT_BUILD_ROS2_PLUGIN=ON \
+    -DAIMRT_BUILD_PROTOCOLS=ON \
+    -DAIMRT_BUILD_NET_PLUGIN=ON \
     -DSDK_BUILD_WITH_EXAMPLES=OFF \
     -DDMDRIVER_BUILD_WITH_EXAMPLE=OFF \
     $@

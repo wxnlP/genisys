@@ -3,8 +3,7 @@ set_root_namespace("robotic_arm")
 
 
 # protocols
-add_subdirectory(protocols/pb_proto)
-add_subdirectory(protocols/ros2_proto)
+add_subdirectory(protocols)
 
 # module
 add_subdirectory(module/control_module)
