@@ -99,8 +99,19 @@ void ControlModule::ControlLoop() {
     header->set_sequence_num(seq_count_++);
 
     if (!arm_controller_->GetJointCommand(joint_cmd)) {
-      AIMRT_DEBUG("机械臂本体无规划指令，保持静止");
+      // 无规划轨迹 — 复用上一帧指令保持
+      if (last_arm_cmd_.stiffness[0] > 0.0) {
+        joint_cmd = last_arm_cmd_;
+      } else {
+        // 尚无有效历史指令，跳过
+        std::this_thread::sleep_until(next_loop_time + period);
+        next_loop_time += period;
+        continue;
+      }
+    } else {
+      last_arm_cmd_ = joint_cmd;
     }
+
     for (int i = 0; i < 6; ++i) {
       auto* joint = joint_cmd_msg.add_joints();
       joint->set_name(joint_names_[i]);
@@ -112,7 +123,17 @@ void ControlModule::ControlLoop() {
     }
     if (gripper_controller_) {
       if (gripper_controller_->GetGripperCommand(gripper_cmd) == -1) {
-        AIMRT_DEBUG("夹爪无规划指令，保持静止");
+        // 无规划轨迹 — 复用上一帧指令保持
+        if (last_gripper_cmd_.stiffness > 0.0) {
+          joint_cmd = last_gripper_cmd_;
+        } else {
+          // 尚无有效历史指令，跳过
+          std::this_thread::sleep_until(next_loop_time + period);
+          next_loop_time += period;
+          continue;
+        }
+      } else {
+        last_gripper_cmd_ = joint_cmd;
       }
       auto* joint = joint_cmd_msg.add_joints();
       joint->set_name(joint_names_.back());
@@ -126,7 +147,6 @@ void ControlModule::ControlLoop() {
     aimrt::channel::Publish(pub_joint_cmd_, joint_cmd_msg);
 
     next_loop_time += period;
-
     std::this_thread::sleep_until(next_loop_time);
   }
   stop_sig_.set_value();

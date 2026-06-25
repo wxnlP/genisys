@@ -54,6 +54,10 @@ class ControlModule : public aimrt::ModuleBase {
   std::shared_ptr<GripperController> gripper_controller_;
 
   std::shared_ptr<MoveControlServiceImpl> move_control_service_;
+
+  // 记录上一帧有效指令，用于轨迹间保持
+  ArmMotion::JointCommand last_arm_cmd_;
+  GripperController::GripperCommand last_gripper_cmd_;
 };
 
 }  // namespace robotic_arm::control_module
