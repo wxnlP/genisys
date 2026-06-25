@@ -41,6 +41,13 @@ message MoveJMutiRequest {
   double a = 4;
 }
 
+message GripperRequest {
+  double position = 1;
+  double velocity = 2;
+  double acceleration = 3;
+  double effort = 4;
+}
+
 message MoveResponse {
   aimrt.protocols.common.Error error = 1;
 }
@@ -50,4 +57,5 @@ service MoveControlService {
   rpc MoveJ(MoveJRequest) returns (MoveResponse);
   rpc MoveLMuti(MoveLMutiRequest) returns (MoveResponse);
   rpc MoveJMuti(MoveJMutiRequest) returns (MoveResponse);
+  rpc Gripper(GripperRequest) returns (MoveResponse);
 }

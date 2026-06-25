@@ -111,4 +111,25 @@ void MoveControlServiceImpl::MoveJMuti(
   callback(aimrt::rpc::Status());
 }
 
+void MoveControlServiceImpl::Gripper(
+    aimrt::rpc::ContextRef ctx_ref,
+    const ::robotic_arm::protocols::GripperRequest& req,
+    ::robotic_arm::protocols::MoveResponse& rsp,
+    std::function<void(aimrt::rpc::Status)>&& callback) {
+  AIMRT_INFO("\n---\n收到Gripper请求\n---");
+
+  bool ret = gripper_controller_->PosControl(
+      req.position(), req.velocity(), req.acceleration(), req.effort());
+  if (ret) {
+    gripper_controller_->WaitForCompletion();
+    rsp.mutable_error()->set_code(0);
+    rsp.mutable_error()->set_msg("Gripper succeeded");
+  } else {
+    rsp.mutable_error()->set_code(-1);
+    rsp.mutable_error()->set_msg("Gripper failed");
+  }
+
+  callback(aimrt::rpc::Status());
+}
+
 }  // namespace robotic_arm::control_module

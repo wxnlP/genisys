@@ -37,6 +37,11 @@ class MoveControlServiceImpl : public robotic_arm::protocols::MoveControlService
       const ::robotic_arm::protocols::MoveJMutiRequest& req,
       ::robotic_arm::protocols::MoveResponse& rsp,
       std::function<void(aimrt::rpc::Status)>&& callback) override;
+  void Gripper(
+      aimrt::rpc::ContextRef ctx_ref,
+      const ::robotic_arm::protocols::GripperRequest& req,
+      ::robotic_arm::protocols::MoveResponse& rsp,
+      std::function<void(aimrt::rpc::Status)>&& callback) override;
 
  private:
   // 独立日志组件
