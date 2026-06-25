@@ -13,10 +13,10 @@ GeniArm 是一个基于 **AimRT** 框架的六自由度协作机械臂实时控�
 │         │ RPC (MoveJ / MoveL / MoveJMuti / MoveLMuti)              │
 │         ▼ :50080                                                   │
 │  ┌─ AimRT Runtime ───────────────────────────────────────────┐     │
-│  │                                                            │     │
+│  │                                                           │     │
 │  │  ┌─ ControlModule ────────────────────────────────────┐   │     │
 │  │  │  MoveControlService (RPC)                          │   │     │
-│  │  │  ArmController (轨迹规划 · IK · 插值)              │   │     │
+│  │  │  ArmController (轨迹规划 · IK · 插值)                │   │     │
 │  │  │  ControlLoop (500Hz) ──→ /geniarm/joint_cmd        │   │     │
 │  │  │  JointStateCallback ←── /geniarm/joint_state       │   │     │
 │  │  └────────────────────────────────────────────────────┘   │     │
@@ -24,16 +24,16 @@ GeniArm 是一个基于 **AimRT** 框架的六自由度协作机械臂实时控�
 │  │         ▼                              │                  │     │
 │  │  ┌─ ActuatorModule ───────────────────────────────────┐   │     │
 │  │  │  JointCmdCallback ←── /geniarm/joint_cmd           │   │     │
-│  │  │  PublishLoop (500Hz) ──→ /geniarm/joint_state     │   │     │
+│  │  │  PublishLoop (500Hz) ──→ /geniarm/joint_state      │   │     │
 │  │  │  GeniArmCtrl · GeniArmGripper                      │   │     │
 │  │  └────────────────────────────────────────────────────┘   │     │
-│  │         │ CANFD (can0)                                     │     │
-│  └─────────┼──────────────────────────────────────────────────┘     │
-│            ▼                                                        │
+│  │         │ CANFD (can0)                                    │     │
+│  └─────────┼─────────────────────────────────────────────────┘     │
+│            ▼                                                       │
 │  ┌─ 硬件层 ──────────────────────────────────────────────────────┐  │
 │  │  DM4340P ×3 (joint1-3)  DM4310 ×4 (joint4-6 + gripper)       │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────┘
+│  └──────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -157,6 +157,27 @@ GeniArm 是一个基于 **AimRT** 框架的六自由度协作机械臂实时控�
 | `MoveL` | 末端位姿(xyz+wxyz) + 速度 + 加速度 | 笛卡尔空间直线运动 |
 | `MoveJMuti` | 多组关节角度 + 过渡半径 + v + a | 多路径点关节运动 |
 | `MoveLMuti` | 多组末端位姿 + 过渡半径 + v + a | 多路径点笛卡尔运动 |
+
+### Python 调用示例
+
+项目提供四种 RPC 调用的 Python 示例脚本，位于 `examples/` 目录：
+
+| 示例 | 文件 | 说明 |
+|:---|:---|:---|
+| MoveJ | [`examples/movej_demo.py`](examples/movej_demo.py) | 关节空间点到点运动 |
+| MoveL | [`examples/movel_demo.py`](examples/movel_demo.py) | 笛卡尔空间直线运动 |
+| MoveJMuti | [`examples/movej_muti_demo.py`](examples/movej_muti_demo.py) | 多路径点关节运动 (圆弧过渡) |
+| MoveLMuti | [`examples/movel_muti_demo.py`](examples/movel_muti_demo.py) | 多路径点笛卡尔运动 (圆弧过渡) |
+
+依赖: `pip install requests`
+
+```bash
+# 启动 GeniArm 后，在另一个终端运行
+python3 examples/movej_demo.py
+python3 examples/movel_demo.py
+python3 examples/movej_muti_demo.py
+python3 examples/movel_muti_demo.py
+```
 
 ---
 
