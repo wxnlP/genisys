@@ -55,10 +55,11 @@ try:
     result = resp.json()
     print(f"\nResponse: {json.dumps(result, indent=2)}")
 
-    if result.get("error", {}).get("code", -1) == 0:
+    code = result.get("error", {}).get("code", -1)
+    if int(code) == 0:
         print("\n✅ MoveLMuti succeeded!")
     else:
-        print(f"\n❌ MoveLMuti failed: {result.get('error', {}).get('msg', 'unknown')}")
+        print(f"\n❌ MoveLMuti failed (code={code}): {result.get('error', {}).get('msg', 'unknown')}")
 
 except requests.exceptions.ConnectionError:
     print("\n❌ 无法连接到 GeniArm (127.0.0.1:50080)，请确认程序已启动。")
