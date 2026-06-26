@@ -31,12 +31,17 @@ bool ActuatorModule::Initialize(aimrt::CoreRef core) {
     AIMRT_INFO("\n---\n执行器关节名称：{}\n---", joint_names_);
 
     pub_executor_ = core_.GetExecutorManager().GetExecutor(pub_executor_name_);
+    AIMRT_CHECK_ERROR_THROW(pub_executor_, "Failed to get pub executor '{}'", pub_executor_name_);
+
     write_executor_ = core.GetExecutorManager().GetExecutor(write_executor_name_);
+    AIMRT_CHECK_ERROR_THROW(write_executor_, "Failed to get write executor '{}'", write_executor_name_);
 
     pub_joint_state_ = core_.GetChannelHandle().GetPublisher(topic_pub_joint_state_);
+    AIMRT_CHECK_ERROR_THROW(pub_joint_state_, "Failed to get publisher for topic '{}'", topic_pub_joint_state_);
     aimrt::channel::RegisterPublishType<JointStateArray>(pub_joint_state_);
 
     sub_joint_cmd_ = core.GetChannelHandle().GetSubscriber(topic_sub_joint_cmd_);
+    AIMRT_CHECK_ERROR_THROW(sub_joint_cmd_, "Failed to get subscriber for topic '{}'", topic_sub_joint_cmd_);
     aimrt::channel::Subscribe<JointCommandArray>(
         sub_joint_cmd_,
         std::bind(&ActuatorModule::JointCmdCallback, this, std::placeholders::_1));

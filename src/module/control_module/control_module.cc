@@ -30,11 +30,14 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     AIMRT_INFO("\n---\n控制器器关节名称：{}\n---", joint_names_);
 
     cycle_control_executor_ = core_.GetExecutorManager().GetExecutor(control_executor_name_);
+    AIMRT_CHECK_ERROR_THROW(cycle_control_executor_, "Failed to get control executor '{}'", control_executor_name_);
 
     pub_joint_cmd_ = core_.GetChannelHandle().GetPublisher(topic_pub_joint_cmd_);
+    AIMRT_CHECK_ERROR_THROW(pub_joint_cmd_, "Failed to get publisher for topic '{}'", topic_pub_joint_cmd_);
     aimrt::channel::RegisterPublishType<JointCommandArray>(pub_joint_cmd_);
 
     sub_joint_state_ = core_.GetChannelHandle().GetSubscriber(topic_sub_joint_state_);
+    AIMRT_CHECK_ERROR_THROW(sub_joint_state_, "Failed to get subscriber for topic '{}'", topic_sub_joint_state_);
     aimrt::channel::Subscribe<JointStateArray>(
         sub_joint_state_, std::bind(&ControlModule::JointStateCallback, this, std::placeholders::_1));
 
