@@ -13,19 +13,23 @@ bool ActuatorModule::Initialize(aimrt::CoreRef core) {
   try {
     // Read cfg
     auto file_path = core_.GetConfigurator().GetConfigFilePath();
-    if (!file_path.empty()) {
-      YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
-      auto actuator_cfg_file = cfg_node["config_file"].as<std::string>();
-      topic_sub_joint_cmd_ = cfg_node["topic_sub_joint_cmd"].as<std::string>();
-      topic_pub_joint_state_ = cfg_node["topic_pub_joint_state"].as<std::string>();
-      pub_executor_name_ = cfg_node["pub_executor_name"].as<std::string>();
-      write_executor_name_ = cfg_node["write_executor_name"].as<std::string>();
-      publish_frequecy_ = cfg_node["pub_frequency"].as<double>();
+    AIMRT_CHECK_ERROR_THROW(!file_path.empty(), "Config file path is empty");
 
-      actuator_manager_ = std::make_shared<ActuatorManager>(actuator_cfg_file);
-      arm_actuator_ = actuator_manager_->GetArmActuator();
-      gripper_actuator_ = actuator_manager_->GetGripperActuator();
-    }
+    YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
+    auto actuator_cfg_file = cfg_node["config_file"].as<std::string>();
+    topic_sub_joint_cmd_ = cfg_node["topic_sub_joint_cmd"].as<std::string>();
+    topic_pub_joint_state_ = cfg_node["topic_pub_joint_state"].as<std::string>();
+    pub_executor_name_ = cfg_node["pub_executor_name"].as<std::string>();
+    write_executor_name_ = cfg_node["write_executor_name"].as<std::string>();
+    publish_frequecy_ = cfg_node["pub_frequency"].as<double>();
+
+    actuator_manager_ = std::make_shared<ActuatorManager>(actuator_cfg_file);
+    AIMRT_CHECK_ERROR_THROW(actuator_manager_, "Failed to create ActuatorManager");
+
+    arm_actuator_ = actuator_manager_->GetArmActuator();
+    AIMRT_CHECK_ERROR_THROW(arm_actuator_, "Failed to get ArmActuator");
+
+    gripper_actuator_ = actuator_manager_->GetGripperActuator();
 
     actuator_manager_->GetJointNames(joint_names_);
     AIMRT_INFO("\n---\n执行器关节名称：{}\n---", joint_names_);

@@ -13,18 +13,22 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
   try {
     // Read cfg
     auto file_path = core_.GetConfigurator().GetConfigFilePath();
-    if (!file_path.empty()) {
-      YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
-      control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
-      topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
-      topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
-      control_frequency_ = cfg_node["control_frequency"].as<double>();
-      auto robot_cfg_file = cfg_node["config_file"].as<std::string>();
+    AIMRT_CHECK_ERROR_THROW(!file_path.empty(), "Config file path is empty");
 
-      arm_manager_ = std::make_shared<ArmManager>(robot_cfg_file);
-      arm_controller_ = arm_manager_->GetArmController();
-      gripper_controller_ = arm_manager_->GetGripperController();
-    }
+    YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
+    control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
+    topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
+    topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
+    control_frequency_ = cfg_node["control_frequency"].as<double>();
+    auto robot_cfg_file = cfg_node["config_file"].as<std::string>();
+
+    arm_manager_ = std::make_shared<ArmManager>(robot_cfg_file);
+    AIMRT_CHECK_ERROR_THROW(arm_manager_, "Failed to create ArmManager");
+
+    arm_controller_ = arm_manager_->GetArmController();
+    AIMRT_CHECK_ERROR_THROW(arm_controller_, "Failed to get ArmController");
+
+    gripper_controller_ = arm_manager_->GetGripperController();
 
     arm_manager_->GetJointNames(joint_names_);
     AIMRT_INFO("\n---\n控制器器关节名称：{}\n---", joint_names_);
