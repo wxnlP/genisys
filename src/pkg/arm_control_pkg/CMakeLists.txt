@@ -24,8 +24,7 @@ target_link_libraries(
   ${CUR_TARGET_NAME}
   PRIVATE aimrt::interface::aimrt_pkg_c_interface
           ${CUR_SUPERIOR_NAMESPACE}::control_module
-          ${CUR_SUPERIOR_NAMESPACE}::actuator_module
-          ${CUR_SUPERIOR_NAMESPACE}::sim_module)
+          ${CUR_SUPERIOR_NAMESPACE}::actuator_module)
 
 # Set installation of target
 set_property(TARGET ${CUR_TARGET_NAME} PROPERTY EXPORT_NAME ${CUR_TARGET_ALIAS_NAME})
