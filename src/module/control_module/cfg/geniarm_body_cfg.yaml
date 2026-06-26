@@ -14,34 +14,34 @@ robot:
       offset: [0.0, -180.0, 166.64, 13.36, 90.0, 0.0]
   dynamics: ""
   joints:
-    - name: "joint1"
+    - name: "shoulder_joint"
       MIT:
         stiffness: 120.0
         damping: 5.0
-    - name: "joint2"
+    - name: "upper_arm_joint"
       MIT:
         stiffness: 120.0
         damping: 5.0
-    - name: "joint3"
+    - name: "elbow_joint"
       MIT:
         stiffness: 120.0
         damping: 5.0
-    - name: "joint4"
+    - name: "wrist1_joint"
       MIT:
         stiffness: 18.0
         damping: 2.0
-    - name: "joint5"
+    - name: "wrist2_joint"
       MIT:
         stiffness: 18.0
         damping: 2.0
-    - name: "joint6"
+    - name: "wrist3_joint"
       MIT:
         stiffness: 18.0
         damping: 2.0
 
 gripper:
   name: "geniarm_gripper"
-  max_range: 1.95
+  max_range: 0.45
   MIT:
     stiffness: 8.0
     damping: 1.0

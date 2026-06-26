@@ -39,6 +39,7 @@ cmake -B build \
     -DAIMRT_BUILD_NET_PLUGIN=ON \
     -DSDK_BUILD_WITH_EXAMPLES=OFF \
     -DDMDRIVER_BUILD_WITH_EXAMPLE=OFF \
+    -DROBOTIC_ARM_BUILD_MUJOCO_SIM=ON \
     $@
 
 cmake --build build --config Release --target install --parallel $(nproc)

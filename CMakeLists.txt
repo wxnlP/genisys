@@ -47,12 +47,19 @@ if(WIN32)
   add_compile_definitions(NOMINMAX)
 endif()
 
+option(ROBOTIC_ARM_BUILD_MUJOCO_SIM "Build AimRT Mujoco Sim" OFF)
+
+
 # Include cmake module
 include(NamespaceTool)
 
 if(ROBOTIC_ARM_BUILD_TESTS)
   include(GetGTest)
   enable_testing()
+endif()
+
+if(ROBOTIC_ARM_BUILD_MUJOCO_SIM)
+  include(GetMujocoSim)
 endif()
 
 set(YAML_CPP_INSTALL ON)

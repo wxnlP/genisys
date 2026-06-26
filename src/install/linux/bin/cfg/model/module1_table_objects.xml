@@ -1,0 +1,73 @@
+<mujoco>
+<asset>
+  <material name="table_material" rgba="0.52 0.38 0.25 1"/>
+  <material name="obj_blue" rgba="0.25 0.45 0.95 1"/>
+  <material name="obj_green" rgba="0.25 0.75 0.40 1"/>
+  <material name="obj_orange" rgba="0.95 0.50 0.20 1"/>
+  <material name="box_material" rgba="0.55 0.55 0.60 1"/>
+</asset>
+
+<worldbody>
+  <!-- Large table: narrow in front (x), longer on both sides (y) -->
+  <body name="table" pos="0.45 0 0.375">
+    <geom name="table_top" type="box" size="0.36 0.58 0.025" material="table_material" friction="1.1 0.02 0.002"/>
+    <geom name="table_leg_fl" type="box" pos="0.31 0.53 -0.35" size="0.025 0.025 0.35" material="table_material"/>
+    <geom name="table_leg_fr" type="box" pos="0.31 -0.53 -0.35" size="0.025 0.025 0.35" material="table_material"/>
+    <geom name="table_leg_rl" type="box" pos="-0.31 0.53 -0.35" size="0.025 0.025 0.35" material="table_material"/>
+    <geom name="table_leg_rr" type="box" pos="-0.31 -0.53 -0.35" size="0.025 0.025 0.35" material="table_material"/>
+  </body>
+
+  <!-- Center marker in front of robot: cube + short vertical rod -->
+  <body name="center_marker" pos="0.54 0.00 0.40">
+    <geom name="marker_base" type="box" pos="0 0 0.018" size="0.028 0.028 0.018" material="obj_orange" friction="0.9 0.02 0.002"/>
+    <geom name="marker_rod" type="cylinder" pos="0 0 0.073" size="0.006 0.055" material="obj_green" friction="0.6 0.01 0.001"/>
+    <site name="rod_tip_target" type="sphere" pos="0 0 0.13" size="0.010" rgba="1 0 0 1"/>
+  </body>
+
+  <!-- Left-front grasp objects: richer shapes, all on tabletop -->
+  <body name="pick_cube_1" pos="0.51 0.22 0.416">
+    <freejoint/>
+    <inertial pos="0 0 0" mass="0.10" diaginertia="2.8e-05 2.8e-05 2.8e-05"/>
+    <geom type="box" size="0.016 0.016 0.016" material="obj_blue" friction="1.2 0.05 0.01" solref="0.004 1" solimp="0.95 0.99 0.001"/>
+  </body>
+
+  <body name="pick_cube_2" pos="0.58 0.19 0.412">
+    <freejoint/>
+    <inertial pos="0 0 0" mass="0.08" diaginertia="1.6e-05 1.6e-05 1.6e-05"/>
+    <geom type="box" size="0.012 0.012 0.012" material="obj_green" friction="1.2 0.05 0.01" solref="0.004 1" solimp="0.95 0.99 0.001"/>
+  </body>
+
+  <body name="pick_flat_1" pos="0.48 0.16 0.406">
+    <freejoint/>
+    <inertial pos="0 0 0" mass="0.06" diaginertia="1.0e-05 2.0e-05 2.6e-05"/>
+    <geom type="box" size="0.030 0.018 0.006" material="obj_orange" friction="1.3 0.06 0.01" solref="0.004 1" solimp="0.95 0.99 0.001"/>
+  </body>
+
+  <body name="pick_flat_2" pos="0.55 0.26 0.405">
+    <freejoint/>
+    <inertial pos="0 0 0" mass="0.05" diaginertia="7.0e-06 1.5e-05 2.0e-05"/>
+    <geom type="box" size="0.026 0.015 0.005" material="obj_blue" friction="1.3 0.06 0.01" solref="0.004 1" solimp="0.95 0.99 0.001"/>
+  </body>
+
+  <body name="pick_cylinder_1" pos="0.46 0.24 0.410">
+    <freejoint/>
+    <inertial pos="0 0 0" mass="0.07" diaginertia="9.0e-06 9.0e-06 6.0e-06"/>
+    <geom type="cylinder" size="0.012 0.010" material="obj_green" friction="1.1 0.05 0.01" solref="0.004 1" solimp="0.95 0.99 0.001"/>
+  </body>
+
+  <body name="pick_brick_long" pos="0.63 0.24 0.408">
+    <freejoint/>
+    <inertial pos="0 0 0" mass="0.09" diaginertia="1.0e-05 3.8e-05 4.0e-05"/>
+    <geom type="box" size="0.038 0.010 0.008" material="obj_orange" friction="1.25 0.06 0.01" solref="0.004 1" solimp="0.95 0.99 0.001"/>
+  </body>
+
+  <!-- Front-right empty box container on tabletop -->
+  <body name="right_empty_box" pos="0.58 -0.18 0.40">
+    <geom name="box_bottom" type="box" pos="0 0 0.004" size="0.09 0.07 0.004" material="box_material" friction="1.0 0.03 0.003"/>
+    <geom name="box_wall_front" type="box" pos="0.085 0 0.032" size="0.005 0.07 0.028" material="box_material"/>
+    <geom name="box_wall_back" type="box" pos="-0.085 0 0.032" size="0.005 0.07 0.028" material="box_material"/>
+    <geom name="box_wall_left" type="box" pos="0 0.065 0.032" size="0.09 0.005 0.028" material="box_material"/>
+    <geom name="box_wall_right" type="box" pos="0 -0.065 0.032" size="0.09 0.005 0.028" material="box_material"/>
+  </body>
+</worldbody>
+</mujoco>

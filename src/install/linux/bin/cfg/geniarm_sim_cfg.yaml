@@ -6,13 +6,121 @@ aimrt:
   module:
     pkgs:
       - path: ./libarm_control_pkg.so
-        disable_modules: ['AcatuatorModule']
+        disable_modules: ['ActuatorModule']
+      - path: ./libmujoco_sim_pkg.so # 官方仿真组件
+        disable_modules: []
     modules:
-      - name: ActuatorModule
+      - name: MujocoSimModule # 官方仿真组件
         log_lvl: INFO
       - name: ControlModule
         log_lvl: INFO
-      - name: SimModule
-        log_lvl: INFO
-
+  plugin:
+    plugins:
+      # - name: ros2_plugin
+      #   path: ./libaimrt_ros2_plugin.so
+      #   options:
+      #     node_name: pid_sim_demo
+      #     executor_type: MultiThreaded
+      #     executor_thread_num: 4
+      # - name: echo_plugin
+      #   path: ./libaimrt_echo_plugin.so
+      #   options:
+      #     type_support_pkgs:
+      #       - path: ./libhardware_type_supprot_pkg.so        
+      #     topic_meta_list:
+      #       - topic_name: /inverted_pendulum/joint_state
+      #         msg_type: ros2:aimrt_msgs/msg/JointStateArray
+      #         echo_type: json
+      - name: net_plugin
+        path: ./libaimrt_net_plugin.so
+        options:
+          thread_num: 4
+          http_options:
+            listen_ip: 127.0.0.1
+            listen_port: 50080
+  executor:
+    executors:
+      - name: gui_executor
+        type: simple_thread
+      - name: control_executor
+        type: simple_thread
+      - name: work_executor
+        type: asio_thread
+        options:
+          thread_num: 5
+  channel:
+    backends:
+      - type: local # 官方支持local后端
+        options:
+          subscriber_use_inline_executor: false
+          subscriber_executor: work_executor
+    pub_topics_options:
+      - topic_name: "(.*)" # 正则表达式
+        enable_backends: [local]
+        enable_filters: []
+    sub_topics_options:
+      - topic_name: "(.*)" # 正则表达式
+        enable_backends: [local]
+        enable_filters: []
+  rpc:
+    backends:
+      - type: http
+    clients_options:
+      - func_name: "(.*)"
+        enable_backends: []
+        enable_filters: []
+    servers_options:
+      - func_name: "(.*)"
+        enable_backends: [http]
+        enable_filters: []
 # Module custom configuration
+MujocoSimModule:
+  simulation_model_path: ./cfg/model/geniarm_v1.1.2.xml
+  sim_executor: work_executor
+  gui_executor: gui_executor
+  subscriber_options:
+    - topic: /geniarm/joint_cmd
+      type: joint_actuator
+      options:
+        joints:
+          - name: shoulder_joint
+            bind_joint: shoulder_joint
+          - name: upper_arm_joint
+            bind_joint: upper_arm_joint
+          - name: elbow_joint
+            bind_joint: elbow_joint
+          - name: wrist1_joint
+            bind_joint: wrist1_joint
+          - name: wrist2_joint
+            bind_joint: wrist2_joint
+          - name: wrist3_joint
+            bind_joint: wrist3_joint
+          - name: geniarm_gripper
+            bind_joint: gripper_right_joint
+  publisher_options:
+    - topic: /geniarm/joint_state
+      frequency: 500
+      executor: work_executor
+      type: joint_sensor
+      options:
+        joints:
+          - name: shoulder_joint
+            bind_joint: shoulder_joint
+          - name: upper_arm_joint
+            bind_joint: upper_arm_joint
+          - name: elbow_joint
+            bind_joint: elbow_joint
+          - name: wrist1_joint
+            bind_joint: wrist1_joint
+          - name: wrist2_joint
+            bind_joint: wrist2_joint
+          - name: wrist3_joint
+            bind_joint: wrist3_joint
+          - name: geniarm_gripper
+            bind_joint: gripper_right_joint
+ControlModule:
+  config_file: control_module/geniarm_body_cfg.yaml
+  topic_pub_joint_cmd: /geniarm/joint_cmd
+  topic_sub_joint_state: /geniarm/joint_state
+  control_executor_name: control_executor
+  control_frequency: 500
