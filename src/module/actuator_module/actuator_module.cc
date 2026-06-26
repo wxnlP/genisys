@@ -18,7 +18,8 @@ bool ActuatorModule::Initialize(aimrt::CoreRef core) {
       auto actuator_cfg_file = cfg_node["config_file"].as<std::string>();
       topic_sub_joint_cmd_ = cfg_node["topic_sub_joint_cmd"].as<std::string>();
       topic_pub_joint_state_ = cfg_node["topic_pub_joint_state"].as<std::string>();
-      executor_name_ = cfg_node["pub_executor_name"].as<std::string>();
+      pub_executor_name_ = cfg_node["pub_executor_name"].as<std::string>();
+      write_executor_name_ = cfg_node["write_executor_name"].as<std::string>();
       publish_frequecy_ = cfg_node["pub_frequency"].as<double>();
 
       actuator_manager_ = std::make_shared<ActuatorManager>(actuator_cfg_file);
@@ -29,7 +30,8 @@ bool ActuatorModule::Initialize(aimrt::CoreRef core) {
     actuator_manager_->GetJointNames(joint_names_);
     AIMRT_INFO("\n---\n执行器关节名称：{}\n---", joint_names_);
 
-    pub_executor_ = core_.GetExecutorManager().GetExecutor(executor_name_);
+    pub_executor_ = core_.GetExecutorManager().GetExecutor(pub_executor_name_);
+    write_executor_ = core.GetExecutorManager().GetExecutor(write_executor_name_);
 
     pub_joint_state_ = core_.GetChannelHandle().GetPublisher(topic_pub_joint_state_);
     aimrt::channel::RegisterPublishType<JointStateArray>(pub_joint_state_);
@@ -62,6 +64,7 @@ bool ActuatorModule::Start() {
     // 启动发布循环
     is_running_.store(true);
     pub_executor_.Execute(std::bind(&ActuatorModule::PublishLoop, this));
+    write_executor_.Execute(std::bind(&ActuatorModule::WriteLoop, this));
   } catch (const std::exception& e) {
     AIMRT_ERROR("Start failed, {}", e.what());
     return false;
@@ -72,14 +75,13 @@ bool ActuatorModule::Start() {
 
 void ActuatorModule::Shutdown() {
   try {
-    // 1. 停止发布循环和 channel 回调（与 DcuDriverModule 模式一致）
+    // 停止发布循环和 channel 回调
     is_running_.store(false);
-    stop_sig_.get_future().wait();
+    write_sem_.release();
+    pub_stop_sig_.get_future().wait();
+    write_stop_sig_.get_future().wait();
 
-    // 2. 等待已排队的 channel 回调执行完毕
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
-    // 3. 失能各执行器
+    // 失能各执行器
     if (arm_actuator_) {
       arm_actuator_->Disable();
     }
@@ -87,7 +89,7 @@ void ActuatorModule::Shutdown() {
       gripper_actuator_->Disable();
     }
 
-    // 4. 关闭内部线程
+    // 关闭内部线程
     if (actuator_manager_) {
       actuator_manager_->Shutdown();
     }
@@ -151,13 +153,35 @@ void ActuatorModule::PublishLoop() {
 
     std::this_thread::sleep_until(next_loop_time);
   }
+  pub_stop_sig_.set_value();
+  AIMRT_INFO("成功退出PublishLoop");
+}
 
-  stop_sig_.set_value();
+void ActuatorModule::WriteLoop() {
+  ArmCtrlBase::JointCommand joint_cmd;
+  GripperCtrlBase::GripperCommand gripper_cmd;
+  while (is_running_.load()) {
+    write_sem_.acquire();
+    if (!is_running_.load()) {
+      break;
+    }
+    {
+      std::lock_guard<std::mutex> lock(cached_cmd_lock);
+      joint_cmd = cached_joint_cmd_;
+      gripper_cmd = cached_gripper_cmd_;
+    }
+    arm_actuator_->SetJointState(joint_cmd);
+    if (gripper_actuator_) {
+      gripper_actuator_->SendCommand(gripper_cmd);
+    }
+  }
+  write_stop_sig_.set_value();
+  AIMRT_INFO("成功退出WriteLoop");
 }
 
 void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandArray>& msg) {
   if (!is_running_.load()) return;
-  AIMRT_INFO("Received joint command message with {} joints.", msg->joints_size());
+  AIMRT_DEBUG("Received joint command message with {} joints.", msg->joints_size());
   int n = msg->joints_size();
   // int expected = gripper_actuator_ ? 7 : 6;
   // if (n < expected) {
@@ -165,28 +189,27 @@ void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandAr
   //   return;
   // }
 
-  ArmCtrlBase::JointCommand joint_cmd;
-  for (int i = 0; i < 6; ++i) {
-    joint_cmd.position[i] = msg->joints(i).position();
-    joint_cmd.velocity[i] = msg->joints(i).velocity();
-    joint_cmd.effort[i] = msg->joints(i).effort();
-    joint_cmd.stiffness[i] = msg->joints(i).stiffness();
-    joint_cmd.damping[i] = msg->joints(i).damping();
-  }
-  arm_actuator_->SetJointState(joint_cmd);
+  {
+    std::lock_guard<std::mutex> lock(cached_cmd_lock);
 
-  if (!gripper_actuator_ || n <= 6) {
-    AIMRT_INFO("No gripper command in this message.");
-    return;
+    for (int i = 0; i < 6; ++i) {
+      cached_joint_cmd_.position[i] = msg->joints(i).position();
+      cached_joint_cmd_.velocity[i] = msg->joints(i).velocity();
+      cached_joint_cmd_.effort[i] = msg->joints(i).effort();
+      cached_joint_cmd_.stiffness[i] = msg->joints(i).stiffness();
+      cached_joint_cmd_.damping[i] = msg->joints(i).damping();
+    }
+
+    if (gripper_actuator_ && n > 6) {
+      cached_gripper_cmd_.position = msg->joints(6).position();
+      cached_gripper_cmd_.velocity = msg->joints(6).velocity();
+      cached_gripper_cmd_.effort = msg->joints(6).effort();
+      cached_gripper_cmd_.stiffness = msg->joints(6).stiffness();
+      cached_gripper_cmd_.damping = msg->joints(6).damping();
+    }
   }
 
-  GripperCtrlBase::GripperCommand gripper_cmd;
-  gripper_cmd.position = msg->joints(6).position();
-  gripper_cmd.velocity = msg->joints(6).velocity();
-  gripper_cmd.effort = msg->joints(6).effort();
-  gripper_cmd.stiffness = msg->joints(6).stiffness();
-  gripper_cmd.damping = msg->joints(6).damping();
-  gripper_actuator_->SendCommand(gripper_cmd);
+  write_sem_.release();
 }
 
 }  // namespace robotic_arm::actuator_module

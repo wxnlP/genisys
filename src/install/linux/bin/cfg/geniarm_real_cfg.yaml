@@ -24,10 +24,12 @@ aimrt:
         type: simple_thread
       - name: control_executor
         type: simple_thread
-      - name: work_executor
-        type: asio_thread
-        options:
-          thread_num: 4
+      - name: write_cmd_thread
+        type: simple_thread
+      # - name: work_executor
+      #   type: asio_thread
+      #   options:
+      #     thread_num: 4
   plugin:
     plugins:
       # - name: ros2_plugin
@@ -55,9 +57,6 @@ aimrt:
   channel:
     backends:
       - type: local # 官方支持local后端
-        options:
-          subscriber_use_inline_executor: false
-          subscriber_executor: work_executor
     pub_topics_options:
       - topic_name: "(.*)" # 正则表达式
         enable_backends: [local]
@@ -84,7 +83,8 @@ ActuatorModule:
   topic_sub_joint_cmd: /geniarm/joint_cmd
   topic_pub_joint_state: /geniarm/joint_state
   pub_executor_name: actuator_pub_executor
-  pub_frequency: 500 
+  pub_frequency: 1000 
+  write_executor_name: write_cmd_thread
 ControlModule:
   config_file: control_module/geniarm_body_cfg.yaml
   topic_pub_joint_cmd: /geniarm/joint_cmd

@@ -67,12 +67,8 @@ bool ControlModule::Start() {
 
 void ControlModule::Shutdown() {
   try {
-    // 1. 停止发布循环和 channel 回调（与 DcuDriverModule 模式一致）
     is_running_.store(false);
     stop_sig_.get_future().wait();
-
-    // 2. 等待已排队的 channel 回调执行完毕
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
   } catch (const std::exception& e) {
     AIMRT_ERROR("control_module Shutdown failed, {}", e.what());
   }
