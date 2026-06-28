@@ -1,6 +1,10 @@
 .vscode/
 .cache/
 .idea/
+.claude/
 _deps/
 build/
 cmake-build*/
+__pycache__/
+*.pyc
+.venv/

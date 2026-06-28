@@ -26,10 +26,10 @@ aimrt:
       #   path: ./libaimrt_echo_plugin.so
       #   options:
       #     type_support_pkgs:
-      #       - path: ./libhardware_type_supprot_pkg.so        
+      #       - path: ./libsensor_pb_ts.so      
       #     topic_meta_list:
-      #       - topic_name: /inverted_pendulum/joint_state
-      #         msg_type: ros2:aimrt_msgs/msg/JointStateArray
+      #       - topic_name: /geniarm/joint_state
+      #         msg_type: pb:aimrt.protocols.sensor.JointStateArray
       #         echo_type: json
       - name: net_plugin
         path: ./libaimrt_net_plugin.so
@@ -38,6 +38,10 @@ aimrt:
           http_options:
             listen_ip: 127.0.0.1
             listen_port: 50080
+      - name: zenoh_plugin
+        path: ./libaimrt_zenoh_plugin.so
+        options:
+          native_cfg_path: ./cfg/zenoh_native_config.json5
   executor:
     executors:
       - name: gui_executor
@@ -54,12 +58,19 @@ aimrt:
         options:
           subscriber_use_inline_executor: false
           subscriber_executor: work_executor
+      - type: zenoh
     pub_topics_options:
-      - topic_name: "(.*)" # 正则表达式
+      - topic_name: "/geniarm/joint_state"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/joint_cmd"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "(.*)"
         enable_backends: [local]
         enable_filters: []
     sub_topics_options:
-      - topic_name: "(.*)" # 正则表达式
+      - topic_name: "(.*)"
         enable_backends: [local]
         enable_filters: []
   rpc:
