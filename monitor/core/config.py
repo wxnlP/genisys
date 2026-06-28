@@ -52,6 +52,11 @@ class _Config:
     def initial_x_window_s(self) -> float:
         return float(self._data.get("initial_x_window_s", 10.0))
 
+    # -- Y-axis minimum range -----------------------------------------------
+    @property
+    def y_range_min(self) -> float:
+        return float(self._data.get("y_range_min", 0))
+
     # -- CSV export time window (seconds; 0 = unlimited) ------------------
     @property
     def csv_export_window_s(self) -> float:

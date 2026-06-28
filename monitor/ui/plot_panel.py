@@ -72,6 +72,16 @@ class _ClickableAxis(pg.AxisItem):
 
     sigSelected = QtCore.pyqtSignal(str)  # 'bottom' or 'left'
 
+    def __init__(self, orientation: str, plain_decimal: bool = False) -> None:
+        super().__init__(orientation)
+        self._plain_decimal = plain_decimal
+
+    def tickStrings(self, values, scale, spacing):
+        """Override to force plain-decimal labels (never ``1e-6`` etc.)."""
+        if self._plain_decimal:
+            return [f"{v:.10f}".rstrip("0").rstrip(".") for v in values]
+        return super().tickStrings(values, scale, spacing)
+
     def mouseClickEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton:
             self.sigSelected.emit(self.orientation)
@@ -256,7 +266,7 @@ class PlotPanel(QtWidgets.QWidget):
 
         # ---- pyqtgraph plot (custom axes + viewbox) ----
         self._x_axis = _ClickableAxis("bottom")
-        self._y_axis = _ClickableAxis("left")
+        self._y_axis = _ClickableAxis("left", plain_decimal=True)
         self._zoom_viewbox = _ZoomViewBox()
 
         self._plot_widget = pg.PlotWidget(
@@ -625,6 +635,13 @@ class PlotPanel(QtWidgets.QWidget):
             y_min = min(y_min, min(vals))
             y_max = max(y_max, max(vals))
         if y_min < y_max:
+            # Enforce minimum Y range so tiny deviations remain visible
+            data_range = y_max - y_min
+            min_range = config.y_range_min
+            if min_range > 0 and data_range < min_range:
+                mid = (y_max + y_min) / 2.0
+                half = min_range / 2.0
+                y_min, y_max = mid - half, mid + half
             vb = self._plot_widget.getViewBox()
             vb.setYRange(y_min, y_max, padding=0.1)
 
