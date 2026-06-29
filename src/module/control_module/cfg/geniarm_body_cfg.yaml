@@ -41,7 +41,7 @@ robot:
 
 gripper:
   name: "geniarm_gripper"
-  max_range: 0.45
+  max_range: 1.95
   MIT:
     stiffness: 8.0
     damping: 1.0
