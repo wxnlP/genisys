@@ -17,9 +17,13 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
     control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
+    pub_executor_name_ = cfg_node["pub_executor_name"].as<std::string>();
     topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
     topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
+    topic_pub_cart_expected_ = cfg_node["topic_pub_cart_expected"].as<std::string>();
+    topic_pub_cart_current_ = cfg_node["topic_pub_cart_current"].as<std::string>();
     control_frequency_ = cfg_node["control_frequency"].as<double>();
+    pub_frequency_ = cfg_node["pub_frequency"].as<double>();
     auto robot_cfg_file = cfg_node["config_file"].as<std::string>();
 
     arm_manager_ = std::make_shared<ArmManager>(robot_cfg_file);
@@ -36,9 +40,20 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     cycle_control_executor_ = core_.GetExecutorManager().GetExecutor(control_executor_name_);
     AIMRT_CHECK_ERROR_THROW(cycle_control_executor_, "Failed to get control executor '{}'", control_executor_name_);
 
+    pub_cart_executor_ = core.GetExecutorManager().GetExecutor(pub_executor_name_);
+    AIMRT_CHECK_ERROR_THROW(pub_cart_executor_, "Failed to get publish executor '{}'", pub_executor_name_);
+
     pub_joint_cmd_ = core_.GetChannelHandle().GetPublisher(topic_pub_joint_cmd_);
     AIMRT_CHECK_ERROR_THROW(pub_joint_cmd_, "Failed to get publisher for topic '{}'", topic_pub_joint_cmd_);
     aimrt::channel::RegisterPublishType<JointCommandArray>(pub_joint_cmd_);
+
+    pub_cart_expected_ = core_.GetChannelHandle().GetPublisher(topic_pub_cart_expected_);
+    AIMRT_CHECK_ERROR_THROW(pub_cart_expected_, "Failed to get publisher for topic '{}'", topic_pub_cart_expected_);
+    aimrt::channel::RegisterPublishType<Pose>(pub_cart_expected_);
+
+    pub_cart_current_ = core_.GetChannelHandle().GetPublisher(topic_pub_cart_current_);
+    AIMRT_CHECK_ERROR_THROW(pub_cart_current_, "Failed to get publisher for topic '{}'", topic_pub_cart_current_);
+    aimrt::channel::RegisterPublishType<Pose>(pub_cart_current_);
 
     sub_joint_state_ = core_.GetChannelHandle().GetSubscriber(topic_sub_joint_state_);
     AIMRT_CHECK_ERROR_THROW(sub_joint_state_, "Failed to get subscriber for topic '{}'", topic_sub_joint_state_);
@@ -63,6 +78,7 @@ bool ControlModule::Start() {
   try {
     is_running_.store(true);
     cycle_control_executor_.Execute(std::bind(&ControlModule::ControlLoop, this));
+    pub_cart_executor_.Execute(std::bind(&ControlModule::PublishLoop, this));
 
   } catch (const std::exception& e) {
     AIMRT_ERROR("control_module Start failed, {}", e.what());
@@ -76,6 +92,7 @@ void ControlModule::Shutdown() {
   try {
     is_running_.store(false);
     stop_sig_.get_future().wait();
+    pub_stop_sig_.get_future().wait();
   } catch (const std::exception& e) {
     AIMRT_ERROR("control_module Shutdown failed, {}", e.what());
   }
@@ -88,7 +105,7 @@ void ControlModule::ControlLoop() {
   // 记录下一次循环时间
   auto next_loop_time = std::chrono::steady_clock::now();
   // 序列
-  uint64_t seq_count_ = 0;
+  uint64_t seq_count = 0;
 
   JointCommandArray joint_cmd_msg;
   ArmMotion::JointCommand joint_cmd;
@@ -103,19 +120,22 @@ void ControlModule::ControlLoop() {
     auto* header = joint_cmd_msg.mutable_header();
     header->set_time_stamp(time_ns);
     header->set_frame_id("base_link");
-    header->set_sequence_num(seq_count_++);
+    header->set_sequence_num(seq_count++);
 
-    if (!arm_controller_->GetJointCommand(joint_cmd)) {
-      // 无规划轨迹 — 复用上一帧指令保持
-      if (last_arm_cmd_.stiffness[0] > 0.0) {
-        joint_cmd = last_arm_cmd_;
+    {
+      std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
+      if (!arm_controller_->GetJointCommand(joint_cmd)) {
+        // 无规划轨迹 — 复用上一帧指令保持
+        if (last_arm_cmd_.stiffness[0] > 0.0) {
+          joint_cmd = last_arm_cmd_;
+        } else {
+          // 尚无有效历史指令
+          joint_cmd.position = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+          joint_cmd.velocity = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+        }
       } else {
-        // 尚无有效历史指令
-        joint_cmd.position = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-        joint_cmd.velocity = ArmMotion::Joint6Dof{0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+        last_arm_cmd_ = joint_cmd;
       }
-    } else {
-      last_arm_cmd_ = joint_cmd;
     }
 
     for (int i = 0; i < 6; ++i) {
@@ -135,7 +155,7 @@ void ControlModule::ControlLoop() {
         } else {
           // 尚无有效历史指令
           gripper_cmd.position = 0.0;
-          gripper_cmd.velocity = 0.5;
+          gripper_cmd.velocity = 0.0;
         }
       } else {
         last_gripper_cmd_ = gripper_cmd;
@@ -155,6 +175,69 @@ void ControlModule::ControlLoop() {
     std::this_thread::sleep_until(next_loop_time);
   }
   stop_sig_.set_value();
+}
+
+void ControlModule::PublishLoop() {
+  // 计算周期
+  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / pub_frequency_ * 1000000000));
+  // 记录下一次循环时间
+  auto next_loop_time = std::chrono::steady_clock::now();
+  // 序列
+  uint64_t seq_count = 0;
+
+  Pose expected_pose_msg;
+  Pose current_pose_msg;
+  ArmMotion::Pose6Dof current_pose;
+  ArmMotion::Joint6Dof joint_pos_cmd;
+  ArmMotion::Pose6Dof expected_pose;
+
+  auto fill_pose_msg = [this](Pose& msg, const ArmMotion::Pose6Dof& source_pose, uint64_t& seq, const auto& time_ns) {
+    auto* header = msg.mutable_header();
+    header->set_time_stamp(time_ns);
+    header->set_frame_id("base_link");
+    header->set_sequence_num(seq++);
+
+    auto* pose = msg.mutable_pose();
+
+    auto* quat = pose->mutable_orientation();
+    quat->set_x(source_pose.quat.x);
+    quat->set_y(source_pose.quat.y);
+    quat->set_z(source_pose.quat.z);
+    quat->set_w(source_pose.quat.w);
+
+    auto* pos = pose->mutable_position();
+    pos->set_x(source_pose.x);
+    pos->set_y(source_pose.y);
+    pos->set_z(source_pose.z);
+  };
+
+  while (is_running_) {
+    // 获取期望和当前笛卡尔位姿
+    arm_controller_->GetCurrentPose(current_pose);
+    {
+      std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
+      joint_pos_cmd = last_arm_cmd_.position;
+    }
+    arm_controller_->JointToPose(joint_pos_cmd, expected_pose);
+
+    // 打包msg
+    expected_pose_msg.Clear();
+    current_pose_msg.Clear();
+
+    auto now = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
+    auto time_ns = duration.count();
+
+    fill_pose_msg(expected_pose_msg, expected_pose, seq_count, time_ns);
+    fill_pose_msg(current_pose_msg, current_pose, seq_count, time_ns);
+
+    aimrt::channel::Publish(pub_cart_expected_, expected_pose_msg);
+    aimrt::channel::Publish(pub_cart_current_, current_pose_msg);
+
+    next_loop_time += period;
+    std::this_thread::sleep_until(next_loop_time);
+  }
+  pub_stop_sig_.set_value();
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {

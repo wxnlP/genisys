@@ -6,7 +6,7 @@ aimrt:
       - type: rotate_file # 文件
         options:
           path: ./log
-          filename: geniarm_ctrl.log
+          filename: geniarm_real.log
           max_file_size_m: 4
           max_file_num: 10
   module:
@@ -24,12 +24,11 @@ aimrt:
         type: simple_thread
       - name: control_executor
         type: simple_thread
+      - name: pub_executor
+        type: simple_thread
       - name: write_cmd_thread
         type: simple_thread
-      # - name: work_executor
-      #   type: asio_thread
-      #   options:
-      #     thread_num: 4
+
   plugin:
     plugins:
       # - name: ros2_plugin
@@ -62,14 +61,14 @@ aimrt:
     backends:
       - type: local # 官方支持local后端
     pub_topics_options:
-      - topic_name: "/geniarm/joint_state"
-        enable_backends: [local, zenoh]
-        enable_filters: []
-      - topic_name: "/geniarm/joint_cmd"
-        enable_backends: [local, zenoh]
-        enable_filters: []
+      # - topic_name: "/geniarm/joint_state"
+      #   enable_backends: [local, zenoh]
+      #   enable_filters: []
+      # - topic_name: "/geniarm/joint_cmd"
+      #   enable_backends: [local, zenoh]
+      #   enable_filters: []
       - topic_name: "(.*)" # 正则表达式
-        enable_backends: [local]
+        enable_backends: [local, zenoh]
         enable_filters: []
     sub_topics_options:
       - topic_name: "(.*)" # 正则表达式
@@ -99,5 +98,9 @@ ControlModule:
   config_file: control_module/geniarm_body_cfg.yaml
   topic_pub_joint_cmd: /geniarm/joint_cmd
   topic_sub_joint_state: /geniarm/joint_state
+  topic_pub_cart_expected: /geniarm/pose_expected
+  topic_pub_cart_current: /geniarm/pose_current
   control_executor_name: control_executor
   control_frequency: 500
+  pub_executor_name: pub_executor
+  pub_frequency: 1000
