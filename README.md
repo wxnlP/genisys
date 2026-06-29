@@ -6,14 +6,14 @@
 
 ### 支持的机械臂构型
 
-得益于 [robotic_arm_sdk](https://github.com/wxnlP/robotic_arm_sdk) 的解藕设计，系统支持常见的两种构型机械臂：
+系统支持常见的两种构型机械臂：
 
 | 构型 | IK 方法 | 说明 |
 |:---|:---|:---|
 | **类 UR 构型** | UR 解析解 | 参考 [reBot-DevArm](https://github.com/Seeed-Projects/reBot-DevArm) 、[Panthera-HT](https://github.com/HighTorque-Robotics/Panthera-HT_Main)，系统提供 GeniArm 适配。 |
 | **Piper 构型** | Piper 解析解 | 参考 [Dummy-Robot](https://github.com/peng-zhihui/Dummy-Robot)，系统提供 S6h4d 适配。 |
 
-两套构型共用同一套控制栈（ControlModule + ActuatorModule），仅需替换 yaml 配置文件即可切换。
+两套构型共用同一套控制栈（ControlModule + ActuatorModule），仅需替换 yaml 配置文件即可切换。此外，得益于 [robotic_arm_sdk](https://github.com/wxnlP/robotic_arm_sdk) 的解藕设计，开发者可以拓展适配自己的机械臂，无论你是 UART 、CAN、Ethernet，只需按照 actuator 模块的接口做适配，即可丝滑对接 control 模块。
 
 ### 系统架构
 
@@ -50,38 +50,26 @@
 ### 目录
 
 ```
-robotic_arm_aimrt/
-├── build.sh                   # 首次构建（含依赖下载）
+robotic_arm_aimrt
+├── build.sh                   # 构建脚本
 ├── compile.sh                 # 增量编译
-├── setup.sh                   # 环境变量设置
+├── setup.sh                   # ROS环境变量设置
 ├── pkg_start.sh               # 启动脚本（交互式选配置）
-├── format.sh                  # 代码格式化
-├── test.sh                    # 运行测试
-├── CMakeLists.txt              # 根 CMake 配置
-├── cmake/                      # CMake 工具模块
-├── examples/                   # Python RPC 调用示例
-├── monitor/                    # ArmMonitor 桌面监控工具 (Python)
-│   ├── README.md
-│   ├── config.yaml
-│   ├── main.py
-│   ├── core/                   #   数据层
-│   ├── ui/                     #   界面层
-│   └── proto/                  #   Protobuf 定义
-├── src/
-│   ├── CMakeLists.txt
-│   ├── install/linux/bin/cfg/  # 运行配置文件
-│   ├── module/
-│   │   ├── actuator_module/    # 执行器模块
-│   │   │   └── cfg/
-│   │   ├── control_module/     # 控制模块
-│   │   │   └── cfg/
-│   │   └── robotic_arm_sdk/   # 底层驱动 SDK
-│   │       ├── actuator/       #   电机驱动
-│   │       └── arm_control/    #   运动控制
-│   ├── pkg/arm_control_pkg/    # 模块打包
-│   └── protocols/              # Protobuf 协议定义
-└── build/                      # 构建输出
-    └── cfg/                    # 运行时配置
+├── CMakeLists.txt             # 根 CMake 配置
+├── cmake                      # CMake 工具模块
+├── examples                   # Python RPC 调用示例
+├── monitor                    # ArmMonitor 数据监控与采集软件
+├── src
+    ├── install/linux/bin/cfg  # 运行配置文件
+    ├── module/
+    │   ├── actuator_module    # 执行器模块 (真机)
+    │   ├── control_module     # 控制模块 (轨迹规划 + RPC + 控制循环)
+    │		├── sim_module				 # mujoco仿真模块
+    │   └── robotic_arm_sdk    # 底层驱动 SDK  │       
+    │			  ├── actuator       # 电机驱动
+    │       └── arm_control    # 运动控制
+    └── protocols/             # 自定义协议
+
 ```
 
 ## 快速开始
@@ -90,17 +78,14 @@ robotic_arm_aimrt/
 
 - **OS**: Ubuntu 22.04+
 - **编译器**: GCC 11+ / Clang 14+ (C++20)
-- **构建工具**: CMake 3.24+, Ninja
+- **构建工具**: CMake 3.24+,
 - **硬件 (真机模式)**: SocketCAN 接口, DM4340P / DM4310 电机
 
 ### 构建
 
 ```bash
-# 首次构建（含依赖下载）
+# 首次构建，需要下载依赖可能较慢，建议内存8G以上或申请8G的虚拟内存，防止编译崩溃
 ./build.sh
-
-# 增量编译
-./compile.sh
 ```
 
 ### 运行
@@ -129,7 +114,8 @@ robotic_arm_aimrt/
 | `MoveControlServiceImpl` | HTTP RPC 服务，提供 MoveJ / MoveL / MoveJMuti / MoveLMuti / Gripper 五种运动原语 |
 | `ArmController` | 轨迹规划（quintic/cubic/lspb）、逆运动学 (Piper/UR)|
 | `GripperController` | 夹爪运动规划 |
-| `ControlLoop` | 500Hz 控制循环，轮询轨迹插值点并下发 |
+| `ControlLoop` | 500Hz 控制循环，轮询轨迹插值点并下发 `/geniarm/joint_cmd` |
+| `PublishLoop` | 1000Hz 发布循环，发布期望和当前笛卡尔位姿到 `/geniarm/pose_expected`、`/geniarm/pose_current` |
 | `JointStateCallback` | 接收执行器反馈，更新控制器状态 |
 
 ### ActuatorModule
@@ -146,6 +132,13 @@ robotic_arm_aimrt/
 ### SimModule
 
 基于 **MuJoCo** 物理引擎的仿真环境，可在无硬件条件下离线验证控制算法。当前提供 GeniArm 仿真配置（`geniarm_sim_cfg.yaml`），替换 yaml 配置即可仿真其他构型。
+
+仿真支持两种执行器模式：
+
+| 模式 | XML 执行器类型 | 控制律位置 | stiffness/damping 含义 |
+|:---|:---|:---|:---|
+| **position** (v1.1.3.xml) | `<position>` | MuJoCo 内置 PD | 物理单位 (N·m/rad, N·m·s/rad) |
+| **motor+MIT** (v1.1.3_mit.xml) | `<motor>` | 软件 `MujocoSimModule` | 物理单位 (N·m/rad, N·m·s/rad) |
 
 ### Monitor
 
@@ -168,53 +161,70 @@ python -m monitor.main
 
 ---
 
-## 通信架构（GeniArm）
+## 通信架构
 
 ```
-                    ┌──────────────┐
-                    │  HTTP Client │  curl / Postman / Web 前端
-                    └──────┬───────┘
-                           │ RPC (JSON/Protobuf)
-                    ┌──────▼───────┐
-                    │  net_plugin  │  :50080
-                    └──────┬───────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-     ┌────────▼────────┐       ┌────────▼────────┐
-     │  ControlModule  │       │  ActuatorModule  │
-     │                 │       │                  │
-     │  pub:           │       │  pub:            │
-     │  /geniarm/      │──────→│  /geniarm/       │
-     │  joint_cmd      │ local │  joint_state     │
-     │                 │←──────│                  │
-     │  sub:           │       │  sub:            │
-     │  /geniarm/      │       │  /geniarm/       │
-     │  joint_state    │       │  joint_cmd       │
-     └─────────────────┘       └────────┬─────────┘
-                                        │ CANFD
-                                ┌───────▼────────┐
-                                │  SocketCAN Bus │
-                                │     can0       │
-                                └───────┬────────┘
-                                        │
-                         ┌──────────────┼──────────────┐
-                         │              │              │
-                    ┌────▼────┐   ┌─────▼─────┐  ┌────▼────┐
-                    │ joint1-3│   │ joint4-6  │  │ gripper │
-                    │ DM4340P │   │ DM4310    │  │ DM4310  │
-                    └─────────┘   └───────────┘  └─────────┘
+┌──────────────┐     ┌──────────────┐     ┌──────────────────┐
+│  HTTP Client │     │  echo_plugin │     │  ArmMonitor      │
+│  (curl/GUI)  │     │  (调试回显)   │     │  (PyQt5 监控)    │
+└──────┬───────┘     └──────┬───────┘     └────────┬─────────┘
+       │ RPC                 │ sub (channel)        │ sub (zenoh)
+       ▼                     ▼                      ▼
+┌──────────────────────────────────────────────────────────┐
+│                   AimRT Runtime                          │
+│                                                          │
+│  ┌─ net_plugin ─────────────┐  ┌─ zenoh_plugin ────────┐│
+│  │  HTTP :50080             │  │  Zenoh Native         ││
+│  └──────────────────────────┘  └───────────────────────┘│
+│                                                          │
+│  ┌─ ControlModule ──────────────────────────────────┐    │
+│  │  MoveControlService (RPC)                        │    │
+│  │  ArmController · GripperController               │    │
+│  │  ControlLoop (500Hz) ──→ /geniarm/joint_cmd      │    │
+│  │  PublishLoop (1000Hz) ──→ /geniarm/pose_expected │    │
+│  │  │                    ──→ /geniarm/pose_current  │    │
+│  │  JointStateCallback ←── /geniarm/joint_state     │    │
+│  └──────────────────────┬───────────────────────────┘    │
+│                         │ channel (local / zenoh)        │
+│  ┌──────────────────────▼───────────────────────────┐    │
+│  │  ActuatorModule (真机) / MujocoSimModule (仿真)   │    │
+│  │  JointCmdCallback ←── /geniarm/joint_cmd         │    │
+│  │  Publish/SimLoop ──→ /geniarm/joint_state        │    │
+│  └──────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────┘
 ```
 
-> 上图为 GeniArm 构型示意。不同构型通过替换 yaml 配置文件切换，Topic 前缀与 MDH 参数随之变化。
+### 真机模式
 
-| 通道 | Topic（GeniArm 示例） | 方向 | 频率 |
-|:---|:---|:---|:---|
-| Channel (local) | `/geniarm/joint_cmd` | ControlModule → ActuatorModule | 500 Hz |
-| Channel (local) | `/geniarm/joint_state` | ActuatorModule → ControlModule | 500 Hz |
-| RPC (HTTP) | `MoveControlService` | Client → ControlModule | 按需 |
+```
+┌─ ActuatorModule ──────────────────────────────────┐
+│  GeniArmCtrl · GeniArmGripper                     │
+│  ↓ CANFD (can0)                                   │
+├─ 硬件层 ──────────────────────────────────────────┤
+│  DM4340P ×3 (joint1-3)  DM4310 ×4 (joint4-6+grip)│
+└───────────────────────────────────────────────────┘
+```
 
----
+### 仿真模式
+
+```
+┌─ MujocoSimModule ──────────────────────────────┐
+│  MujocoSimModule (官方组件)                     │
+│  ├─ joint_actuator ← sub /geniarm/joint_cmd    │
+│  │   └─ MIT 阻抗控制 (软件)                      │
+│  ├─ joint_sensor → pub /geniarm/joint_state    │
+│  └─ MuJoCo GUI 可视化                           │
+└─────────────────────────────────────────────────┘
+```
+
+### Channel 话题列表
+
+| Topic | 消息类型 | 方向 | 频率 | 说明 |
+|:---|:---|:---|:---|:---|
+| `/geniarm/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` | ControlModule → Actuator/SimModule | 500 Hz | 关节控制指令 (位置/速度/刚度/阻尼) |
+| `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` | Actuator/SimModule → ControlModule | 500 Hz | 关节状态反馈 |
+| `/geniarm/pose_expected` | `robotic_arm.protocols.PoseStamped` | ControlModule → (echo/monitor) | 1000 Hz | **期望笛卡尔位姿** (由当前关节指令正解算出) |
+| `/geniarm/pose_current` | `robotic_arm.protocols.PoseStamped` | ControlModule → (echo/monitor) | 1000 Hz | **当前实际笛卡尔位姿** (由关节反馈正解算出) |
 
 ## RPC 接口
 
@@ -252,24 +262,6 @@ python3 examples/movel_muti_demo.py
 python3 examples/go_home.py
 python3 examples/gripper_demo.py
 ```
-
----
-
-## 硬件配置（GeniArm ）
-
-| 关节 | 电机型号 | CAN ID | 反馈 ID | 运动范围 |
-|:---|:---|:---|:---|:---|
-| joint1 | DM4340P | 0x01 | 0x11 | ±150° |
-| joint2 | DM4340P | 0x02 | 0x12 | 0° ~ 212° |
-| joint3 | DM4340P | 0x03 | 0x13 | -212° ~ 0° |
-| joint4 | DM4310 | 0x04 | 0x14 | ±90° |
-| joint5 | DM4310 | 0x05 | 0x15 | ±90° |
-| joint6 | DM4310 | 0x06 | 0x16 | ±90° |
-| gripper | DM4310 | 0x07 | 0x17 | — |
-
-> Piper (s6h4d) 构型使用不同的关节限位与 MDH 参数，详见 `src/module/robotic_arm_sdk/cfg/s6h4d_body_cfg.yaml`。
-
-控制模式: **MIT** (阻抗控制, stiffness + damping) / POS (位置) / VEL (速度)
 
 ## 许可
 
