@@ -1,15 +1,9 @@
 syntax = "proto3";
 
 import "error.proto";
-import "quaternion.proto";
-import "vector3.proto";
+import "pose.proto";
 
 package robotic_arm.protocols;
-
-message Pose {
-  aimrt.protocols.geometry.Quaternion orientation = 1;
-  aimrt.protocols.geometry.Vector3 position = 2;
-}
 
 message Joint {
   repeated double position = 1;
