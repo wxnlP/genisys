@@ -1,5 +1,5 @@
 <mujoco model="GeniArm_v1_1_2">
-  <compiler angle="radian" meshdir="../meshes/geni_arm_v1.1.2/" />
+  <compiler angle="radian" meshdir="../meshes/geniarm_v1.1.2/" />
 
   <option timestep="0.001" gravity="0 0 -9.81" iterations="120" solver="Newton" integrator="implicitfast">
     <flag energy="enable"/>
