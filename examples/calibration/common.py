@@ -17,7 +17,7 @@ RPC_URL = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/M
 
 
 def movej(target: List[float], v: float = 0.3, a: float = 0.5,
-          timeout: float = 30) -> bool:
+          timeout: float = 120) -> bool:
     """调用 MoveJ RPC，向机器人发送关节空间运动指令。
 
     Args:
@@ -35,7 +35,10 @@ def movej(target: List[float], v: float = 0.3, a: float = 0.5,
         "a": a,
     }
     try:
-        resp = requests.post(RPC_URL, json=payload, timeout=timeout)
+        # 本地地址不走代理，避免 Clash/VPN 等拦截 RPC 请求
+        session = requests.Session()
+        session.trust_env = False
+        resp = session.post(RPC_URL, json=payload, timeout=timeout)
         resp.raise_for_status()
         result = resp.json()
         code = result.get("error", {}).get("code", -1)
