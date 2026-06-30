@@ -13,12 +13,21 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 # Fields shown in both tables (stiffness / damping are fixed values, omitted).
-DISPLAY_FIELDS = ("position", "velocity", "effort")
+DISPLAY_FIELDS = ("pos", "vel", "eff")
+
+# Mapping from short field name → full key used in the protobuf message.
+# This lets us display short column headers while still reading the
+# correct field from incoming data.
+_FIELD_KEY: dict[str, str] = {
+    "pos": "position",
+    "vel": "velocity",
+    "eff": "effort",
+}
 
 FIELD_UNITS = {
-    "position": "(rad)",
-    "velocity": "(rad/s)",
-    "effort": "(Nm)",
+    "pos": "(rad)",
+    "vel": "(rad/s)",
+    "eff": "(Nm)",
 }
 
 COL_NAME = 0
@@ -67,15 +76,34 @@ class _DataTableWidget(QtWidgets.QWidget):
         self._table.customContextMenuRequested.connect(self._on_context_menu)
         self._table.verticalHeader().setVisible(False)
 
+        # 禁用内部垂直滚动条 — 表格显示所有行，高度由内容决定。
+        # 两个表格共用外层的 QScrollArea 统一滚动。
+        self._table.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+
         hdr = self._table.horizontalHeader()
-        hdr.setStretchLastSection(True)
-        hdr.setSectionResizeMode(COL_NAME, QtWidgets.QHeaderView.Stretch)
+        # 所有列等比例拉伸，随窗口缩放自动调整列宽
+        for i in range(ncols):
+            hdr.setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
 
         layout.addWidget(self._table)
+
+        self._fit_height()
 
     # ------------------------------------------------------------------
     # Public
     # ------------------------------------------------------------------
+
+    def _fit_height(self) -> None:
+        """调整表格最小高度使其恰好容纳所有行，不出现内部滚动条。
+
+        仅在行数变化时由调用方触发。
+        """
+        self._table.resizeRowsToContents()
+        h = self._table.horizontalHeader().height()
+        for r in range(self._table.rowCount()):
+            h += self._table.rowHeight(r)
+        h += 2 * self._table.frameWidth()
+        self._table.setMinimumHeight(h)
 
     def update_from_message(self, msg: dict) -> None:
         joints = msg.get("joints", [])
@@ -104,9 +132,11 @@ class _DataTableWidget(QtWidgets.QWidget):
 
             row = self._rows[name]
             for idx, field in enumerate(DISPLAY_FIELDS, start=_COL_FIELD_START):
-                if field not in j:
+                # Map short display name to the actual protobuf key
+                msg_key = _FIELD_KEY.get(field, field)
+                if msg_key not in j:
                     continue
-                value = j[field]
+                value = j[msg_key]
                 text = f"{value:.6f}"
                 item = self._table.item(row, idx)
                 if item is None:
@@ -130,6 +160,10 @@ class _DataTableWidget(QtWidgets.QWidget):
             for r in list(self._name_by_row):
                 if r > row:
                     self._name_by_row[r - 1] = self._name_by_row.pop(r)
+
+        # 仅在行数变化时重算高度，避免高频数据更新时频繁布局导致卡顿
+        if seen != existing:
+            self._fit_height()
 
     def set_plotted_keys(self, keys: set[str]) -> None:
         self._plotted_keys = keys
@@ -161,7 +195,9 @@ class _DataTableWidget(QtWidgets.QWidget):
         plotted = self._plotted_keys
         menu = QtWidgets.QMenu(self)
         for field in fields:
-            key = f"{self._source}/{name}/{field}"
+            # Map short display name → original protobuf key for data lookup
+            msg_key = _FIELD_KEY.get(field, field)
+            key = f"{self._source}/{name}/{msg_key}"
             label = f"{self._source}_{name}_{field}"
             if key in plotted:
                 action = menu.addAction(f"✕  Remove {label}")
@@ -206,7 +242,9 @@ class DataPanel(QtWidgets.QWidget):
         self._cmd_table.add_to_plot_requested.connect(self._relay)
         layout.addWidget(self._cmd_table)
 
-        layout.addStretch()
+        # 底部 stretch 吸收多余空间：窗口远大于表格时不会把表格拉高，
+        # 表格保持自然高度，空白留在底部。
+        layout.addStretch(1)
 
     def _relay(self, key: str, label: str) -> None:
         self.add_to_plot_requested.emit(key, label)

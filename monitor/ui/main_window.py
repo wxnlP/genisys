@@ -253,7 +253,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_connect = QtWidgets.QPushButton("●  Connect")
         self._btn_connect.setProperty("accent", "true")
         self._btn_connect.clicked.connect(self._start_zenoh)
-        self._btn_connect.setMinimumWidth(100)
         topics_display = ", ".join(self._cfg.topics.values())
         self._btn_connect.setToolTip(f"Connect to zenoh ({topics_display})")
         toolbar.addWidget(self._btn_connect)
@@ -279,9 +278,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self._toolbar_rate.setStyleSheet("color: #64748b; padding-right: 4px;")
         toolbar.addWidget(self._toolbar_rate)
 
+        # -- Data panel in scroll area — 两个表格共用同一垂直滚动条 --
+        # 当窗口高度小于两表格总高时，滚动条出现；
+        # 向下滚动时 Table 1 逐行上移隐藏，Table 2 逐渐显现。
+        self._data_scroll = QtWidgets.QScrollArea()
+        self._data_scroll.setWidget(self._data_panel)
+        self._data_scroll.setWidgetResizable(True)
+        self._data_scroll.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarAlwaysOff
+        )
+        self._data_scroll.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarAsNeeded
+        )
+        self._data_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+
         # -- Central splitter --
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-        splitter.addWidget(self._data_panel)
+        splitter.addWidget(self._data_scroll)
         splitter.addWidget(self._plot_panel)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)

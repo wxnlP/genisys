@@ -230,33 +230,28 @@ class PlotPanel(QtWidgets.QWidget):
 
         # 「☰」global actions dropdown
         self._actions_btn = QtWidgets.QPushButton("☰  操作")
-        self._actions_btn.setFixedWidth(90)
         self._actions_btn.clicked.connect(self._show_actions_menu)
         bar.addWidget(self._actions_btn)
 
         # 「↺」reset data — clear model data, curves restart from 0
         self._reset_data_btn = QtWidgets.QPushButton("↺  重置数据")
-        self._reset_data_btn.setFixedWidth(100)
         self._reset_data_btn.clicked.connect(self.clear_data_requested.emit)
         self._reset_data_btn.setToolTip("Clear accumulated data, curves start from 0")
         bar.addWidget(self._reset_data_btn)
 
         # 「✕」clear curves — remove all curve items and legend entries
         self._clear_curves_btn = QtWidgets.QPushButton("✕  清除曲线")
-        self._clear_curves_btn.setFixedWidth(100)
         self._clear_curves_btn.clicked.connect(self.clear_curves_requested.emit)
         self._clear_curves_btn.setToolTip("Clear curves & data, stay paused to add new curves")
         bar.addWidget(self._clear_curves_btn)
 
         # 「💾」save CSV
         self._save_btn = QtWidgets.QPushButton("💾  Save CSV")
-        self._save_btn.setFixedWidth(100)
         self._save_btn.clicked.connect(self.save_csv_requested.emit)
         self._save_btn.setToolTip("Export plotted curves to CSV")
         bar.addWidget(self._save_btn)
 
         self._pause_btn = QtWidgets.QPushButton("⏸  暂停")
-        self._pause_btn.setFixedWidth(90)
         self._pause_btn.setCheckable(True)
         self._pause_btn.toggled.connect(self._on_pause_toggled)
         self._pause_btn.setChecked(True)   # start paused — time frozen at 0
