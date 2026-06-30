@@ -1,5 +1,0 @@
-# hand_eye_calibration — 额外依赖
-# 在 monitor/requirements.txt 的基础上增加以下包
-
-opencv-python>=4.8
-opencv-contrib-python>=4.8
