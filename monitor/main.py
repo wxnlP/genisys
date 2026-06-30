@@ -24,6 +24,7 @@ import sys
 
 from PyQt5 import QtCore, QtWidgets
 
+from monitor.core.config import config
 from monitor.ui.main_window import MainWindow
 
 # ── Ctrl+C → graceful quit via socket pair ──────────────────────────
@@ -64,7 +65,21 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
+    # ── High-DPI / UI scaling ──────────────────────────────────────
+    # 注意：AA_EnableHighDpiScaling 必须在 QApplication 创建之前设置。
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
+
     app = QtWidgets.QApplication(sys.argv)
+
+    # Windows 额外 DPI 感知（让系统告诉 Qt 真实 DPI）
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
+
     app.setApplicationName("ArmMonitor")
     app.setApplicationVersion("0.1.0")
 
@@ -74,10 +89,16 @@ def main() -> None:
     )
     notifier.activated.connect(_graceful_shutdown)
 
-    # Global font hint
+    # Global font hint (base size before ui_scale)
     font = app.font()
-    font.setPointSize(11)
+    base_size = 11
+    font.setPointSize(max(1, round(base_size * config.ui_scale)))
     app.setFont(font)
+
+    if config.ui_scale != 1.0:
+        logging.getLogger(__name__).info(
+            "UI scale factor = %.2f", config.ui_scale
+        )
 
     _main_window = MainWindow()
     _main_window.show()

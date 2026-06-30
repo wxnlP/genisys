@@ -223,7 +223,7 @@ class PlotPanel(QtWidgets.QWidget):
 
         title = QtWidgets.QLabel("Plot View")
         title.setStyleSheet(
-            "font-size: 13px; font-weight: 600; color: #1e293b; padding: 6px 0;"
+            "font-weight: 600; color: #1e293b; padding: 6px 0;"
         )
         bar.addWidget(title)
         bar.addStretch()

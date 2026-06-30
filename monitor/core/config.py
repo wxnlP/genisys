@@ -70,6 +70,11 @@ class _Config:
             return [str(e) for e in raw]
         return []
 
+    # -- UI scale factor ----------------------------------------------------
+    @property
+    def ui_scale(self) -> float:
+        return float(self._data.get("ui_scale", 1.0))
+
 
 # ---------------------------------------------------------------------------
 # Singleton

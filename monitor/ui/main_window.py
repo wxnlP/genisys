@@ -36,7 +36,6 @@ QWidget {
     background-color: #f8fafc;
     color: #1e293b;
     font-family: "JetBrains Mono", "Fira Code", "Consolas", "Source Code Pro", monospace;
-    font-size: 12px;
 }
 
 /* --- Main window --- */
@@ -66,7 +65,6 @@ QHeaderView::section {
     border-right: 1px solid #1d4ed8;
     padding: 6px 8px;
     font-weight: 600;
-    font-size: 11px;
 }
 
 /* --- Buttons --- */
@@ -129,7 +127,6 @@ QStatusBar {
     background-color: #ffffff;
     border-top: 1px solid #e2e8f0;
     color: #64748b;
-    font-size: 11px;
 }
 
 /* --- Splitter handle --- */
@@ -206,7 +203,6 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
 
 /* --- Labels in panels --- */
 QLabel[heading="true"] {
-    font-size: 13px;
     font-weight: 600;
     color: #1e293b;
     padding: 6px 0;

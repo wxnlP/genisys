@@ -46,7 +46,7 @@ class _DataTableWidget(QtWidgets.QWidget):
         # -- header label --
         lbl = QtWidgets.QLabel(title)
         lbl.setStyleSheet(
-            "QLabel { font-size: 13px; font-weight: 600;"
+            "QLabel { font-weight: 600;"
             " color: #1e293b; padding: 6px 0; }"
         )
         layout.addWidget(lbl)
