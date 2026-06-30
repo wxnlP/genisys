@@ -193,6 +193,8 @@ class PlotPanel(QtWidgets.QWidget):
     clear_curves_requested = QtCore.pyqtSignal()
     # Emitted when the user clicks "💾  Save CSV".
     save_csv_requested = QtCore.pyqtSignal()
+    # Emitted when the user clicks "💾  Export Range" (t_min, t_max).
+    save_csv_range_requested = QtCore.pyqtSignal(float, float)
     # Emitted when the pause button is toggled (True = paused).
     pause_toggled = QtCore.pyqtSignal(bool)
 
@@ -208,6 +210,13 @@ class PlotPanel(QtWidgets.QWidget):
         self._paused = False                       # pause auto-follow
         self._auto_y_enabled = True                # Y auto-range on; user scroll = off
         self._curve_start_time: Dict[str, float] = {}  # t ≥ this → visible
+
+        # Range selection cursors
+        self._range_active = False
+        self._cursor_l: pg.InfiniteLine | None = None
+        self._cursor_r: pg.InfiniteLine | None = None
+        self._range_region: pg.LinearRegionItem | None = None
+
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -245,11 +254,26 @@ class PlotPanel(QtWidgets.QWidget):
         self._clear_curves_btn.setToolTip("Clear curves & data, stay paused to add new curves")
         bar.addWidget(self._clear_curves_btn)
 
-        # 「💾」save CSV
+        # 「💾」save CSV (full range)
         self._save_btn = QtWidgets.QPushButton("💾  Save CSV")
         self._save_btn.clicked.connect(self.save_csv_requested.emit)
         self._save_btn.setToolTip("Export plotted curves to CSV")
         bar.addWidget(self._save_btn)
+
+        # 「📏」range selection toggle
+        self._range_btn = QtWidgets.QPushButton("📏  选区")
+        self._range_btn.setCheckable(True)
+        self._range_btn.setChecked(False)
+        self._range_btn.toggled.connect(self._toggle_range_mode)
+        self._range_btn.setToolTip("Toggle range selection cursors")
+        bar.addWidget(self._range_btn)
+
+        # 「💾」export range only
+        self._export_range_btn = QtWidgets.QPushButton("💾  导出选区")
+        self._export_range_btn.setEnabled(False)
+        self._export_range_btn.clicked.connect(self._on_export_range)
+        self._export_range_btn.setToolTip("Export only the selected time range")
+        bar.addWidget(self._export_range_btn)
 
         self._pause_btn = QtWidgets.QPushButton("⏸  暂停")
         self._pause_btn.setCheckable(True)
@@ -653,3 +677,89 @@ class PlotPanel(QtWidgets.QWidget):
         """Re-enable Y auto-range and immediately fit all visible curves."""
         self._auto_y_enabled = True
         self._auto_range_y()
+
+    # ------------------------------------------------------------------
+    # Range selection cursors
+    # ------------------------------------------------------------------
+
+    def _toggle_range_mode(self, active: bool) -> None:
+        """Show / hide the two draggable vertical cursors + highlight region."""
+        self._range_active = active
+        self._range_btn.setText("📏  取消选区" if active else "📏  选区")
+        self._export_range_btn.setEnabled(active)
+
+        if active:
+            vb = self._plot_widget.getViewBox()
+            x_range = vb.viewRange()[0]
+            mid = (x_range[0] + x_range[1]) / 2.0
+            quarter = (x_range[1] - x_range[0]) / 4.0
+
+            # Draggable vertical lines
+            self._cursor_l = pg.InfiniteLine(
+                pos=mid - quarter, angle=90, movable=True,
+                pen=pg.mkPen("#2563eb", width=2),
+                label="← 起点", labelOpts={"color": "#2563eb", "position": 0.05},
+            )
+            self._cursor_r = pg.InfiniteLine(
+                pos=mid + quarter, angle=90, movable=True,
+                pen=pg.mkPen("#dc2626", width=2),
+                label="→ 终点", labelOpts={"color": "#dc2626", "position": 0.95},
+            )
+            # Highlighted region between cursors
+            self._range_region = pg.LinearRegionItem(
+                values=(mid - quarter, mid + quarter),
+                movable=True,
+                brush=pg.mkBrush(37, 99, 235, 30),
+                pen=pg.mkPen("#2563eb", width=1),
+            )
+            self._range_region.setZValue(-10)  # behind curves
+
+            self._plot_widget.addItem(self._range_region)
+            self._plot_widget.addItem(self._cursor_l)
+            self._plot_widget.addItem(self._cursor_r)
+
+            # Sync cursors ↔ region
+            self._cursor_l.sigPositionChanged.connect(self._sync_range_from_cursors)
+            self._cursor_r.sigPositionChanged.connect(self._sync_range_from_cursors)
+            self._range_region.sigRegionChanged.connect(self._sync_range_from_region)
+        else:
+            self._remove_range_items()
+
+    def _remove_range_items(self) -> None:
+        """Remove cursor lines and region from the plot."""
+        for item in (self._cursor_l, self._cursor_r, self._range_region):
+            if item is not None:
+                self._plot_widget.removeItem(item)
+        self._cursor_l = self._cursor_r = None
+        self._range_region = None
+
+    def _sync_range_from_cursors(self) -> None:
+        """Cursor dragged → update region."""
+        if self._cursor_l is None or self._cursor_r is None or self._range_region is None:
+            return
+        t_l = self._cursor_l.value()
+        t_r = self._cursor_r.value()
+        if t_l < t_r:
+            self._range_region.setRegion((t_l, t_r))
+
+    def _sync_range_from_region(self) -> None:
+        """Region dragged → update cursors."""
+        if self._cursor_l is None or self._cursor_r is None or self._range_region is None:
+            return
+        t_l, t_r = self._range_region.getRegion()
+        self._cursor_l.setValue(t_l)
+        self._cursor_r.setValue(t_r)
+
+    def get_selected_range(self) -> tuple[float, float] | None:
+        """Return ``(t_min, t_max)`` if range cursors are active, else ``None``."""
+        if not self._range_active or self._cursor_l is None or self._cursor_r is None:
+            return None
+        t_l = self._cursor_l.value()
+        t_r = self._cursor_r.value()
+        return (t_l, t_r) if t_l < t_r else (t_r, t_l)
+
+    def _on_export_range(self) -> None:
+        """Emit ``save_csv_range_requested`` with current cursor positions."""
+        rng = self.get_selected_range()
+        if rng is not None:
+            self.save_csv_range_requested.emit(*rng)

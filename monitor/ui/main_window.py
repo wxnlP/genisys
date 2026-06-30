@@ -327,6 +327,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._plot_panel.clear_data_requested.connect(self._on_reset_data)
         self._plot_panel.clear_curves_requested.connect(self._on_clear_curves)
         self._plot_panel.save_csv_requested.connect(self._on_save_csv)
+        self._plot_panel.save_csv_range_requested.connect(self._on_save_csv_range)
         self._plot_panel.pause_toggled.connect(self._on_pause_toggled)
 
         # UI refresh timer — drives plot redraw only (interval from config.yaml).
@@ -426,7 +427,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._model.resume()
 
     def _on_save_csv(self) -> None:
-        """Export plotted curves to a CSV file."""
+        """Export plotted curves to a CSV file (full range)."""
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save CSV", "", "CSV files (*.csv);;All files (*)"
         )
@@ -438,6 +439,21 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._model.export_csv(path, plotted)
         logger.info("Saved %d curves to %s", len(plotted), path)
+
+    def _on_save_csv_range(self, t_min: float, t_max: float) -> None:
+        """Export plotted curves within the selected time range."""
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Save CSV (range)", "", "CSV files (*.csv);;All files (*)"
+        )
+        if not path:
+            return
+        plotted = list(self._plot_panel.curve_keys)
+        if not plotted:
+            self._status_label.setText("⚠  Nothing to save — no curves plotted")
+            return
+        self._model.export_csv(path, plotted, t_min=t_min, t_max=t_max)
+        logger.info("Saved %d curves (range [%.3f, %.3f]) to %s",
+                     len(plotted), t_min, t_max, path)
 
     def _sync_plotted_keys(self) -> None:
         """Keep data-panel plotted-keys in sync with plot panel."""

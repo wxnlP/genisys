@@ -200,7 +200,9 @@ class DataModel(QtCore.QObject):
     def get_series(self, key: str) -> Optional[JointStateSeries]:
         return self._series.get(key)
 
-    def export_csv(self, filepath: str, plotted_keys: list[str]) -> None:
+    def export_csv(self, filepath: str, plotted_keys: list[str],
+                   t_min: float | None = None,
+                   t_max: float | None = None) -> None:
         """Export plotted curves to CSV.
 
         All series share the same uniform time grid (guaranteed by
@@ -212,7 +214,9 @@ class DataModel(QtCore.QObject):
 
         Args:
             filepath: Output path (e.g. ``/tmp/data.csv``).
-            plotted_keys: Curve keys to include (e.g. ``joint_state/j1/position``).
+            plotted_keys: Curve keys to include.
+            t_min: Optional lower time bound for range export.
+            t_max: Optional upper time bound for range export.
         """
         import csv
         import time as _time
@@ -233,6 +237,12 @@ class DataModel(QtCore.QObject):
         if window > 0 and self._start_time is not None:
             cutoff_rel = now_abs - self._start_time - window
             times = [t for t in times if t >= cutoff_rel]
+
+        # Apply range selection (takes priority over window filter)
+        if t_min is not None or t_max is not None:
+            lo = t_min if t_min is not None else float("-inf")
+            hi = t_max if t_max is not None else float("inf")
+            times = [t for t in times if lo <= t <= hi]
 
         if not times:
             return
