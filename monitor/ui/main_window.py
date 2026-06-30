@@ -353,16 +353,6 @@ class MainWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_data_received(self, msg: dict) -> None:
-        source = msg.get("source", "?")
-        joints = msg.get("joints", [])
-        # First message per source = one-line confirmation
-        if not hasattr(self, "_seen_sources"):
-            self._seen_sources: set[str] = set()
-        if source not in self._seen_sources:
-            self._seen_sources.add(source)
-            joint_names = [j.get("name", "?") for j in joints]
-            logger.info("Data source active: %s  joints=%s", source, joint_names)
-
         self._model.ingest(msg)
         self._data_panel.update_from_message(msg)
         self._sample_count += 1

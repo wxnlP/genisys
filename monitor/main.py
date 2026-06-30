@@ -44,9 +44,24 @@ def _sigint_handler(signum: int, frame: object) -> None:
     _sig_w.send(b"\0")
 
 
+_shutdown_in_progress = False
+
+
 def _graceful_shutdown() -> None:
     """Close the window (triggers closeEvent → zenoh.stop()) and force-
     exit after 1 s in case zenoh native threads keep the process alive."""
+    global _shutdown_in_progress
+    if _shutdown_in_progress:
+        return
+    _shutdown_in_progress = True
+
+    # Read from the socket to clear it, otherwise QSocketNotifier
+    # keeps firing and calls _graceful_shutdown repeatedly.
+    try:
+        _sig_r.recv(4096)
+    except Exception:
+        pass
+
     if _main_window is not None:
         _main_window.close()
     # Fallback: if the process still hasn't exited, force it.

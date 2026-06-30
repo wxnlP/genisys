@@ -137,32 +137,32 @@ class ZenohSubscriber(QtCore.QObject):
             self._session = None
             return False
 
-        # Also subscribe to each configured topic expression individually.
-        # Zenoh may reject key expressions with a leading slash, so we try
-        # both with and without it.
+        # Subscribe to each configured topic.  Zenoh may reject key
+        # expressions with a leading slash, so we try both forms.
+        subscribed_topics: list[str] = []
         for source, expr in config.topics.items():
             candidates = [expr]
             if expr.startswith("/"):
-                candidates.append(expr[1:])  # e.g. "/geniarm/joint_state" → "geniarm/joint_state"
+                candidates.append(expr[1:])
             else:
                 candidates.append(f"/{expr}")
-            subscribed = False
+            ok = False
             for ke in candidates:
                 try:
                     sub = self._session.declare_subscriber(ke, self._on_sample)
                     self._subscribers.append(sub)
-                    logger.info("Subscribed: %s  (%s)", ke, source)
-                    subscribed = True
+                    subscribed_topics.append(f"{source} ({ke})")
+                    ok = True
                     break
-                except Exception as exc:
-                    msg = str(exc).split(":")[0] if ":" in str(exc) else str(exc)
-                    logger.info("  Skip: %s  (%s) — %s", ke, source, msg)
-            if not subscribed:
-                logger.info("  Skip: %s  (no matching key expr)", expr)
+                except Exception:
+                    pass
+            if not ok:
+                logger.warning("Subscription failed: %s — no matching key expr", expr)
 
         self._active = True
         self.connection_changed.emit(True)
-        logger.info("ZenohSubscriber: listening")
+        logger.info("ZenohSubscriber: listening  (%s)",
+                     ", ".join(subscribed_topics))
         return True
 
     def stop(self) -> None:
@@ -182,9 +182,9 @@ class ZenohSubscriber(QtCore.QObject):
         # Summary of messages received per source
         if self._source_counts:
             summary = "  ".join(f"{s}={c}" for s, c in self._source_counts.items())
-            logger.info("ZenohSubscriber: stopped  (total=%d  %s)", self._msg_count, summary)
+            logger.warning("Zenoh Subscriber stopped  (total=%d  %s)", self._msg_count, summary)
         else:
-            logger.info("ZenohSubscriber: stopped  (total=%d)", self._msg_count)
+            logger.warning("Zenoh Subscriber stopped  (total=%d)", self._msg_count)
         self.connection_changed.emit(False)
 
     @property
@@ -236,16 +236,17 @@ class ZenohSubscriber(QtCore.QObject):
                 # Log the first few unknown keys so the user can see if a
                 # configured topic expression doesn't match the wire key.
                 if self._msg_count < 3:
-                    logger.info("Unknown source: %s  (decoded: %s)", key, unquote(key))
+                    logger.info("Unknown source: %s", unquote(key))
                 return
 
             self._msg_count += 1
             self._source_counts[source] = self._source_counts.get(source, 0) + 1
 
-            # Log the first message from each source so we know both are flowing
+            # Log the first message from each source so we know data is flowing
             if source not in self._source_logged:
                 self._source_logged.add(source)
-                logger.info("First msg: %s  (%s)", key, source)
+                decoded_key = unquote(key)
+                logger.info("Data flowing: %s  topic=%s", decoded_key, source)
 
 
             # Parse AIMRT channel framing header, then protobuf-decode the body.
