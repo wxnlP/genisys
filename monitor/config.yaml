@@ -13,6 +13,8 @@
 topics:
   joint_state: "/geniarm/joint_state"
   joint_cmd: "/geniarm/joint_cmd"
+  pose_current: "/geniarm/pose_current"
+  pose_expected: "/geniarm/pose_expected"
 
 
 # ---------------------------------------------------------------------------

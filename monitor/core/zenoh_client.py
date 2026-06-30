@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import struct
 from collections import deque
 from typing import Dict, List, Optional
@@ -21,6 +22,7 @@ from PyQt5 import QtCore
 from monitor.core.config import config
 from monitor.proto.joint_state_pb2 import JointStateArray
 from monitor.proto.joint_command_pb2 import JointCommandArray
+from monitor.proto.pose_pb2 import PoseStamped
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,22 @@ _DUP_WINDOW = 256
 # Protobuf field names for each message type — used to build the emitted dict.
 _JOINT_STATE_FIELDS = ("position", "velocity", "effort")
 _JOINT_CMD_FIELDS = ("position", "velocity", "effort", "stiffness", "damping")
+
+
+def _quat_to_rpy(
+    qx: float, qy: float, qz: float, qw: float
+) -> tuple[float, float, float]:
+    """Quaternion → ZYX Euler angles (roll, pitch, yaw) in radians."""
+    sinr_cosp = 2.0 * (qw * qx + qy * qz)
+    cosr_cosp = 1.0 - 2.0 * (qx * qx + qy * qy)
+    roll = math.atan2(sinr_cosp, cosr_cosp)
+    sinp = 2.0 * (qw * qy - qz * qx)
+    sinp = max(-1.0, min(1.0, sinp))
+    pitch = math.asin(sinp)
+    siny_cosp = 2.0 * (qw * qz + qx * qy)
+    cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz)
+    yaw = math.atan2(siny_cosp, cosy_cosp)
+    return roll, pitch, yaw
 
 
 def _resolve_source(topic_key: str) -> str | None:
@@ -308,22 +326,54 @@ class ZenohSubscriber(QtCore.QObject):
             msg = JointStateArray()
             msg.ParseFromString(pb_bytes)
             fields = _JOINT_STATE_FIELDS
+            joints_data = [
+                {"name": j.name, **{name: getattr(j, name) for name in fields}}
+                for j in msg.joints
+            ]
+            return {
+                "frame_id": msg.header.frame_id,
+                "sequence": msg.header.sequence_num,
+                "joints": joints_data,
+            }
+
         elif source == "joint_cmd":
             msg = JointCommandArray()
             msg.ParseFromString(pb_bytes)
             fields = _JOINT_CMD_FIELDS
+            joints_data = [
+                {"name": j.name, **{name: getattr(j, name) for name in fields}}
+                for j in msg.joints
+            ]
+            return {
+                "frame_id": msg.header.frame_id,
+                "sequence": msg.header.sequence_num,
+                "joints": joints_data,
+            }
+
+        elif source in ("pose_current", "pose_expected"):
+            msg = PoseStamped()
+            msg.ParseFromString(pb_bytes)
+            qx, qy, qz, qw = (msg.pose.orientation.x, msg.pose.orientation.y,
+                               msg.pose.orientation.z, msg.pose.orientation.w)
+            roll, pitch, yaw = _quat_to_rpy(qx, qy, qz, qw)
+            return {
+                "frame_id": msg.header.frame_id,
+                "sequence": msg.header.sequence_num,
+                "source": source,
+                "position_x": msg.pose.position.x,
+                "position_y": msg.pose.position.y,
+                "position_z": msg.pose.position.z,
+                "orientation_x": qx,
+                "orientation_y": qy,
+                "orientation_z": qz,
+                "orientation_w": qw,
+                "roll": roll,
+                "pitch": pitch,
+                "yaw": yaw,
+            }
+
         else:
             return None
-
-        joints_data = [
-            {"name": j.name, **{name: getattr(j, name) for name in fields}}
-            for j in msg.joints
-        ]
-        return {
-            "frame_id": msg.header.frame_id,
-            "sequence": msg.header.sequence_num,
-            "joints": joints_data,
-        }
 
     @staticmethod
     def _decode_json(source: str, json_bytes: bytes) -> dict | None:
@@ -334,18 +384,46 @@ class ZenohSubscriber(QtCore.QObject):
 
         if source == "joint_state":
             fields = _JOINT_STATE_FIELDS
+            joints_list = obj.get("joints", [])
+            joints_data = [
+                {"name": j.get("name", ""), **{name: j.get(name, 0.0) for name in fields}}
+                for j in joints_list
+            ]
+            return {
+                "frame_id": header.get("frameId", header.get("frame_id", "")),
+                "sequence": header.get("sequenceNum", header.get("sequence_num", 0)),
+                "joints": joints_data,
+            }
+
         elif source == "joint_cmd":
             fields = _JOINT_CMD_FIELDS
+            joints_list = obj.get("joints", [])
+            joints_data = [
+                {"name": j.get("name", ""), **{name: j.get(name, 0.0) for name in fields}}
+                for j in joints_list
+            ]
+            return {
+                "frame_id": header.get("frameId", header.get("frame_id", "")),
+                "sequence": header.get("sequenceNum", header.get("sequence_num", 0)),
+                "joints": joints_data,
+            }
+
+        elif source in ("pose_current", "pose_expected"):
+            pose = obj.get("pose", {})
+            pos = pose.get("position", {})
+            orient = pose.get("orientation", {})
+            return {
+                "frame_id": header.get("frameId", header.get("frame_id", "")),
+                "sequence": header.get("sequenceNum", header.get("sequence_num", 0)),
+                "source": source,
+                "position_x": pos.get("x", 0.0),
+                "position_y": pos.get("y", 0.0),
+                "position_z": pos.get("z", 0.0),
+                "orientation_x": orient.get("x", 0.0),
+                "orientation_y": orient.get("y", 0.0),
+                "orientation_z": orient.get("z", 0.0),
+                "orientation_w": orient.get("w", 0.0),
+            }
+
         else:
             return None
-
-        joints_list = obj.get("joints", [])
-        joints_data = [
-            {"name": j.get("name", ""), **{name: j.get(name, 0.0) for name in fields}}
-            for j in joints_list
-        ]
-        return {
-            "frame_id": header.get("frameId", header.get("frame_id", "")),
-            "sequence": header.get("sequenceNum", header.get("sequence_num", 0)),
-            "joints": joints_data,
-        }

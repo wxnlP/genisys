@@ -92,7 +92,7 @@ class DataModel(QtCore.QObject):
     # ------------------------------------------------------------------
 
     def ingest(self, msg: dict) -> None:
-        """Write incoming joint-field values into the transient buffer.
+        """Write incoming joint-field / pose values into the transient buffer.
 
         The buffer is overwritten in-place on every call — no timestamp
         is recorded and nothing is appended to the time series.  That
@@ -101,6 +101,7 @@ class DataModel(QtCore.QObject):
         source = msg.get("source", "unknown")
         new_keys: List[str] = []
 
+        # ── Joint data (joints array) ─────────────────────────────
         for j in msg.get("joints", []):
             name = j["name"]
             for field, value in j.items():
@@ -112,8 +113,19 @@ class DataModel(QtCore.QObject):
                     self._series[key] = JointStateSeries()
                     new_keys.append(key)
 
-                # In-place overwrite — no timestamp, no append
                 self._latest_buffer[key] = value
+
+        # ── Pose data (single pose, no joints) ────────────────────
+        for field in ("position_x", "position_y", "position_z",
+                      "orientation_x", "orientation_y", "orientation_z",
+                      "orientation_w", "roll", "pitch", "yaw"):
+            if field not in msg:
+                continue
+            key = f"{source}/{field}"
+            if key not in self._series:
+                self._series[key] = JointStateSeries()
+                new_keys.append(key)
+            self._latest_buffer[key] = msg[field]
 
         self._latest_full = msg
         if new_keys:
