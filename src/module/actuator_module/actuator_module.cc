@@ -117,6 +117,7 @@ void ActuatorModule::PublishLoop() {
   uint64_t seq_count_ = 0;
   // 初始化
   JointStateArray joint_state_msg;
+  joint_state_msg.mutable_joints()->Reserve(7);
   ArmCtrlBase::JointState joint_state;
   GripperCtrlBase::GripperState gripper_state;
 
