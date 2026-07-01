@@ -137,6 +137,7 @@ void ControlModule::ControlLoop() {
           // 尚无有效历史指令
           joint_cmd.position = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
           joint_cmd.velocity = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+          joint_cmd.effort = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
         }
       } else {
         last_arm_cmd_ = joint_cmd;
@@ -162,6 +163,7 @@ void ControlModule::ControlLoop() {
           // 尚无有效历史指令
           gripper_cmd.position = 0.0;
           gripper_cmd.velocity = 0.0;
+          gripper_cmd.effort = 0.0;
         }
       } else {
         last_gripper_cmd_ = gripper_cmd;
