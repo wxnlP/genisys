@@ -10,6 +10,28 @@ MoveL Demo — 笛卡尔空间直线运动
 
 import requests
 import json
+import math
+
+
+def rpy_to_quat(roll_deg, pitch_deg, yaw_deg):
+    """Convert RPY (degrees) to quaternion (w, x, y, z)."""
+    r = math.radians(roll_deg / 2)
+    p = math.radians(pitch_deg / 2)
+    y = math.radians(yaw_deg / 2)
+    return {
+        "w": math.cos(r) * math.cos(p) * math.cos(y) + math.sin(r) * math.sin(p) * math.sin(y),
+        "x": math.sin(r) * math.cos(p) * math.cos(y) - math.cos(r) * math.sin(p) * math.sin(y),
+        "y": math.cos(r) * math.sin(p) * math.cos(y) + math.sin(r) * math.cos(p) * math.sin(y),
+        "z": math.cos(r) * math.cos(p) * math.sin(y) - math.sin(r) * math.sin(p) * math.cos(y),
+    }
+
+
+# 末端姿态 (RPY 欧拉角, 单位: 度)
+ROLL_DEG = -108.0
+PITCH_DEG = 0.0
+YAW_DEG = -90.0
+
+ORI = rpy_to_quat(ROLL_DEG, PITCH_DEG, YAW_DEG)
 
 URL_MOVEJ = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/MoveJ"
 URL_MOVEL = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/MoveL"
@@ -36,21 +58,11 @@ if int(code) != 0:
     print("MoveJ 失败，无法继续")
     exit(1)
 
-# 2. 在水平方向做小范围直线运动（保持当前朝向）
-# RPY(-108°, 0°, -90°) = 四元数(0.416, -0.572, 0, -0.416)
+# 2. 笛卡尔空间直线运动
 payload = {
     "pose": {
-        "position": {
-            "x": 0.30,
-            "y": 0.0,
-            "z": 0.15
-        },
-        "orientation": {
-            "w": 0.416,
-            "x": -0.572,
-            "y": 0.572,
-            "z": -0.416
-        }
+        "position": {"x": 0.30, "y": 0.0, "z": 0.15},
+        "orientation": ORI
     },
     "v": 0.3,
     "a": 0.2
