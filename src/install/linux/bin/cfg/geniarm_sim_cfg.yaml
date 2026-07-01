@@ -40,7 +40,7 @@ aimrt:
       - name: net_plugin
         path: ./libaimrt_net_plugin.so
         options:
-          thread_num: 4
+          thread_num: 2
           http_options:
             listen_ip: 127.0.0.1
             listen_port: 50080
@@ -54,8 +54,6 @@ aimrt:
         type: simple_thread
       - name: control_executor
         type: simple_thread
-      - name: pub_executor
-        type: simple_thread
       - name: work_executor
         type: asio_thread
         options:
@@ -63,9 +61,6 @@ aimrt:
   channel:
     backends:
       - type: local # 官方支持local后端
-        options:
-          subscriber_use_inline_executor: false
-          subscriber_executor: work_executor
       - type: zenoh
     pub_topics_options:
       # - topic_name: "/geniarm/joint_state"
@@ -145,5 +140,6 @@ ControlModule:
   topic_pub_cart_current: /geniarm/pose_current
   control_executor_name: control_executor
   control_frequency: 500
-  pub_executor_name: pub_executor
-  pub_frequency: 1000
+  publish_frequency: 500
+  cpu_core: 7
+  sched_priority: 80

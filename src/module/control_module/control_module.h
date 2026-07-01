@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <mutex>
+#include <thread>
 
 using JointStateArray = aimrt::protocols::sensor::JointStateArray;
 using JointCommandArray = aimrt::protocols::sensor::JointCommandArray;
@@ -44,21 +45,22 @@ class ControlModule : public aimrt::ModuleBase {
   aimrt::channel::SubscriberRef sub_joint_state_;
   // 周期控制执行器（单独）
   aimrt::executor::ExecutorRef cycle_control_executor_;
-  aimrt::executor::ExecutorRef pub_cart_executor_;
 
   std::atomic_bool is_running_{false};
   std::promise<void> stop_sig_;
   std::promise<void> pub_stop_sig_;
   std::mutex last_arm_cmd_mutex_;
+  std::jthread publish_thread_;
 
   std::string topic_pub_joint_cmd_;
   std::string topic_sub_joint_state_;
   std::string topic_pub_cart_expected_;
   std::string topic_pub_cart_current_;
   std::string control_executor_name_;
-  std::string pub_executor_name_;
   double control_frequency_;
-  double pub_frequency_;
+  double publish_frequency_;
+  int cpu_core_ = -1;
+  int sched_priority_ = -1;
   std::vector<std::string> joint_names_;
 
   std::shared_ptr<ArmManager> arm_manager_;

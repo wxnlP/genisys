@@ -1,6 +1,7 @@
 #include "control_module/control_module.h"
 #include <fmt/ranges.h>
 #include <thread>
+#include <pthread.h>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "yaml-cpp/yaml.h"
 
@@ -17,13 +18,14 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
     control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
-    pub_executor_name_ = cfg_node["pub_executor_name"].as<std::string>();
     topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
     topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
     topic_pub_cart_expected_ = cfg_node["topic_pub_cart_expected"].as<std::string>();
     topic_pub_cart_current_ = cfg_node["topic_pub_cart_current"].as<std::string>();
     control_frequency_ = cfg_node["control_frequency"].as<double>();
-    pub_frequency_ = cfg_node["pub_frequency"].as<double>();
+    publish_frequency_ = cfg_node["publish_frequency"].as<double>();
+    cpu_core_ = cfg_node["cpu_core"] ? cfg_node["cpu_core"].as<int>() : -1;
+    sched_priority_ = cfg_node["sched_priority"] ? cfg_node["sched_priority"].as<int>() : -1;
     auto robot_cfg_file = cfg_node["config_file"].as<std::string>();
 
     arm_manager_ = std::make_shared<ArmManager>(robot_cfg_file);
@@ -39,9 +41,6 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     cycle_control_executor_ = core_.GetExecutorManager().GetExecutor(control_executor_name_);
     AIMRT_CHECK_ERROR_THROW(cycle_control_executor_, "Failed to get control executor '{}'", control_executor_name_);
-
-    pub_cart_executor_ = core.GetExecutorManager().GetExecutor(pub_executor_name_);
-    AIMRT_CHECK_ERROR_THROW(pub_cart_executor_, "Failed to get publish executor '{}'", pub_executor_name_);
 
     pub_joint_cmd_ = core_.GetChannelHandle().GetPublisher(topic_pub_joint_cmd_);
     AIMRT_CHECK_ERROR_THROW(pub_joint_cmd_, "Failed to get publisher for topic '{}'", topic_pub_joint_cmd_);
@@ -78,7 +77,7 @@ bool ControlModule::Start() {
   try {
     is_running_.store(true);
     cycle_control_executor_.Execute(std::bind(&ControlModule::ControlLoop, this));
-    pub_cart_executor_.Execute(std::bind(&ControlModule::PublishLoop, this));
+    publish_thread_ = std::jthread(&ControlModule::PublishLoop, this);
 
   } catch (const std::exception& e) {
     AIMRT_ERROR("control_module Start failed, {}", e.what());
@@ -108,10 +107,38 @@ void ControlModule::ControlLoop() {
   uint64_t seq_count = 0;
 
   JointCommandArray joint_cmd_msg;
+  joint_cmd_msg.mutable_joints()->Reserve(7);
   ArmMotion::JointCommand joint_cmd;
   GripperController::GripperCommand gripper_cmd;
 
+  // 绑定控制线程到指定核心 + SCHED_FIFO 实时优先级（由 yaml 配置）
+  if (cpu_core_ >= 0) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_core_, &cpuset);
+    if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) == 0) {
+      AIMRT_INFO("Control loop thread pinned to core {}", cpu_core_);
+    } else {
+      AIMRT_WARN("Failed to pin control loop thread to core {}", cpu_core_);
+    }
+  }
+  if (sched_priority_ >= 0) {
+    struct sched_param param = {.sched_priority = sched_priority_};
+    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) == 0) {
+      AIMRT_INFO("Control loop thread set to SCHED_FIFO priority {}", sched_priority_);
+    } else {
+      AIMRT_WARN("Failed to set SCHED_FIFO (need sudo?), try SCHED_OTHER");
+    }
+  }
+
+  // 周期计时统计
+  uint64_t dbg_cycle = 0;
+  int64_t cycle_max_us = 0;
+  int64_t get_cmd_sum_us = 0, build_msg_sum_us = 0, publish_sum_us = 0;
+
   while (is_running_.load()) {
+    auto t_start = std::chrono::steady_clock::now();
+
     joint_cmd_msg.Clear();
     auto now = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
@@ -137,6 +164,7 @@ void ControlModule::ControlLoop() {
         last_arm_cmd_ = joint_cmd;
       }
     }
+    auto t_get_cmd = std::chrono::steady_clock::now();
 
     for (int i = 0; i < 6; ++i) {
       auto* joint = joint_cmd_msg.add_joints();
@@ -168,10 +196,43 @@ void ControlModule::ControlLoop() {
       joint->set_stiffness(gripper_cmd.stiffness);
       joint->set_damping(gripper_cmd.damping);
     }
+    auto t_build_msg = std::chrono::steady_clock::now();
 
     aimrt::channel::Publish(pub_joint_cmd_, joint_cmd_msg);
 
+    auto t_publish = std::chrono::steady_clock::now();
+
+    // 每 200 周期打印一次详细计时
+    auto get_cmd_us = std::chrono::duration_cast<std::chrono::microseconds>(t_get_cmd - t_start).count();
+    auto build_msg_us = std::chrono::duration_cast<std::chrono::microseconds>(t_build_msg - t_get_cmd).count();
+    auto publish_us = std::chrono::duration_cast<std::chrono::microseconds>(t_publish - t_build_msg).count();
+    auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(t_publish - t_start).count();
+
+    get_cmd_sum_us += get_cmd_us;
+    build_msg_sum_us += build_msg_us;
+    publish_sum_us += publish_us;
+    if (total_us > cycle_max_us) cycle_max_us = total_us;
+    dbg_cycle++;
+
+    if (dbg_cycle % 200 == 0) {
+      AIMRT_DEBUG(
+          "[CycleTiming] avg: get_cmd={}μs, build_msg={}μs, publish={}μs, max_cycle={}μs, cycles={}",
+          get_cmd_sum_us / dbg_cycle, build_msg_sum_us / dbg_cycle, publish_sum_us / dbg_cycle,
+          cycle_max_us, dbg_cycle);
+    }
+    // 单次超 1ms 就打印警告
+    if (total_us > 1000) {
+      AIMRT_WARN(
+          "[CycleTiming] Slow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs",
+          get_cmd_us, build_msg_us, publish_us, total_us);
+    }
+
     next_loop_time += period;
+    now = std::chrono::steady_clock::now();
+    if (next_loop_time < now - period) {  // 落后超过 1 个周期
+      AIMRT_WARN("Control loop is lagging behind, skip to next cycle.");
+      next_loop_time = now + period;      // 放弃追赶，重新对齐
+    }
     std::this_thread::sleep_until(next_loop_time);
   }
   stop_sig_.set_value();
@@ -179,7 +240,7 @@ void ControlModule::ControlLoop() {
 
 void ControlModule::PublishLoop() {
   // 计算周期
-  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / pub_frequency_ * 1000000000));
+  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / publish_frequency_ * 1000000000));
   // 记录下一次循环时间
   auto next_loop_time = std::chrono::steady_clock::now();
   // 序列
