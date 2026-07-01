@@ -24,6 +24,9 @@ aimrt:
         type: simple_thread
       - name: control_executor
         type: simple_thread
+        options:
+          thread_bind_cpu: [7]
+          thread_sched_policy: SCHED_FIFO:80
       - name: write_cmd_thread
         type: simple_thread
 
@@ -101,5 +104,3 @@ ControlModule:
   control_executor_name: control_executor
   control_frequency: 500
   publish_frequency: 1000
-  cpu_core: 7
-  sched_priority: 80

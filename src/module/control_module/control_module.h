@@ -59,8 +59,6 @@ class ControlModule : public aimrt::ModuleBase {
   std::string control_executor_name_;
   double control_frequency_;
   double publish_frequency_;
-  int cpu_core_ = -1;
-  int sched_priority_ = -1;
   std::vector<std::string> joint_names_;
 
   std::shared_ptr<ArmManager> arm_manager_;

@@ -32,15 +32,15 @@ aimrt:
       #   path: ./libaimrt_echo_plugin.so
       #   options:
       #     type_support_pkgs:
-      #       - path: ./libpb_proto_pb_ts.so
+      #       - path: ./libactuator_pb_ts.so
       #     topic_meta_list:
-      #       - topic_name: /geniarm/pose_expected
-      #         msg_type: pb:robotic_arm.protocols.PoseStamped 
+      #       - topic_name: /geniarm/joint_cmd
+      #         msg_type: pb:aimrt.protocols.sensor.JointCommandArray
       #         echo_type: json
       - name: net_plugin
         path: ./libaimrt_net_plugin.so
         options:
-          thread_num: 2
+          thread_num: 5
           http_options:
             listen_ip: 127.0.0.1
             listen_port: 50080
@@ -54,6 +54,9 @@ aimrt:
         type: simple_thread
       - name: control_executor
         type: simple_thread
+        options:
+          thread_bind_cpu: [7]
+          thread_sched_policy: SCHED_FIFO:80
       - name: work_executor
         type: asio_thread
         options:
@@ -141,5 +144,3 @@ ControlModule:
   control_executor_name: control_executor
   control_frequency: 500
   publish_frequency: 500
-  cpu_core: 7
-  sched_priority: 80
