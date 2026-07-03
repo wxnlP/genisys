@@ -93,7 +93,7 @@ ActuatorModule:
   topic_sub_joint_cmd: /geniarm/joint_cmd
   topic_pub_joint_state: /geniarm/joint_state
   pub_executor_name: actuator_pub_executor
-  pub_frequency: 1000 
+  pub_frequency: 500 
   write_executor_name: write_cmd_thread
 ControlModule:
   config_file: control_module/geniarm_body_cfg.yaml
@@ -103,4 +103,4 @@ ControlModule:
   topic_pub_cart_current: /geniarm/pose_current
   control_executor_name: control_executor
   control_frequency: 500
-  publish_frequency: 1000
+  publish_frequency: 500

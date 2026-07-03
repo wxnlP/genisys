@@ -40,7 +40,7 @@ aimrt:
       - name: net_plugin
         path: ./libaimrt_net_plugin.so
         options:
-          thread_num: 5
+          thread_num: 2
           http_options:
             listen_ip: 127.0.0.1
             listen_port: 50080
