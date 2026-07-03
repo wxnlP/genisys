@@ -61,6 +61,7 @@ aimrt:
   channel:
     backends:
       - type: local # 官方支持local后端
+      - type: zenoh
     pub_topics_options:
       # - topic_name: "/geniarm/joint_state"
       #   enable_backends: [local, zenoh]
