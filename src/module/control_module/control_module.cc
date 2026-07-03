@@ -90,6 +90,9 @@ void ControlModule::Shutdown() {
     is_running_.store(false);
     stop_sig_.get_future().wait();
     pub_stop_sig_.get_future().wait();
+    if (arm_controller_) {
+      arm_controller_->StopSampleThread();
+    }
   } catch (const std::exception& e) {
     AIMRT_ERROR("control_module Shutdown failed, {}", e.what());
   }
