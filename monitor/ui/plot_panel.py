@@ -198,6 +198,14 @@ class PlotPanel(QtWidgets.QWidget):
     # Emitted when the pause button is toggled (True = paused).
     pause_toggled = QtCore.pyqtSignal(bool)
 
+    # Emitted for tag configuration (plot layout) save/load.
+    save_tag_config_requested = QtCore.pyqtSignal()
+    load_tag_config_requested = QtCore.pyqtSignal()
+
+    # Emitted for trajectory export/import.
+    export_trajectory_requested = QtCore.pyqtSignal()
+    import_trajectory_requested = QtCore.pyqtSignal()
+
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
         self._curves: Dict[str, pg.PlotDataItem] = {}
@@ -208,6 +216,7 @@ class PlotPanel(QtWidgets.QWidget):
         self._highlighted: Optional[str] = None   # key of highlighted curve
         self._selected_axis: str | None = None     # 'x', 'y', or None
         self._paused = False                       # pause auto-follow
+        self._readonly = False                     # read-only mode (trajectory import)
         self._auto_y_enabled = True                # Y auto-range on; user scroll = off
         self._curve_start_time: Dict[str, float] = {}  # t ≥ this → visible
 
@@ -238,24 +247,24 @@ class PlotPanel(QtWidgets.QWidget):
         bar.addStretch()
 
         # 「☰」global actions dropdown
-        self._actions_btn = QtWidgets.QPushButton("☰  操作")
+        self._actions_btn = QtWidgets.QPushButton("⚙  操作")
         self._actions_btn.clicked.connect(self._show_actions_menu)
         bar.addWidget(self._actions_btn)
 
-        # 「↺」reset data — clear model data, curves restart from 0
-        self._reset_data_btn = QtWidgets.QPushButton("↺  重置数据")
+        # 「🔄」reset data — clear model data, curves restart from 0
+        self._reset_data_btn = QtWidgets.QPushButton("🔄  重置数据")
         self._reset_data_btn.clicked.connect(self.clear_data_requested.emit)
         self._reset_data_btn.setToolTip("Clear accumulated data, curves start from 0")
         bar.addWidget(self._reset_data_btn)
 
-        # 「✕」clear curves — remove all curve items and legend entries
-        self._clear_curves_btn = QtWidgets.QPushButton("✕  清除曲线")
+        # 「🗑」clear curves — remove all curve items and legend entries
+        self._clear_curves_btn = QtWidgets.QPushButton("🗑  清除曲线")
         self._clear_curves_btn.clicked.connect(self.clear_curves_requested.emit)
         self._clear_curves_btn.setToolTip("Clear curves & data, stay paused to add new curves")
         bar.addWidget(self._clear_curves_btn)
 
-        # 「💾」save CSV (full range)
-        self._save_btn = QtWidgets.QPushButton("💾  Save CSV")
+        # 「💾」保存CSV
+        self._save_btn = QtWidgets.QPushButton("💾  保存CSV")
         self._save_btn.clicked.connect(self.save_csv_requested.emit)
         self._save_btn.setToolTip("Export plotted curves to CSV")
         bar.addWidget(self._save_btn)
@@ -268,7 +277,7 @@ class PlotPanel(QtWidgets.QWidget):
         self._range_btn.setToolTip("Toggle range selection cursors")
         bar.addWidget(self._range_btn)
 
-        # 「💾」export range only
+        # 「💾」导出选区
         self._export_range_btn = QtWidgets.QPushButton("💾  导出选区")
         self._export_range_btn.setEnabled(False)
         self._export_range_btn.clicked.connect(self._on_export_range)
@@ -380,6 +389,65 @@ class PlotPanel(QtWidgets.QWidget):
         self._curves[key].setVisible(vis)
         return vis
 
+    # ------------------------------------------------------------------
+    # Tag configuration (plot layout save/load)
+    # ------------------------------------------------------------------
+
+    def get_curve_info(self) -> list[dict]:
+        """Return a list of dicts describing every currently plotted curve.
+
+        Each dict has keys ``key``, ``label``, ``visible``.
+        This is the format expected by :meth:`restore_from_curve_info`.
+        """
+        return [
+            {"key": k, "label": self._labels.get(k, k),
+             "visible": self._visible.get(k, True)}
+            for k in self._curves
+        ]
+
+    def restore_from_curve_info(self, curves_info: list[dict],
+                                 model) -> None:
+        """Restore plotted curves from a saved tag configuration.
+
+        Args:
+            curves_info: List of dicts with ``key``, ``label``, ``visible``
+                         (as returned by :meth:`get_curve_info`).
+            model: The ``DataModel`` instance to pull data from.
+        """
+        for info in curves_info:
+            key = info["key"]
+            label = info.get("label", key)
+            visible = info.get("visible", True)
+
+            if key in self._curves:
+                continue
+
+            # Determine start_time from existing model data
+            series = model.get_series(key)
+            start_time = series.times[-1] if (series and series.times) else None
+            self.add_curve(key, label, start_time=start_time)
+            self.set_curve_visible(key, visible)
+
+    # ------------------------------------------------------------------
+    # Trajectory import — add curves for externally loaded data
+    # ------------------------------------------------------------------
+
+    def add_trajectory_curves(self, curves: dict,
+                               labels: dict[str, str]) -> None:
+        """Add curves for imported trajectory data.
+
+        Each curve is added without a *start_time* filter so all historical
+        data is immediately visible.
+
+        Args:
+            curves: ``{key: (times, values)}``.
+            labels: ``{key: display_label}``.
+        """
+        for key in curves:
+            label = labels.get(key, key)
+            if key not in self._curves:
+                self.add_curve(key, label, start_time=None)
+
     def set_curve_visible(self, key: str, visible: bool) -> None:
         if key not in self._curves:
             return
@@ -397,12 +465,23 @@ class PlotPanel(QtWidgets.QWidget):
     def curve_count(self) -> int:
         return len(self._curves)
 
-    def update_curves(self, model) -> None:
-        """Push latest data from model into all curves (frozen when paused)."""
-        if not self._paused:
+    def update_curves(self, model, force: bool = False) -> None:
+        """Push latest data from model into all curves.
+
+        When *paused*, ``setData`` is skipped for performance — the
+        visual is frozen.  Pass ``force=True`` to do a one-time render
+        even while paused (used after importing a trajectory or after
+        resetting data so the plot immediately reflects the new model
+        state).
+
+        Auto-follow (X/Y range) is always skipped when paused regardless
+        of *force*, so the user's current viewport is preserved.
+        """
+        if not self._paused or force:
             for key, curve in self._curves.items():
                 series = model.get_series(key)
                 if series is None:
+                    curve.setData([], [])  # clear visual when data gone
                     continue
                 times, values = series.times, series.values
                 start_t = self._curve_start_time.get(key, float("-inf"))
@@ -412,6 +491,7 @@ class PlotPanel(QtWidgets.QWidget):
                         times, values = times[i:], values[i:]
                 curve.setData(times, values)
 
+        if not self._paused:
             self._auto_range_x()
             self._auto_range_y()
 
@@ -420,7 +500,7 @@ class PlotPanel(QtWidgets.QWidget):
 
     def _refresh_actions_label(self) -> None:
         count = self.curve_count
-        self._actions_btn.setText(f"☰  操作  ({count})" if count else "☰  操作")
+        self._actions_btn.setText(f"⚙  操作  ({count})" if count else "⚙  操作")
 
     def clear_all(self) -> None:
         for curve in list(self._curves.values()):
@@ -500,13 +580,13 @@ class PlotPanel(QtWidgets.QWidget):
         menu.addSection(f"📈  {label}")
 
         if vis:
-            hide_act = menu.addAction("  隐藏")
+            hide_act = menu.addAction("🙈  隐藏")
             hide_act.setData(("hide", target_key))
         else:
-            show_act = menu.addAction("  显示")
+            show_act = menu.addAction("👁  显示")
             show_act.setData(("show", target_key))
 
-        remove_act = menu.addAction("✕  删除")
+        remove_act = menu.addAction("🗑  删除")
         remove_act.setData(("remove", target_key))
 
         action = menu.exec_(QtGui.QCursor.pos())
@@ -522,17 +602,31 @@ class PlotPanel(QtWidgets.QWidget):
             self.remove_curve(key)
 
     # ------------------------------------------------------------------
-    # Global actions dropdown (☰)
+    # Global actions dropdown (⚙)
     # ------------------------------------------------------------------
 
     def _show_actions_menu(self) -> None:
         menu = QtWidgets.QMenu(self)
 
-        show_all = menu.addAction("☑  显示全部")
+        show_all = menu.addAction("显示全部")
         show_all.setData("show_all")
 
-        hide_all = menu.addAction("☐  隐藏全部")
+        hide_all = menu.addAction("隐藏全部")
         hide_all.setData("hide_all")
+
+        menu.addSeparator()
+
+        save_tag = menu.addAction("导出标签配置")
+        save_tag.setData("save_tag")
+        load_tag = menu.addAction("加载标签配置")
+        load_tag.setData("load_tag")
+
+        menu.addSeparator()
+
+        export_traj = menu.addAction("导出轨迹 (.npz)")
+        export_traj.setData("export_traj")
+        import_traj = menu.addAction("导入轨迹 (.npz)")
+        import_traj.setData("import_traj")
 
         action = menu.exec_(
             self._actions_btn.mapToGlobal(
@@ -549,6 +643,14 @@ class PlotPanel(QtWidgets.QWidget):
         elif cmd == "hide_all":
             for k in self._curves:
                 self.set_curve_visible(k, False)
+        elif cmd == "save_tag":
+            self.save_tag_config_requested.emit()
+        elif cmd == "load_tag":
+            self.load_tag_config_requested.emit()
+        elif cmd == "export_traj":
+            self.export_trajectory_requested.emit()
+        elif cmd == "import_traj":
+            self.import_trajectory_requested.emit()
 
     # ------------------------------------------------------------------
     # Axis selection (click-to-highlight → single-axis zoom)
@@ -590,18 +692,55 @@ class PlotPanel(QtWidgets.QWidget):
     # Pause / resume
     # ------------------------------------------------------------------
 
-    def _on_pause_toggled(self, checked: bool) -> None:
-        """Pause or resume auto-follow (and data sampling)."""
-        self._paused = checked
-        if checked:
+    def set_paused(self, paused: bool, readonly: bool = False) -> None:
+        """Unified state transition.
+
+        Args:
+            paused: ``True`` = freeze sampling & rendering.
+            readonly: ``True`` = trajectory-import read-only mode.
+                      Only ``🗑 清除曲线`` and ``⚙ 操作`` stay enabled.
+        """
+        self._paused = paused
+        self._readonly = readonly
+
+        # ── Pause button ──────────────────────────────────────────
+        self._pause_btn.blockSignals(True)
+        self._pause_btn.setChecked(paused)
+        self._pause_btn.setEnabled(not readonly)
+        if readonly:
+            self._pause_btn.setText("📖  只读")
+            self._pause_btn.setToolTip("Read-only — click 清除曲线 to exit")
+        elif paused:
             self._pause_btn.setText("▶  继续")
             self._pause_btn.setToolTip("Resume data sampling & auto-follow")
         else:
             self._pause_btn.setText("⏸  暂停")
             self._pause_btn.setToolTip("Pause data sampling & auto-follow")
-            # Snap back to the latest data immediately on resume
+        self._pause_btn.blockSignals(False)
+
+        # ── Toolbar buttons in readonly mode ─────────────────────
+        # Only 🗑 清除曲线 and ⚙ 操作 remain clickable.
+        self._reset_data_btn.setEnabled(not readonly)
+        self._save_btn.setEnabled(not readonly)
+        self._range_btn.setEnabled(not readonly)
+        self._export_range_btn.setEnabled(
+            not readonly and self._range_active
+        )
+
+        # Clean up range cursors when entering readonly
+        if readonly and self._range_active:
+            self._toggle_range_mode(False)
+
+        # ── Sync model ───────────────────────────────────────────
+        self.pause_toggled.emit(paused)
+
+        # Auto-follow on resume
+        if not paused:
             self._auto_range_x()
-        self.pause_toggled.emit(checked)
+
+    def _on_pause_toggled(self, checked: bool) -> None:
+        """Signal handler — user clicked the pause button."""
+        self.set_paused(checked, readonly=False)
 
     # ------------------------------------------------------------------
     # Auto-follow (pausable)

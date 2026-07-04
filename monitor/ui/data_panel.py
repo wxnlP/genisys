@@ -545,7 +545,7 @@ class _PoseTableWidget(QtWidgets.QWidget):
 
         menu = QtWidgets.QMenu(self)
         if key in plotted:
-            action = menu.addAction(f"✕  Remove {label}")
+            action = menu.addAction(f"🗑  Remove {label}")
         else:
             action = menu.addAction(f"📈  Plot {label}")
         action.setData((key, label))

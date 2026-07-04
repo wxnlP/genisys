@@ -270,6 +270,49 @@ class DataModel(QtCore.QObject):
         self._start_time = None
         self._next_logical_time = 0.0
 
+    def load_external_data(self, curves: dict) -> float:
+        """Load externally recorded trajectory data (e.g. from NPZ import).
+
+        This bypasses the normal ``ingest()`` / ``sample_snapshot()`` pipeline
+        and writes directly into the time series.  The logical clock is
+        advanced past the imported data so any subsequent live data will
+        not collide.
+
+        Args:
+            curves: ``{key: (times_list, values_list)}``  where both lists
+                    contain ``float`` values.
+
+        Returns:
+            The maximum timestamp found across all imported curves (so the
+            caller can set the plot view accordingly).
+        """
+        max_t = 0.0
+        for key, (times, values) in curves.items():
+            if key not in self._series:
+                self._series[key] = JointStateSeries()
+            for t, v in zip(times, values):
+                self._series[key].append(t, v)
+                if t > max_t:
+                    max_t = t
+
+            # Also write the latest value into the buffer so the data tables
+            # show something immediately.
+            if values:
+                self._latest_buffer[key] = values[-1]
+
+        # Advance logical time past imported data to avoid overlap
+        if max_t >= self._next_logical_time:
+            self._next_logical_time = max_t + self._sample_step
+        if self._start_time is None:
+            import time as _time
+            self._start_time = _time.time()
+
+        self.data_updated.emit(
+            {"new_keys": list(curves.keys()),
+             "latest": dict(self._latest_buffer)}
+        )
+        return max_t
+
     @property
     def latest_values(self) -> Dict[str, float]:
         return dict(self._latest_buffer)

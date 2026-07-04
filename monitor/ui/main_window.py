@@ -5,12 +5,15 @@ Main application window — layout, styling, and wiring.
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from monitor.core.config import config
 from monitor.core.data_model import DataModel
+from monitor.core.tag_manager import PlotTagManager
+from monitor.core.trajectory_manager import TrajectoryManager
 from monitor.ui.data_panel import DataPanel
 from monitor.ui.plot_panel import PlotPanel
 from monitor.core.zenoh_client import ZenohSubscriber
@@ -236,6 +239,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._last_update = QtCore.QTime.currentTime()
         self._connected_at: float | None = None
 
+        # Explicit initial paused state (signals are now wired)
+        self._plot_panel.set_paused(paused=True, readonly=False)
+        self._model.pause()
+
     # ------------------------------------------------------------------
     # Layout
     # ------------------------------------------------------------------
@@ -250,14 +257,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         toolbar.addWidget(QtWidgets.QLabel("  "))
 
-        self._btn_connect = QtWidgets.QPushButton("●  Connect")
+        self._btn_connect = QtWidgets.QPushButton("🟢  Connect")
         self._btn_connect.setProperty("accent", "true")
         self._btn_connect.clicked.connect(self._start_zenoh)
         topics_display = ", ".join(self._cfg.topics.values())
         self._btn_connect.setToolTip(f"Connect to zenoh ({topics_display})")
         toolbar.addWidget(self._btn_connect)
 
-        self._btn_disconnect = QtWidgets.QPushButton("◉  Disconnect")
+        self._btn_disconnect = QtWidgets.QPushButton("🔴  Disconnect")
         self._btn_disconnect.setProperty("danger", "true")
         self._btn_disconnect.clicked.connect(self._stop_zenoh)
         self._btn_disconnect.setEnabled(False)
@@ -329,6 +336,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._plot_panel.save_csv_requested.connect(self._on_save_csv)
         self._plot_panel.save_csv_range_requested.connect(self._on_save_csv_range)
         self._plot_panel.pause_toggled.connect(self._on_pause_toggled)
+        self._plot_panel.save_tag_config_requested.connect(self._on_save_tag_config)
+        self._plot_panel.load_tag_config_requested.connect(self._on_load_tag_config)
+        self._plot_panel.export_trajectory_requested.connect(self._on_export_trajectory)
+        self._plot_panel.import_trajectory_requested.connect(self._on_import_trajectory)
 
         # UI refresh timer — drives plot redraw only (interval from config.yaml).
         # Data acquisition uses a separate timer below.
@@ -347,6 +358,15 @@ class MainWindow(QtWidgets.QMainWindow):
         rate_timer = QtCore.QTimer(self)
         rate_timer.timeout.connect(self._update_rate)
         rate_timer.start(1000)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _ensure_ext(path: str, ext: str) -> str:
+        """Append *ext* to *path* if it doesn't already end with it."""
+        return path if path.endswith(ext) else path + ext
 
     # ------------------------------------------------------------------
     # Slots
@@ -368,14 +388,14 @@ class MainWindow(QtWidgets.QMainWindow):
         topics_display = ", ".join(self._cfg.topics.values())
         if connected:
             self._connected_at = time.time()
-            self._status_label.setText(f"●  Connected  |  {topics_display}")
+            self._status_label.setText(f"🟢  Connected  |  {topics_display}")
             self._status_label.setStyleSheet(
                 "color: #16a34a; padding-left: 4px; font-weight: 600;"
             )
         else:
             self._connected_at = None
             self._uptime_label.setText("")
-            self._status_label.setText(f"●  Disconnected  |  {topics_display}")
+            self._status_label.setText(f"⚪  Disconnected  |  {topics_display}")
             self._status_label.setStyleSheet("color: #64748b; padding-left: 4px;")
 
     def _on_error(self, error_text: str) -> None:
@@ -396,17 +416,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sync_plotted_keys()
 
     def _on_reset_data(self) -> None:
-        """Reset Data: clear all data, reset logical time to 0, auto-resume.
-        Curves stay — they start showing fresh data from t=0 immediately.
+        """Reset Data: clear accumulated data, keep curves.
+        Preserve current pause state — let user decide when to resume.
         """
-        self._model.reset_and_resume()
+        paused = self._model.is_paused
+        if paused:
+            self._model.reset_and_pause()
+        else:
+            self._model.reset_and_resume()
+        self._plot_panel.set_paused(paused=paused, readonly=False)
+        # Force render so curves visually clear immediately (even when paused)
+        self._plot_panel.update_curves(self._model, force=True)
+        self._sync_plotted_keys()
 
     def _on_clear_curves(self) -> None:
-        """Clear Curves: remove all curves, clear data, auto-pause.
-        User can add new curves before manually resuming.
-        """
+        """Clear Curves: remove all curves & data, back to normal mode."""
         self._plot_panel.clear_all()
         self._model.reset_and_pause()
+        self._plot_panel.set_paused(paused=True, readonly=False)
         self._sync_plotted_keys()
 
     def _on_pause_toggled(self, paused: bool) -> None:
@@ -423,6 +450,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         if not path:
             return
+        path = self._ensure_ext(path, ".csv")
         plotted = list(self._plot_panel.curve_keys)
         if not plotted:
             self._status_label.setText("⚠  Nothing to save — no curves plotted")
@@ -437,6 +465,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         if not path:
             return
+        path = self._ensure_ext(path, ".csv")
         plotted = list(self._plot_panel.curve_keys)
         if not plotted:
             self._status_label.setText("⚠  Nothing to save — no curves plotted")
@@ -444,6 +473,134 @@ class MainWindow(QtWidgets.QMainWindow):
         self._model.export_csv(path, plotted, t_min=t_min, t_max=t_max)
         logger.info("Saved %d curves (range [%.3f, %.3f]) to %s",
                      len(plotted), t_min, t_max, path)
+
+    # ------------------------------------------------------------------
+    # Tag configuration (plot layout save/load)
+    # ------------------------------------------------------------------
+
+    def _on_save_tag_config(self) -> None:
+        """Export current plot layout as a JSON tag config file."""
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "导出标签配置", "", "Plot Tag (*.plottag);;All files (*)"
+        )
+        if not path:
+            return
+        path = self._ensure_ext(path, ".plottag")
+        curves_info = self._plot_panel.get_curve_info()
+        if not curves_info:
+            self._status_label.setText("⚠  没有曲线可导出")
+            return
+        PlotTagManager.save(path, curves_info)
+        self._status_label.setText(f"✅  标签配置已保存: {path}")
+        logger.info("Saved %d tag(s) to %s", len(curves_info), path)
+
+    def _on_load_tag_config(self) -> None:
+        """Load a plot layout from a JSON tag config file."""
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "加载标签配置", "", "Plot Tag (*.plottag);;All files (*)"
+        )
+        if not path:
+            return
+        try:
+            curves_info = PlotTagManager.load(path)
+        except Exception as exc:
+            self._status_label.setText(f"⚠  加载标签配置失败: {exc}")
+            logger.error("Failed to load tag config: %s", exc)
+            return
+        self._plot_panel.restore_from_curve_info(curves_info, self._model)
+        self._sync_plotted_keys()
+        self._status_label.setText(f"✅  标签配置已加载: {path}")
+        logger.info("Loaded %d tag(s) from %s", len(curves_info), path)
+
+    # ------------------------------------------------------------------
+    # Trajectory export/import (.traj / NPZ)
+    # ------------------------------------------------------------------
+
+    def _on_export_trajectory(self) -> None:
+        """Export all plotted curve data as a compressed NPZ file."""
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "导出轨迹", "", "Trajectory (*.npz);;All files (*)"
+        )
+        if not path:
+            return
+        path = self._ensure_ext(path, ".npz")
+        plotted = list(self._plot_panel.curve_keys)
+        if not plotted:
+            self._status_label.setText("⚠  没有曲线可导出")
+            return
+
+        # Build curves dict and labels dict from the model
+        curves = {}
+        labels = {}
+        for key in plotted:
+            series = self._model.get_series(key)
+            if series is not None:
+                curves[key] = (series.times, series.values)
+                # Derive a human-readable label from the plot panel
+                labels[key] = self._plot_panel._labels.get(key, key)
+
+        if not curves:
+            self._status_label.setText("⚠  没有数据可导出")
+            return
+
+        # Collect basic metadata
+        metadata = {
+            "source": "arm_monitor",
+            "curve_count": len(curves),
+        }
+        # Estimate sample count and duration from the first curve
+        first_key = next(iter(curves))
+        times = curves[first_key][0]
+        if times:
+            metadata["sample_count"] = len(times)
+            metadata["duration_s"] = round(times[-1] - times[0], 3)
+
+        TrajectoryManager.export(path, curves, labels, metadata=metadata)
+        self._status_label.setText(f"✅  轨迹已导出: {path}")
+        logger.info("Exported trajectory (%d curves) to %s", len(curves), path)
+
+    def _on_import_trajectory(self) -> None:
+        """Import a NPZ trajectory file and display its curves."""
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "导入轨迹", "", "Trajectory (*.npz);;All files (*)"
+        )
+        if not path:
+            return
+        try:
+            result = TrajectoryManager.load(path)
+        except Exception as exc:
+            self._status_label.setText(f"⚠  导入轨迹失败: {exc}")
+            logger.error("Failed to import trajectory: %s", exc)
+            return
+
+        curves = result["curves"]
+        labels = result["labels"]
+
+        if not curves:
+            self._status_label.setText("⚠  轨迹文件为空")
+            return
+
+        # Load data into the model, then add curves to the plot
+        max_t = self._model.load_external_data(curves)
+        self._plot_panel.add_trajectory_curves(curves, labels)
+        self._sync_plotted_keys()
+
+        # Force an immediate render so curves appear right away
+        self._plot_panel.update_curves(self._model, force=True)
+
+        # Auto-focus the view to show the full imported trajectory
+        if max_t > 0:
+            self._plot_panel._plot_widget.setXRange(0, max_t * 1.05, padding=0)
+
+        # Enter read-only mode — freeze data, disable the pause button
+        self._model.pause()
+        self._plot_panel.set_paused(paused=True, readonly=True)
+
+        self._status_label.setText(
+            f"✅  轨迹已导入: {os.path.basename(path)}  "
+            f"({len(curves)} 曲线, {result['metadata'].get('sample_count', '?')} 采样点)"
+        )
+        logger.info("Imported trajectory from %s (%d curves)", path, len(curves))
 
     def _sync_plotted_keys(self) -> None:
         """Keep data-panel plotted-keys in sync with plot panel."""
