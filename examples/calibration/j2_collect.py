@@ -21,7 +21,7 @@ from common import movej, deg2rad, wait_stable, print_step, go_home
 # ---- 配置参数 ----------------------------------------------------------
 JOINT_ID = 2
 START_DEG = 5.0     # 起始角度（度），留安全余量
-END_DEG = 180.0     # 终止角度（度），留安全余量
+END_DEG = 80.0     # 终止角度（度），留安全余量
 STEP_DEG = 5.0      # 步进（度）
 WAIT_SEC = 0.8      # 每步等待稳定时间（秒）— 手臂姿态变化大，多等一会
 VEL = 0.15          # MoveJ 速度 (rad/s) — 低速，确保准静态
