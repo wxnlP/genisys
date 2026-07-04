@@ -100,115 +100,119 @@ void ControlModule::Shutdown() {
 }
 
 void ControlModule::ControlLoop() {
-  // 计算周期
-  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / control_frequency_ * 1000000000));
-  // 记录下一次循环时间
-  auto next_loop_time = std::chrono::steady_clock::now();
-  // 序列
-  uint64_t seq_count = 0;
+  try {
+    // 计算周期
+    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / control_frequency_ * 1000000000));
+    // 记录下一次循环时间
+    auto next_loop_time = std::chrono::steady_clock::now();
+    // 序列
+    uint64_t seq_count = 0;
 
-  JointCommandArray joint_cmd_msg;
-  joint_cmd_msg.mutable_joints()->Reserve(7);
-  ArmMotion::JointCommand joint_cmd;
-  GripperController::GripperCommand gripper_cmd;
+    JointCommandArray joint_cmd_msg;
+    joint_cmd_msg.mutable_joints()->Reserve(7);
+    ArmMotion::JointCommand joint_cmd;
+    GripperController::GripperCommand gripper_cmd;
 
-  // 周期计时统计
-  uint64_t dbg_cycle = 0;
-  int64_t cycle_max_us = 0;
-  int64_t get_cmd_sum_us = 0, build_msg_sum_us = 0, publish_sum_us = 0;
+    // 周期计时统计
+    uint64_t dbg_cycle = 0;
+    int64_t cycle_max_us = 0;
+    int64_t get_cmd_sum_us = 0, build_msg_sum_us = 0, publish_sum_us = 0;
 
-  while (is_running_.load()) {
-    auto t_start = std::chrono::steady_clock::now();
+    while (is_running_.load()) {
+      auto t_start = std::chrono::steady_clock::now();
 
-    joint_cmd_msg.Clear();
-    auto now = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
-    auto time_ns = duration.count();
+      joint_cmd_msg.Clear();
+      auto now = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
+      auto time_ns = duration.count();
 
-    auto* header = joint_cmd_msg.mutable_header();
-    header->set_time_stamp(time_ns);
-    header->set_frame_id("base_link");
-    header->set_sequence_num(seq_count++);
+      auto* header = joint_cmd_msg.mutable_header();
+      header->set_time_stamp(time_ns);
+      header->set_frame_id("base_link");
+      header->set_sequence_num(seq_count++);
 
-    {
-      std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
-      if (!arm_controller_->GetJointCommand(joint_cmd)) {
-        // 无规划轨迹 — 复用上一帧指令保持
-        if (last_arm_cmd_.stiffness[0] > 0.0) {
-          joint_cmd = last_arm_cmd_;
+      {
+        std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
+        if (!arm_controller_->GetJointCommand(joint_cmd)) {
+          // 无规划轨迹 — 复用上一帧指令保持
+          if (last_arm_cmd_.stiffness[0] > 0.0) {
+            joint_cmd = last_arm_cmd_;
+          } else {
+            // 尚无有效历史指令
+            joint_cmd.position = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+            joint_cmd.velocity = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+            joint_cmd.effort = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+          }
         } else {
-          // 尚无有效历史指令
-          joint_cmd.position = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-          joint_cmd.velocity = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-          joint_cmd.effort = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+          last_arm_cmd_ = joint_cmd;
         }
-      } else {
-        last_arm_cmd_ = joint_cmd;
       }
-    }
-    auto t_get_cmd = std::chrono::steady_clock::now();
+      auto t_get_cmd = std::chrono::steady_clock::now();
 
-    for (int i = 0; i < 6; ++i) {
-      auto* joint = joint_cmd_msg.add_joints();
-      joint->set_name(joint_names_[i]);
-      joint->set_position(joint_cmd.position[i]);
-      joint->set_velocity(joint_cmd.velocity[i]);
-      joint->set_effort(joint_cmd.effort[i]);
-      joint->set_stiffness(joint_cmd.stiffness[i]);
-      joint->set_damping(joint_cmd.damping[i]);
-    }
-    if (gripper_controller_) {
-      if (gripper_controller_->GetGripperCommand(gripper_cmd) == -1) {
-        // 无规划轨迹 — 复用上一帧指令保持
-        if (last_gripper_cmd_.stiffness > 0.0) {
-          gripper_cmd = last_gripper_cmd_;
+      for (int i = 0; i < 6; ++i) {
+        auto* joint = joint_cmd_msg.add_joints();
+        joint->set_name(joint_names_[i]);
+        joint->set_position(joint_cmd.position[i]);
+        joint->set_velocity(joint_cmd.velocity[i]);
+        joint->set_effort(joint_cmd.effort[i]);
+        joint->set_stiffness(joint_cmd.stiffness[i]);
+        joint->set_damping(joint_cmd.damping[i]);
+      }
+      if (gripper_controller_) {
+        if (gripper_controller_->GetGripperCommand(gripper_cmd) == -1) {
+          // 无规划轨迹 — 复用上一帧指令保持
+          if (last_gripper_cmd_.stiffness > 0.0) {
+            gripper_cmd = last_gripper_cmd_;
+          } else {
+            // 尚无有效历史指令
+            gripper_cmd.position = 0.0;
+            gripper_cmd.velocity = 0.0;
+            gripper_cmd.effort = 0.0;
+          }
         } else {
-          // 尚无有效历史指令
-          gripper_cmd.position = 0.0;
-          gripper_cmd.velocity = 0.0;
-          gripper_cmd.effort = 0.0;
+          last_gripper_cmd_ = gripper_cmd;
         }
-      } else {
-        last_gripper_cmd_ = gripper_cmd;
+        auto* joint = joint_cmd_msg.add_joints();
+        joint->set_name(joint_names_.back());
+        joint->set_position(gripper_cmd.position);
+        joint->set_velocity(gripper_cmd.velocity);
+        joint->set_effort(gripper_cmd.effort);
+        joint->set_stiffness(gripper_cmd.stiffness);
+        joint->set_damping(gripper_cmd.damping);
       }
-      auto* joint = joint_cmd_msg.add_joints();
-      joint->set_name(joint_names_.back());
-      joint->set_position(gripper_cmd.position);
-      joint->set_velocity(gripper_cmd.velocity);
-      joint->set_effort(gripper_cmd.effort);
-      joint->set_stiffness(gripper_cmd.stiffness);
-      joint->set_damping(gripper_cmd.damping);
+      auto t_build_msg = std::chrono::steady_clock::now();
+
+      aimrt::channel::Publish(pub_joint_cmd_, joint_cmd_msg);
+
+      auto t_publish = std::chrono::steady_clock::now();
+
+      // 每 200 周期打印一次详细计时
+      auto get_cmd_us = std::chrono::duration_cast<std::chrono::microseconds>(t_get_cmd - t_start).count();
+      auto build_msg_us = std::chrono::duration_cast<std::chrono::microseconds>(t_build_msg - t_get_cmd).count();
+      auto publish_us = std::chrono::duration_cast<std::chrono::microseconds>(t_publish - t_build_msg).count();
+      auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(t_publish - t_start).count();
+
+      dbg_cycle++;
+
+      if (dbg_cycle % 200 == 0) {
+        AIMRT_DEBUG(
+            "[CycleTiming] Slow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs",
+            get_cmd_us, build_msg_us, publish_us, total_us);
+      }
+
+      next_loop_time += period;
+      now = std::chrono::steady_clock::now();
+      if (next_loop_time < now - period) {  // 落后超过 1 个周期
+        AIMRT_WARN("Control loop is lagging behind, skip to next cycle.");
+        AIMRT_WARN(
+            "\n---\nNow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs\n---",
+            get_cmd_us, build_msg_us, publish_us, total_us);
+        next_loop_time = now + period;      // 放弃追赶，重新对齐
+      }
+      std::this_thread::sleep_until(next_loop_time);
     }
-    auto t_build_msg = std::chrono::steady_clock::now();
-
-    aimrt::channel::Publish(pub_joint_cmd_, joint_cmd_msg);
-
-    auto t_publish = std::chrono::steady_clock::now();
-
-    // 每 200 周期打印一次详细计时
-    auto get_cmd_us = std::chrono::duration_cast<std::chrono::microseconds>(t_get_cmd - t_start).count();
-    auto build_msg_us = std::chrono::duration_cast<std::chrono::microseconds>(t_build_msg - t_get_cmd).count();
-    auto publish_us = std::chrono::duration_cast<std::chrono::microseconds>(t_publish - t_build_msg).count();
-    auto total_us = std::chrono::duration_cast<std::chrono::microseconds>(t_publish - t_start).count();
-
-    dbg_cycle++;
-
-    if (dbg_cycle % 200 == 0) {
-      AIMRT_DEBUG(
-          "[CycleTiming] Slow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs",
-          get_cmd_us, build_msg_us, publish_us, total_us);
-    }
-
-    next_loop_time += period;
-    now = std::chrono::steady_clock::now();
-    if (next_loop_time < now - period) {  // 落后超过 1 个周期
-      AIMRT_WARN("Control loop is lagging behind, skip to next cycle.");
-      AIMRT_WARN(
-          "\n---\nNow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs\n---",
-          get_cmd_us, build_msg_us, publish_us, total_us);
-      next_loop_time = now + period;      // 放弃追赶，重新对齐
-    }
-    std::this_thread::sleep_until(next_loop_time);
+  } catch (const std::exception& e) {
+    AIMRT_ERROR("ControlLoop crashed: {}", e.what());
   }
   stop_sig_.set_value();
 }

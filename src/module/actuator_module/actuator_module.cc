@@ -109,81 +109,89 @@ void ActuatorModule::Shutdown() {
 }
 
 void ActuatorModule::PublishLoop() {
-  // 计算周期
-  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / publish_frequecy_ * 1000000000));
-  // 记录下一次循环时间
-  auto next_loop_time = std::chrono::steady_clock::now();
-  // 序列
-  uint64_t seq_count_ = 0;
-  // 初始化
-  JointStateArray joint_state_msg;
-  joint_state_msg.mutable_joints()->Reserve(7);
-  ArmCtrlBase::JointState joint_state;
-  GripperCtrlBase::GripperState gripper_state;
+  try {
+    // 计算周期
+    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / publish_frequecy_ * 1000000000));
+    // 记录下一次循环时间
+    auto next_loop_time = std::chrono::steady_clock::now();
+    // 序列
+    uint64_t seq_count_ = 0;
+    // 初始化
+    JointStateArray joint_state_msg;
+    joint_state_msg.mutable_joints()->Reserve(7);
+    ArmCtrlBase::JointState joint_state;
+    GripperCtrlBase::GripperState gripper_state;
 
-  while (is_running_.load()) {
-    joint_state_msg.Clear();
-    if (!arm_actuator_->GetJointState(joint_state)) {
-      AIMRT_ERROR("读取机械臂本体关节状态失败！");
-    }
-    if (gripper_actuator_) {
-      if (!gripper_actuator_->ReceiveState(gripper_state)) {
-        AIMRT_ERROR("读取夹爪状态失败！");
+    while (is_running_.load()) {
+      joint_state_msg.Clear();
+      if (!arm_actuator_->GetJointState(joint_state)) {
+        AIMRT_ERROR("读取机械臂本体关节状态失败！");
       }
+      if (gripper_actuator_) {
+        if (!gripper_actuator_->ReceiveState(gripper_state)) {
+          AIMRT_ERROR("读取夹爪状态失败！");
+        }
+      }
+
+      auto now = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
+      auto time_ns = duration.count();
+
+      auto* header = joint_state_msg.mutable_header();
+      header->set_time_stamp(time_ns);
+      header->set_frame_id("base_link");
+      header->set_sequence_num(seq_count_++);
+
+      for (int i = 0; i < 6; ++i) {
+        auto* joint = joint_state_msg.add_joints();
+        joint->set_name(joint_names_[i]);
+        joint->set_position(joint_state.position[i]);
+        joint->set_velocity(joint_state.velocity[i]);
+        joint->set_effort(joint_state.effort[i]);
+      }
+
+      if (gripper_actuator_) {
+        auto* gripper_joint = joint_state_msg.add_joints();
+        gripper_joint->set_name(joint_names_.back());
+        gripper_joint->set_position(gripper_state.position);
+        gripper_joint->set_velocity(gripper_state.velocity);
+        gripper_joint->set_effort(gripper_state.effort);
+      }
+
+      aimrt::channel::Publish(pub_joint_state_, joint_state_msg);
+
+      next_loop_time += period;
+
+      std::this_thread::sleep_until(next_loop_time);
     }
-
-    auto now = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
-    auto time_ns = duration.count();
-
-    auto* header = joint_state_msg.mutable_header();
-    header->set_time_stamp(time_ns);
-    header->set_frame_id("base_link");
-    header->set_sequence_num(seq_count_++);
-
-    for (int i = 0; i < 6; ++i) {
-      auto* joint = joint_state_msg.add_joints();
-      joint->set_name(joint_names_[i]);
-      joint->set_position(joint_state.position[i]);
-      joint->set_velocity(joint_state.velocity[i]);
-      joint->set_effort(joint_state.effort[i]);
-    }
-
-    if (gripper_actuator_) {
-      auto* gripper_joint = joint_state_msg.add_joints();
-      gripper_joint->set_name(joint_names_.back());
-      gripper_joint->set_position(gripper_state.position);
-      gripper_joint->set_velocity(gripper_state.velocity);
-      gripper_joint->set_effort(gripper_state.effort);
-    }
-
-    aimrt::channel::Publish(pub_joint_state_, joint_state_msg);
-
-    next_loop_time += period;
-
-    std::this_thread::sleep_until(next_loop_time);
+  } catch (const std::exception& e) {
+    AIMRT_ERROR("PublishLoop crashed: {}", e.what());
   }
   pub_stop_sig_.set_value();
   AIMRT_INFO("成功退出PublishLoop");
 }
 
 void ActuatorModule::WriteLoop() {
-  ArmCtrlBase::JointCommand joint_cmd;
-  GripperCtrlBase::GripperCommand gripper_cmd;
-  while (is_running_.load()) {
-    write_sem_.acquire();
-    if (!is_running_.load()) {
-      break;
+  try {
+    ArmCtrlBase::JointCommand joint_cmd;
+    GripperCtrlBase::GripperCommand gripper_cmd;
+    while (is_running_.load()) {
+      write_sem_.acquire();
+      if (!is_running_.load()) {
+        break;
+      }
+      {
+        std::lock_guard<std::mutex> lock(cached_cmd_lock);
+        joint_cmd = cached_joint_cmd_;
+        gripper_cmd = cached_gripper_cmd_;
+      }
+      arm_actuator_->SetJointState(joint_cmd);
+      if (gripper_actuator_) {
+        gripper_actuator_->SendCommand(gripper_cmd);
+      }
     }
-    {
-      std::lock_guard<std::mutex> lock(cached_cmd_lock);
-      joint_cmd = cached_joint_cmd_;
-      gripper_cmd = cached_gripper_cmd_;
-    }
-    arm_actuator_->SetJointState(joint_cmd);
-    if (gripper_actuator_) {
-      gripper_actuator_->SendCommand(gripper_cmd);
-    }
+  } catch (const std::exception& e) {
+    AIMRT_ERROR("WriteLoop crashed: {}", e.what());
   }
   write_stop_sig_.set_value();
   AIMRT_INFO("成功退出WriteLoop");
