@@ -78,3 +78,9 @@ def go_home(v: float = 1.0, a: float = 0.5) -> bool:
     else:
         print(">>> 回 home 失败\n")
     return ok
+
+
+def wait_for_save():
+    """采集完成后暂停，等用户导出数据后按 Enter 回零"""
+    print(f"\n✅ 采集完成！请在 monitor 中点击「💾 Save CSV」导出数据")
+    input("导出完成后按 Enter 回零 ...\n")

@@ -14,7 +14,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from common import movej, deg2rad, wait_stable, print_step, go_home
+from common import movej, deg2rad, wait_stable, print_step, go_home, wait_for_save
 
 # ---- 配置参数 ----------------------------------------------------------
 JOINT_ID = 4
@@ -47,11 +47,11 @@ def main():
     print(f"  等待时间: {WAIT_SEC}s/点  (信号弱，延长等待)")
     print(f"  速度: {VEL} rad/s  加速度: {ACC} rad/s²")
     print(f"  位姿: 手臂水平伸出 (q₂=90°, q₃=-90°)")
-    print(f"\n请在 monitor 中点击「● Connect」并「▶ 继续」开始记录")
-    input("准备好后按 Enter 开始采集 ...")
     print()
 
-    # ---- 移动到起始位姿 ------------------------------------------------
+    # ---- 预先移动到起始位姿（不计入数据）----------------------------------
+    if not go_home():
+        return
     print(">>> 移动到腕部采集起始位姿 ...")
     start_pose = [0.0, deg2rad(90.0), deg2rad(-90.0),
                   deg2rad(START_DEG), 0.0, 0.0]
@@ -59,6 +59,9 @@ def main():
         print("    [ERROR] 移动到起始位姿失败")
         return
     wait_stable(1.0)
+
+    print(f"请在 monitor 中点击「● Connect」并「▶ 继续」开始记录")
+    input("准备好后按 Enter 开始采集 ...\n")
 
     count = 0
 
@@ -88,13 +91,12 @@ def main():
             return
         wait_stable(WAIT_SEC)
 
-    # ---- 回 home -------------------------------------------------------
+    # ---- 保存数据 & 回 home ---------------------------------------------
     print()
-    go_home()
-    print("=" * 60)
     print(f"✅ 关节 {JOINT_ID} 采集完成！共 {count} 个点")
-    print("=" * 60)
-    print("请在 monitor 中点击「💾 Save CSV」导出数据，")
+    wait_for_save()
+
+    go_home()
     print("建议文件名: calibration_j4.csv")
 
 
