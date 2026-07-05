@@ -51,9 +51,14 @@ def main():
     print(f"\n警告: 关节 2 力矩变化大，请确保周围无障碍物！")
     print()
 
-    # ---- 预先回 home（不计入数据）----------------------------------------
-    if not go_home():
+    # ---- 预移到起始角（不计入数据）----------------------------------------
+    start_pose = list(FIXED_POSE)
+    start_pose[JOINT_ID - 1] = deg2rad(START_DEG)
+    print(f"\n>>> 预移到起始位置 J{JOINT_ID}={START_DEG:.0f}° ...")
+    if not movej(start_pose, v=VEL, a=ACC):
+        print("    [ERROR] 预移失败，终止")
         return
+    print(">>> 已就位\n")
 
     print(f"请在 monitor 中点击「● Connect」并「▶ 继续」开始记录")
     input("准备好后按 Enter 开始采集 ...\n")

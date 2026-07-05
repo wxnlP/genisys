@@ -58,6 +58,9 @@ def rad2deg(rad: float) -> float:
     return rad * 180.0 / 3.141592653589793
 
 
+
+
+
 def wait_stable(seconds: float = 0.8):
     """等待机器人稳定"""
     time.sleep(seconds)

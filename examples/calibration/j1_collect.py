@@ -29,7 +29,7 @@ JOINT_ID = 1
 START_DEG = -150.0  # 起始角度（度）
 END_DEG = 150.0     # 终止角度（度）
 STEP_DEG = 10.0     # 步进（度）
-WAIT_SEC = 0.5      # 每步等待稳定时间（秒）
+WAIT_SEC = 0.8      # 每步等待稳定时间（秒）
 VEL = 0.15          # MoveJ 速度 (rad/s) — 低速，确保准静态
 ACC = 0.3            # MoveJ 加速度 (rad/s²) — 小加速度，减少惯性力
 
@@ -57,9 +57,14 @@ def main():
     print(f"  速度: {VEL} rad/s  加速度: {ACC} rad/s²")
     print()
 
-    # ---- 预先回 home（不计入数据）----------------------------------------
-    if not go_home():
+    # ---- 预移到起始角（不计入数据）----------------------------------------
+    start_pose = list(FIXED_POSE)
+    start_pose[JOINT_ID - 1] = deg2rad(START_DEG)
+    print(f"\n>>> 预移到起始位置 J{JOINT_ID}={START_DEG:.0f}° ...")
+    if not movej(start_pose, v=1, a=0.5):
+        print("    [ERROR] 预移失败，终止")
         return
+    print(">>> 已就位\n")
 
     print(f"请在 monitor 中点击「● Connect」并「▶ 继续」开始记录")
     input("准备好后按 Enter 开始采集 ...\n")

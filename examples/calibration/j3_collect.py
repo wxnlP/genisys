@@ -85,9 +85,17 @@ def main():
     print(f"  速度: {VEL} rad/s  加速度: {ACC} rad/s²")
     print()
 
-    # ---- 预先回 home + 起始位姿（不计入数据）-----------------------------
+    # ---- 安全回 home，再预移到第一组起始位姿（均不计入数据）---------------
     if not go_home():
         return
+    first_q2 = Q2_FIX_VALUES[0]
+    print(f"\n>>> 预移到第一组起始位姿 q₂={first_q2:.0f}°, q₃={START_DEG:.0f}° ...")
+    start_pose = [0.0, deg2rad(first_q2), deg2rad(START_DEG), 0.0, 0.0, 0.0]
+    if not movej(start_pose, v=0.3, a=0.5):
+        print("    [ERROR] 预移失败，终止")
+        return
+    wait_stable(1.0)
+    print(">>> 已就位\n")
 
     print(f"请在 monitor 中点击「● Connect」并「▶ 继续」开始记录")
     input("准备好后按 Enter 开始采集 ...\n")
@@ -95,14 +103,15 @@ def main():
     count = 0
 
     # ---- 分两组采集 ----------------------------------------------------
-    for q2_fix in Q2_FIX_VALUES:
-        # 先移动到该组的起始姿态
-        print(f"\n>>> 移动到 q₂ = {q2_fix:.0f}° 的起始位姿 ...")
-        start_pose = [0.0, deg2rad(q2_fix), deg2rad(START_DEG), 0.0, 0.0, 0.0]
-        if not movej(start_pose, v=0.3, a=0.5):
-            print("    [ERROR] 移动到起始位姿失败")
-            return
-        wait_stable(1.0)
+    for qi, q2_fix in enumerate(Q2_FIX_VALUES):
+        # 第一组的起始位姿已在录制前就位，无需重复移动
+        if qi > 0:
+            print(f"\n>>> 移动到 q₂ = {q2_fix:.0f}° 的起始位姿 ...")
+            start_pose = [0.0, deg2rad(q2_fix), deg2rad(START_DEG), 0.0, 0.0, 0.0]
+            if not movej(start_pose, v=0.3, a=0.5):
+                print("    [ERROR] 移动到起始位姿失败")
+                return
+            wait_stable(1.0)
 
         count = collect_pass(q2_fix, angles_fwd, angles_rev, count)
         if count < 0:
