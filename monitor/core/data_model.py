@@ -8,10 +8,13 @@ use the "Clear All" button in the plot toolbar to reset when needed.
 
 from __future__ import annotations
 
+import time as _time
 from collections import deque
 from typing import Dict, List, Optional
 
 from PyQt5 import QtCore
+
+from monitor.core.config import config as _cfg
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -74,6 +77,10 @@ class DataModel(QtCore.QObject):
     # Emitted after a batch of samples is ingested.
     # payload: {"new_keys": list[str], "latest": dict[str, float]}
     data_updated = QtCore.pyqtSignal(dict)
+
+    # Emitted when CSV export completes (in background thread).
+    csv_export_finished = QtCore.pyqtSignal(str)  # filepath
+    csv_export_failed = QtCore.pyqtSignal(str)    # error message
 
     def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
         super().__init__(parent)
@@ -200,10 +207,12 @@ class DataModel(QtCore.QObject):
     def get_series(self, key: str) -> Optional[JointStateSeries]:
         return self._series.get(key)
 
+    # ── CSV export in background thread ────────────────────────────────
+
     def export_csv(self, filepath: str, plotted_keys: list[str],
                    t_min: float | None = None,
                    t_max: float | None = None) -> None:
-        """Export plotted curves to CSV.
+        """Export plotted curves to CSV in a background thread.
 
         All series share the same uniform time grid (guaranteed by
         :meth:`sample_snapshot`).  Pick one visible series as the
@@ -218,15 +227,10 @@ class DataModel(QtCore.QObject):
             t_min: Optional lower time bound for range export.
             t_max: Optional upper time bound for range export.
         """
-        import csv
-        import time as _time
-
-        from monitor.core.config import config as _cfg
-
+        # Snapshot data in the main thread, then hand off to worker.
         window = _cfg.csv_export_window_s
         now_abs = _time.time()
 
-        # Take the time axis from the first non-empty plotted series
         times: list[float] = []
         for key in plotted_keys:
             s = self._series.get(key)
@@ -238,7 +242,6 @@ class DataModel(QtCore.QObject):
             cutoff_rel = now_abs - self._start_time - window
             times = [t for t in times if t >= cutoff_rel]
 
-        # Apply range selection (takes priority over window filter)
         if t_min is not None or t_max is not None:
             lo = t_min if t_min is not None else float("-inf")
             hi = t_max if t_max is not None else float("inf")
@@ -249,18 +252,59 @@ class DataModel(QtCore.QObject):
 
         columns = ["t"] + [k.replace("/", "_") for k in plotted_keys]
 
-        with open(filepath, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(columns)
-            for i, t in enumerate(times):
-                row = [f"{t:.6f}"]
-                for key in plotted_keys:
-                    s = self._series.get(key)
-                    if s is None or i >= len(s.values):
-                        row.append("")
-                    else:
-                        row.append(f"{s.values[i]:.6f}")
-                writer.writerow(row)
+        # Snapshot all column values
+        col_values: dict[str, list[float | str]] = {}
+        for key in plotted_keys:
+            s = self._series.get(key)
+            col_values[key] = list(s.values) if s is not None else []
+
+        self._run_csv_worker(filepath, columns, times, col_values, plotted_keys)
+
+    def _run_csv_worker(self, filepath: str, columns: list[str],
+                        times: list[float],
+                        col_values: dict[str, list[float | str]],
+                        plotted_keys: list[str]) -> None:
+        """Start a background thread to write CSV, then return immediately."""
+
+        class Worker(QtCore.QObject):
+            done = QtCore.pyqtSignal(str)
+            error = QtCore.pyqtSignal(str)
+
+            def run(self) -> None:
+                try:
+                    # Build entire CSV in memory first (fast), then write once.
+                    lines = [",".join(columns)]
+                    vals = col_values
+                    for i, t in enumerate(times):
+                        row = [f"{t:.6f}"]
+                        for key in plotted_keys:
+                            vs = vals.get(key)
+                            if vs is not None and i < len(vs):
+                                row.append(f"{vs[i]:.6f}")
+                            else:
+                                row.append("")
+                        lines.append(",".join(row))
+                    full_csv = "\n".join(lines)
+
+                    with open(filepath, "w", newline="") as f:
+                        f.write(full_csv)   # single syscall → releases GIL
+                    self.done.emit(filepath)
+                except Exception as e:
+                    self.error.emit(str(e))
+
+        thread = QtCore.QThread(self)
+        worker = Worker()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.done.connect(lambda fp: (
+            self.csv_export_finished.emit(fp),
+            thread.quit(), thread.wait(), worker.deleteLater(), thread.deleteLater()
+        ))
+        worker.error.connect(lambda msg: (
+            self.csv_export_failed.emit(msg),
+            thread.quit(), thread.wait(), worker.deleteLater(), thread.deleteLater()
+        ))
+        thread.start()
 
     def clear_all(self) -> None:
         """Discard all accumulated data and reset the logical clock."""

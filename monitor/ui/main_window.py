@@ -444,7 +444,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._model.resume()
 
     def _on_save_csv(self) -> None:
-        """Export plotted curves to a CSV file (full range)."""
+        """Export plotted curves to a CSV file (full range) — modal progress."""
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save CSV", "", "CSV files (*.csv);;All files (*)"
         )
@@ -455,11 +455,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not plotted:
             self._status_label.setText("⚠  Nothing to save — no curves plotted")
             return
-        self._model.export_csv(path, plotted)
-        logger.info("Saved %d curves to %s", len(plotted), path)
+        self._do_export_csv(path, plotted)
 
     def _on_save_csv_range(self, t_min: float, t_max: float) -> None:
-        """Export plotted curves within the selected time range."""
+        """Export plotted curves within the selected time range — modal progress."""
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save CSV (range)", "", "CSV files (*.csv);;All files (*)"
         )
@@ -470,9 +469,85 @@ class MainWindow(QtWidgets.QMainWindow):
         if not plotted:
             self._status_label.setText("⚠  Nothing to save — no curves plotted")
             return
+        self._do_export_csv(path, plotted, t_min=t_min, t_max=t_max)
+
+    def _do_export_csv(self, path: str, plotted: list[str],
+                       t_min: float | None = None,
+                       t_max: float | None = None) -> None:
+        """Show modal progress dialog and export CSV in background thread."""
+        # ── custom modal dialog ──────────────────────────────────────
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("导出数据")
+        dialog.setWindowModality(QtCore.Qt.WindowModal)
+        dialog.setFixedSize(360, 140)
+        layout = QtWidgets.QVBoxLayout(dialog)
+        layout.setSpacing(16)
+
+        label = QtWidgets.QLabel("正在导出 CSV …")
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setStyleSheet("font-size: 14px; padding: 8px;")
+        layout.addWidget(label)
+
+        progress = QtWidgets.QProgressBar(dialog)
+        progress.setRange(0, 0)  # indeterminate
+        progress.setFixedHeight(6)
+        layout.addWidget(progress)
+
+        btn = QtWidgets.QPushButton("完成")
+        btn.setEnabled(False)
+        btn.setFixedWidth(100)
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        dialog.show()
+        QtWidgets.QApplication.processEvents()
+
+        error_msg: list[str] = []
+        loop = QtCore.QEventLoop(self)
+
+        def on_done(fp: str) -> None:
+            label.setText("✅  导出完成，请点击「完成」关闭")
+            label.setStyleSheet(
+                "font-size: 14px; padding: 8px; color: #16a34a;")
+            progress.setRange(0, 100)
+            progress.setValue(100)
+            progress.setStyleSheet(
+                "QProgressBar::chunk { background-color: #16a34a; }")
+            btn.setEnabled(True)
+            QtWidgets.QApplication.processEvents()
+
+        def on_failed(msg: str) -> None:
+            error_msg.append(msg)
+            label.setText(f"❌  导出失败:\n{msg}")
+            label.setStyleSheet(
+                "font-size: 14px; padding: 8px; color: #dc2626;")
+            progress.setVisible(False)
+            btn.setEnabled(True)
+            btn.setText("关闭")
+            QtWidgets.QApplication.processEvents()
+
+        btn.clicked.connect(loop.quit)
+        self._model.csv_export_finished.connect(on_done)
+        self._model.csv_export_failed.connect(on_failed)
         self._model.export_csv(path, plotted, t_min=t_min, t_max=t_max)
-        logger.info("Saved %d curves (range [%.3f, %.3f]) to %s",
-                     len(plotted), t_min, t_max, path)
+
+        loop.exec()
+
+        # ── cleanup ─────────────────────────────────────────────────
+        self._model.csv_export_finished.disconnect(on_done)
+        self._model.csv_export_failed.disconnect(on_failed)
+        dialog.close()
+
+        if error_msg:
+            self._status_label.setText(
+                f"❌  CSV export failed: {error_msg[0]}")
+            logger.error("CSV export failed: %s", error_msg[0])
+        else:
+            self._status_label.setText(f"✅  Saved {path}")
+            logger.info("Saved CSV to %s", path)
 
     # ------------------------------------------------------------------
     # Tag configuration (plot layout save/load)
