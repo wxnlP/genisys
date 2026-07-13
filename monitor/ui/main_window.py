@@ -13,7 +13,6 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from monitor.core.config import config
 from monitor.core.data_model import DataModel
 from monitor.core.tag_manager import PlotTagManager
-from monitor.core.trajectory_manager import TrajectoryManager
 from monitor.ui.data_panel import DataPanel
 from monitor.ui.plot_panel import PlotPanel
 from monitor.core.zenoh_client import ZenohSubscriber
@@ -238,6 +237,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sample_count = 0
         self._last_update = QtCore.QTime.currentTime()
         self._connected_at: float | None = None
+        self._record_pending_action: str | None = None
+        self._record_config = {
+            "action_name": "record_joint_state",
+            "preparation_duration_s": 0,
+            "record_duration_s": 0,
+            "rpc_base_url": "http://127.0.0.1:50080",
+        }
 
         # Explicit initial paused state (signals are now wired)
         self._plot_panel.set_paused(paused=True, readonly=False)
@@ -270,6 +276,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_disconnect.setEnabled(False)
         self._btn_disconnect.setToolTip("Disconnect from zenoh")
         toolbar.addWidget(self._btn_disconnect)
+
+        self._btn_record_config = QtWidgets.QPushButton("🛠  录制配置")
+        self._btn_record_config.clicked.connect(self._on_configure_start_record)
+        self._btn_record_config.setToolTip("配置 StartRecord 参数与 RPC 地址")
+        toolbar.addWidget(self._btn_record_config)
 
         toolbar.addSeparator()
 
@@ -333,13 +344,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._data_panel.add_to_plot_requested.connect(self._on_add_to_plot)
         self._plot_panel.clear_data_requested.connect(self._on_reset_data)
         self._plot_panel.clear_curves_requested.connect(self._on_clear_curves)
-        self._plot_panel.save_csv_requested.connect(self._on_save_csv)
-        self._plot_panel.save_csv_range_requested.connect(self._on_save_csv_range)
+        self._plot_panel.record_toggle_requested.connect(self._on_record_toggle)
         self._plot_panel.pause_toggled.connect(self._on_pause_toggled)
         self._plot_panel.save_tag_config_requested.connect(self._on_save_tag_config)
         self._plot_panel.load_tag_config_requested.connect(self._on_load_tag_config)
-        self._plot_panel.export_trajectory_requested.connect(self._on_export_trajectory)
-        self._plot_panel.import_trajectory_requested.connect(self._on_import_trajectory)
+        self._model.record_started.connect(self._on_record_started)
+        self._model.record_stopped.connect(self._on_record_stopped)
+        self._model.record_failed.connect(self._on_record_failed)
 
         # UI refresh timer — drives plot redraw only (interval from config.yaml).
         # Data acquisition uses a separate timer below.
@@ -347,12 +358,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._ui_timer.timeout.connect(lambda: self._plot_panel.update_curves(self._model))
         self._ui_timer.start(self._cfg.refresh_interval_ms)
 
-        # DAQ timer — strict 10 ms sampling clock, independent of UI refresh.
-        # Drives sample_snapshot() which snapshots the ingest buffer into the
-        # time series with a single shared timestamp per tick.
-        self._daq_timer = QtCore.QTimer(self)
-        self._daq_timer.timeout.connect(self._model.sample_snapshot)
-        self._daq_timer.start(10)
+        # Sampling is message-driven in DataModel.ingest(); no DAQ snapshot timer.
 
         # Rate meter (1 Hz)
         rate_timer = QtCore.QTimer(self)
@@ -443,111 +449,102 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self._model.resume()
 
-    def _on_save_csv(self) -> None:
-        """Export plotted curves to a CSV file (full range) — modal progress."""
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Save CSV", "", "CSV files (*.csv);;All files (*)"
-        )
-        if not path:
-            return
-        path = self._ensure_ext(path, ".csv")
-        plotted = list(self._plot_panel.curve_keys)
-        if not plotted:
-            self._status_label.setText("⚠  Nothing to save — no curves plotted")
-            return
-        self._do_export_csv(path, plotted)
+    def _on_record_toggle(self, start: bool) -> None:
+        """Handle unified record toggle button (start/stop)."""
+        action_name = str(self._record_config["action_name"]).strip() or "record_joint_state"
+        rpc_base_url = str(self._record_config["rpc_base_url"]).strip() or "http://127.0.0.1:50080"
+        self._model.set_record_rpc_base_url(rpc_base_url)
+        self._record_pending_action = "start" if start else "stop"
 
-    def _on_save_csv_range(self, t_min: float, t_max: float) -> None:
-        """Export plotted curves within the selected time range — modal progress."""
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Save CSV (range)", "", "CSV files (*.csv);;All files (*)"
-        )
-        if not path:
-            return
-        path = self._ensure_ext(path, ".csv")
-        plotted = list(self._plot_panel.curve_keys)
-        if not plotted:
-            self._status_label.setText("⚠  Nothing to save — no curves plotted")
-            return
-        self._do_export_csv(path, plotted, t_min=t_min, t_max=t_max)
-
-    def _do_export_csv(self, path: str, plotted: list[str],
-                       t_min: float | None = None,
-                       t_max: float | None = None) -> None:
-        """Show modal progress dialog and export CSV in background thread."""
-        # ── custom modal dialog ──────────────────────────────────────
-        dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle("导出数据")
-        dialog.setWindowModality(QtCore.Qt.WindowModal)
-        dialog.setFixedSize(360, 140)
-        layout = QtWidgets.QVBoxLayout(dialog)
-        layout.setSpacing(16)
-
-        label = QtWidgets.QLabel("正在导出 CSV …")
-        label.setAlignment(QtCore.Qt.AlignCenter)
-        label.setStyleSheet("font-size: 14px; padding: 8px;")
-        layout.addWidget(label)
-
-        progress = QtWidgets.QProgressBar(dialog)
-        progress.setRange(0, 0)  # indeterminate
-        progress.setFixedHeight(6)
-        layout.addWidget(progress)
-
-        btn = QtWidgets.QPushButton("完成")
-        btn.setEnabled(False)
-        btn.setFixedWidth(100)
-        btn_layout = QtWidgets.QHBoxLayout()
-        btn_layout.addStretch()
-        btn_layout.addWidget(btn)
-        btn_layout.addStretch()
-        layout.addLayout(btn_layout)
-
-        dialog.show()
-        QtWidgets.QApplication.processEvents()
-
-        error_msg: list[str] = []
-        loop = QtCore.QEventLoop(self)
-
-        def on_done(fp: str) -> None:
-            label.setText("✅  导出完成，请点击「完成」关闭")
-            label.setStyleSheet(
-                "font-size: 14px; padding: 8px; color: #16a34a;")
-            progress.setRange(0, 100)
-            progress.setValue(100)
-            progress.setStyleSheet(
-                "QProgressBar::chunk { background-color: #16a34a; }")
-            btn.setEnabled(True)
-            QtWidgets.QApplication.processEvents()
-
-        def on_failed(msg: str) -> None:
-            error_msg.append(msg)
-            label.setText(f"❌  导出失败:\n{msg}")
-            label.setStyleSheet(
-                "font-size: 14px; padding: 8px; color: #dc2626;")
-            progress.setVisible(False)
-            btn.setEnabled(True)
-            btn.setText("关闭")
-            QtWidgets.QApplication.processEvents()
-
-        btn.clicked.connect(loop.quit)
-        self._model.csv_export_finished.connect(on_done)
-        self._model.csv_export_failed.connect(on_failed)
-        self._model.export_csv(path, plotted, t_min=t_min, t_max=t_max)
-
-        loop.exec()
-
-        # ── cleanup ─────────────────────────────────────────────────
-        self._model.csv_export_finished.disconnect(on_done)
-        self._model.csv_export_failed.disconnect(on_failed)
-        dialog.close()
-
-        if error_msg:
-            self._status_label.setText(
-                f"❌  CSV export failed: {error_msg[0]}")
-            logger.error("CSV export failed: %s", error_msg[0])
+        if start:
+            self._model.export_recording(
+                action_name=action_name,
+                preparation_duration_s=int(self._record_config["preparation_duration_s"]),
+                record_duration_s=int(self._record_config["record_duration_s"]),
+            )
+            self._status_label.setText("⏺  已请求 record_playback 插件开始录制…")
         else:
-            self._status_label.setText(f"✅  Saved {path}")
-            logger.info("Saved CSV to %s", path)
+            self._model.stop_recording(action_name=action_name)
+            self._status_label.setText("⏹  已请求 record_playback 插件停止录制…")
+
+    def _on_configure_start_record(self) -> None:
+        """Open a small dialog to configure StartRecord payload."""
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("配置 StartRecord")
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        form = QtWidgets.QFormLayout()
+
+        action_edit = QtWidgets.QLineEdit(str(self._record_config["action_name"]))
+        action_edit.setPlaceholderText("record_joint_state")
+        form.addRow("action_name", action_edit)
+
+        prep_spin = QtWidgets.QSpinBox()
+        prep_spin.setRange(0, 86400)
+        prep_spin.setValue(int(self._record_config["preparation_duration_s"]))
+        prep_spin.setSuffix(" s")
+        form.addRow("preparation_duration_s", prep_spin)
+
+        duration_spin = QtWidgets.QSpinBox()
+        duration_spin.setRange(0, 86400)
+        duration_spin.setValue(int(self._record_config["record_duration_s"]))
+        duration_spin.setSuffix(" s")
+        form.addRow("record_duration_s", duration_spin)
+
+        rpc_url_edit = QtWidgets.QLineEdit(str(self._record_config["rpc_base_url"]))
+        rpc_url_edit.setPlaceholderText("http://127.0.0.1:50080")
+        form.addRow("rpc_base_url", rpc_url_edit)
+
+        tip = QtWidgets.QLabel("提示: record_duration_s=0 表示持续录制，直到 StopRecord。")
+        tip.setStyleSheet("color: #64748b;")
+
+        layout.addLayout(form)
+        layout.addWidget(tip)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QtWidgets.QDialog.Accepted:
+            return
+
+        action_name = action_edit.text().strip() or "record_joint_state"
+        rpc_base_url = rpc_url_edit.text().strip() or "http://127.0.0.1:50080"
+        self._record_config = {
+            "action_name": action_name,
+            "preparation_duration_s": prep_spin.value(),
+            "record_duration_s": duration_spin.value(),
+            "rpc_base_url": rpc_base_url,
+        }
+        self._status_label.setText(
+            "✅  StartRecord 参数已更新: "
+            f"action_name={action_name}, "
+            f"preparation_duration_s={prep_spin.value()}, "
+            f"record_duration_s={duration_spin.value()}, "
+            f"rpc_base_url={rpc_base_url}"
+        )
+
+    def _on_record_started(self, output_dir: str) -> None:
+        self._record_pending_action = None
+        self._plot_panel.set_recording(True)
+        self._status_label.setText(f"⏺  录制已开始: {output_dir}")
+
+    def _on_record_stopped(self, output_dir: str) -> None:
+        self._record_pending_action = None
+        self._plot_panel.set_recording(False)
+        self._status_label.setText(f"⏹  录制已停止: {output_dir}")
+
+    def _on_record_failed(self, error_text: str) -> None:
+        pending = self._record_pending_action
+        self._record_pending_action = None
+        if pending == "start":
+            self._plot_panel.set_recording(False)
+        elif pending == "stop":
+            self._plot_panel.set_recording(True)
+        self._status_label.setText(f"⚠  录制操作失败: {error_text}")
 
     # ------------------------------------------------------------------
     # Tag configuration (plot layout save/load)
@@ -586,96 +583,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sync_plotted_keys()
         self._status_label.setText(f"✅  标签配置已加载: {path}")
         logger.info("Loaded %d tag(s) from %s", len(curves_info), path)
-
-    # ------------------------------------------------------------------
-    # Trajectory export/import (.traj / NPZ)
-    # ------------------------------------------------------------------
-
-    def _on_export_trajectory(self) -> None:
-        """Export all plotted curve data as a compressed NPZ file."""
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "导出轨迹", "", "Trajectory (*.npz);;All files (*)"
-        )
-        if not path:
-            return
-        path = self._ensure_ext(path, ".npz")
-        plotted = list(self._plot_panel.curve_keys)
-        if not plotted:
-            self._status_label.setText("⚠  没有曲线可导出")
-            return
-
-        # Build curves dict and labels dict from the model
-        curves = {}
-        labels = {}
-        for key in plotted:
-            series = self._model.get_series(key)
-            if series is not None:
-                curves[key] = (series.times, series.values)
-                # Derive a human-readable label from the plot panel
-                labels[key] = self._plot_panel._labels.get(key, key)
-
-        if not curves:
-            self._status_label.setText("⚠  没有数据可导出")
-            return
-
-        # Collect basic metadata
-        metadata = {
-            "source": "arm_monitor",
-            "curve_count": len(curves),
-        }
-        # Estimate sample count and duration from the first curve
-        first_key = next(iter(curves))
-        times = curves[first_key][0]
-        if times:
-            metadata["sample_count"] = len(times)
-            metadata["duration_s"] = round(times[-1] - times[0], 3)
-
-        TrajectoryManager.export(path, curves, labels, metadata=metadata)
-        self._status_label.setText(f"✅  轨迹已导出: {path}")
-        logger.info("Exported trajectory (%d curves) to %s", len(curves), path)
-
-    def _on_import_trajectory(self) -> None:
-        """Import a NPZ trajectory file and display its curves."""
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "导入轨迹", "", "Trajectory (*.npz);;All files (*)"
-        )
-        if not path:
-            return
-        try:
-            result = TrajectoryManager.load(path)
-        except Exception as exc:
-            self._status_label.setText(f"⚠  导入轨迹失败: {exc}")
-            logger.error("Failed to import trajectory: %s", exc)
-            return
-
-        curves = result["curves"]
-        labels = result["labels"]
-
-        if not curves:
-            self._status_label.setText("⚠  轨迹文件为空")
-            return
-
-        # Load data into the model, then add curves to the plot
-        max_t = self._model.load_external_data(curves)
-        self._plot_panel.add_trajectory_curves(curves, labels)
-        self._sync_plotted_keys()
-
-        # Force an immediate render so curves appear right away
-        self._plot_panel.update_curves(self._model, force=True)
-
-        # Auto-focus the view to show the full imported trajectory
-        if max_t > 0:
-            self._plot_panel._plot_widget.setXRange(0, max_t * 1.05, padding=0)
-
-        # Enter read-only mode — freeze data, disable the pause button
-        self._model.pause()
-        self._plot_panel.set_paused(paused=True, readonly=True)
-
-        self._status_label.setText(
-            f"✅  轨迹已导入: {os.path.basename(path)}  "
-            f"({len(curves)} 曲线, {result['metadata'].get('sample_count', '?')} 采样点)"
-        )
-        logger.info("Imported trajectory from %s (%d curves)", path, len(curves))
 
     def _sync_plotted_keys(self) -> None:
         """Keep data-panel plotted-keys in sync with plot panel."""

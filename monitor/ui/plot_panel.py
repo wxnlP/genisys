@@ -191,20 +191,14 @@ class PlotPanel(QtWidgets.QWidget):
     clear_data_requested = QtCore.pyqtSignal()
     # Emitted when the user clicks "✕  清除曲线".
     clear_curves_requested = QtCore.pyqtSignal()
-    # Emitted when the user clicks "💾  Save CSV".
-    save_csv_requested = QtCore.pyqtSignal()
-    # Emitted when the user clicks "💾  Export Range" (t_min, t_max).
-    save_csv_range_requested = QtCore.pyqtSignal(float, float)
+    # Emitted when record toggle is clicked (True=start, False=stop).
+    record_toggle_requested = QtCore.pyqtSignal(bool)
     # Emitted when the pause button is toggled (True = paused).
     pause_toggled = QtCore.pyqtSignal(bool)
 
     # Emitted for tag configuration (plot layout) save/load.
     save_tag_config_requested = QtCore.pyqtSignal()
     load_tag_config_requested = QtCore.pyqtSignal()
-
-    # Emitted for trajectory export/import.
-    export_trajectory_requested = QtCore.pyqtSignal()
-    import_trajectory_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
@@ -219,14 +213,10 @@ class PlotPanel(QtWidgets.QWidget):
         self._readonly = False                     # read-only mode (trajectory import)
         self._auto_y_enabled = True                # Y auto-range on; user scroll = off
         self._curve_start_time: Dict[str, float] = {}  # t ≥ this → visible
-
-        # Range selection cursors
-        self._range_active = False
-        self._cursor_l: pg.InfiniteLine | None = None
-        self._cursor_r: pg.InfiniteLine | None = None
-        self._range_region: pg.LinearRegionItem | None = None
+        self._recording = False                    # recording state for toggle button icon/text
 
         self._setup_ui()
+        self.set_recording(False)
 
     # ------------------------------------------------------------------
     # UI
@@ -263,26 +253,10 @@ class PlotPanel(QtWidgets.QWidget):
         self._clear_curves_btn.setToolTip("Clear curves & data, stay paused to add new curves")
         bar.addWidget(self._clear_curves_btn)
 
-        # 「💾」保存CSV
-        self._save_btn = QtWidgets.QPushButton("💾  保存CSV")
-        self._save_btn.clicked.connect(self.save_csv_requested.emit)
-        self._save_btn.setToolTip("Export plotted curves to CSV")
-        bar.addWidget(self._save_btn)
-
-        # 「📏」range selection toggle
-        self._range_btn = QtWidgets.QPushButton("📏  选区")
-        self._range_btn.setCheckable(True)
-        self._range_btn.setChecked(False)
-        self._range_btn.toggled.connect(self._toggle_range_mode)
-        self._range_btn.setToolTip("Toggle range selection cursors")
-        bar.addWidget(self._range_btn)
-
-        # 「💾」导出选区
-        self._export_range_btn = QtWidgets.QPushButton("💾  导出选区")
-        self._export_range_btn.setEnabled(False)
-        self._export_range_btn.clicked.connect(self._on_export_range)
-        self._export_range_btn.setToolTip("Export only the selected time range")
-        bar.addWidget(self._export_range_btn)
+        self._record_toggle_btn = QtWidgets.QPushButton("▶️  开始录制")
+        self._record_toggle_btn.clicked.connect(self._on_record_toggle_clicked)
+        self._record_toggle_btn.setToolTip("Start recording via record_playback plugin")
+        bar.addWidget(self._record_toggle_btn)
 
         self._pause_btn = QtWidgets.QPushButton("⏸  暂停")
         self._pause_btn.setCheckable(True)
@@ -621,13 +595,6 @@ class PlotPanel(QtWidgets.QWidget):
         load_tag = menu.addAction("加载标签配置")
         load_tag.setData("load_tag")
 
-        menu.addSeparator()
-
-        export_traj = menu.addAction("导出轨迹 (.npz)")
-        export_traj.setData("export_traj")
-        import_traj = menu.addAction("导入轨迹 (.npz)")
-        import_traj.setData("import_traj")
-
         action = menu.exec_(
             self._actions_btn.mapToGlobal(
                 QtCore.QPoint(0, self._actions_btn.height())
@@ -647,10 +614,6 @@ class PlotPanel(QtWidgets.QWidget):
             self.save_tag_config_requested.emit()
         elif cmd == "load_tag":
             self.load_tag_config_requested.emit()
-        elif cmd == "export_traj":
-            self.export_trajectory_requested.emit()
-        elif cmd == "import_traj":
-            self.import_trajectory_requested.emit()
 
     # ------------------------------------------------------------------
     # Axis selection (click-to-highlight → single-axis zoom)
@@ -721,15 +684,7 @@ class PlotPanel(QtWidgets.QWidget):
         # ── Toolbar buttons in readonly mode ─────────────────────
         # Only 🗑 清除曲线 and ⚙ 操作 remain clickable.
         self._reset_data_btn.setEnabled(not readonly)
-        self._save_btn.setEnabled(not readonly)
-        self._range_btn.setEnabled(not readonly)
-        self._export_range_btn.setEnabled(
-            not readonly and self._range_active
-        )
-
-        # Clean up range cursors when entering readonly
-        if readonly and self._range_active:
-            self._toggle_range_mode(False)
+        self._record_toggle_btn.setEnabled(not readonly)
 
         # ── Sync model ───────────────────────────────────────────
         self.pause_toggled.emit(paused)
@@ -737,6 +692,22 @@ class PlotPanel(QtWidgets.QWidget):
         # Auto-follow on resume
         if not paused:
             self._auto_range_x()
+
+    def set_recording(self, recording: bool) -> None:
+        """Update record toggle icon/text by recording state."""
+        self._recording = recording
+        if recording:
+            self._record_toggle_btn.setText("⏹  停止录制")
+            self._record_toggle_btn.setToolTip("Stop recording via record_playback plugin")
+            self._record_toggle_btn.setStyleSheet("")
+        else:
+            self._record_toggle_btn.setText("▶️  开始录制")
+            self._record_toggle_btn.setToolTip("Start recording via record_playback plugin")
+            self._record_toggle_btn.setStyleSheet("")
+
+    def _on_record_toggle_clicked(self) -> None:
+        """Emit toggle intent; receiver decides start/stop."""
+        self.record_toggle_requested.emit(not self._recording)
 
     def _on_pause_toggled(self, checked: bool) -> None:
         """Signal handler — user clicked the pause button."""
@@ -817,88 +788,3 @@ class PlotPanel(QtWidgets.QWidget):
         self._auto_y_enabled = True
         self._auto_range_y()
 
-    # ------------------------------------------------------------------
-    # Range selection cursors
-    # ------------------------------------------------------------------
-
-    def _toggle_range_mode(self, active: bool) -> None:
-        """Show / hide the two draggable vertical cursors + highlight region."""
-        self._range_active = active
-        self._range_btn.setText("📏  取消选区" if active else "📏  选区")
-        self._export_range_btn.setEnabled(active)
-
-        if active:
-            vb = self._plot_widget.getViewBox()
-            x_range = vb.viewRange()[0]
-            mid = (x_range[0] + x_range[1]) / 2.0
-            quarter = (x_range[1] - x_range[0]) / 4.0
-
-            # Draggable vertical lines
-            self._cursor_l = pg.InfiniteLine(
-                pos=mid - quarter, angle=90, movable=True,
-                pen=pg.mkPen("#2563eb", width=2),
-                label="← 起点", labelOpts={"color": "#2563eb", "position": 0.05},
-            )
-            self._cursor_r = pg.InfiniteLine(
-                pos=mid + quarter, angle=90, movable=True,
-                pen=pg.mkPen("#dc2626", width=2),
-                label="→ 终点", labelOpts={"color": "#dc2626", "position": 0.95},
-            )
-            # Highlighted region between cursors
-            self._range_region = pg.LinearRegionItem(
-                values=(mid - quarter, mid + quarter),
-                movable=True,
-                brush=pg.mkBrush(37, 99, 235, 30),
-                pen=pg.mkPen("#2563eb", width=1),
-            )
-            self._range_region.setZValue(-10)  # behind curves
-
-            self._plot_widget.addItem(self._range_region)
-            self._plot_widget.addItem(self._cursor_l)
-            self._plot_widget.addItem(self._cursor_r)
-
-            # Sync cursors ↔ region
-            self._cursor_l.sigPositionChanged.connect(self._sync_range_from_cursors)
-            self._cursor_r.sigPositionChanged.connect(self._sync_range_from_cursors)
-            self._range_region.sigRegionChanged.connect(self._sync_range_from_region)
-        else:
-            self._remove_range_items()
-
-    def _remove_range_items(self) -> None:
-        """Remove cursor lines and region from the plot."""
-        for item in (self._cursor_l, self._cursor_r, self._range_region):
-            if item is not None:
-                self._plot_widget.removeItem(item)
-        self._cursor_l = self._cursor_r = None
-        self._range_region = None
-
-    def _sync_range_from_cursors(self) -> None:
-        """Cursor dragged → update region."""
-        if self._cursor_l is None or self._cursor_r is None or self._range_region is None:
-            return
-        t_l = self._cursor_l.value()
-        t_r = self._cursor_r.value()
-        if t_l < t_r:
-            self._range_region.setRegion((t_l, t_r))
-
-    def _sync_range_from_region(self) -> None:
-        """Region dragged → update cursors."""
-        if self._cursor_l is None or self._cursor_r is None or self._range_region is None:
-            return
-        t_l, t_r = self._range_region.getRegion()
-        self._cursor_l.setValue(t_l)
-        self._cursor_r.setValue(t_r)
-
-    def get_selected_range(self) -> tuple[float, float] | None:
-        """Return ``(t_min, t_max)`` if range cursors are active, else ``None``."""
-        if not self._range_active or self._cursor_l is None or self._cursor_r is None:
-            return None
-        t_l = self._cursor_l.value()
-        t_r = self._cursor_r.value()
-        return (t_l, t_r) if t_l < t_r else (t_r, t_l)
-
-    def _on_export_range(self) -> None:
-        """Emit ``save_csv_range_requested`` with current cursor positions."""
-        rng = self.get_selected_range()
-        if rng is not None:
-            self.save_csv_range_requested.emit(*rng)

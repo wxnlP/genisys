@@ -332,6 +332,7 @@ class ZenohSubscriber(QtCore.QObject):
                 for j in msg.joints
             ]
             return {
+                "time_stamp": msg.header.time_stamp,
                 "frame_id": msg.header.frame_id,
                 "sequence": msg.header.sequence_num,
                 "joints": joints_data,
@@ -346,6 +347,7 @@ class ZenohSubscriber(QtCore.QObject):
                 for j in msg.joints
             ]
             return {
+                "time_stamp": msg.header.time_stamp,
                 "frame_id": msg.header.frame_id,
                 "sequence": msg.header.sequence_num,
                 "joints": joints_data,
@@ -358,6 +360,7 @@ class ZenohSubscriber(QtCore.QObject):
                                msg.pose.orientation.z, msg.pose.orientation.w)
             roll, pitch, yaw = _quat_to_rpy(qx, qy, qz, qw)
             return {
+                "time_stamp": msg.header.time_stamp,
                 "frame_id": msg.header.frame_id,
                 "sequence": msg.header.sequence_num,
                 "source": source,
@@ -391,6 +394,7 @@ class ZenohSubscriber(QtCore.QObject):
                 for j in joints_list
             ]
             return {
+                "time_stamp": header.get("timeStamp", header.get("time_stamp", 0)),
                 "frame_id": header.get("frameId", header.get("frame_id", "")),
                 "sequence": header.get("sequenceNum", header.get("sequence_num", 0)),
                 "joints": joints_data,
@@ -404,6 +408,7 @@ class ZenohSubscriber(QtCore.QObject):
                 for j in joints_list
             ]
             return {
+                "time_stamp": header.get("timeStamp", header.get("time_stamp", 0)),
                 "frame_id": header.get("frameId", header.get("frame_id", "")),
                 "sequence": header.get("sequenceNum", header.get("sequence_num", 0)),
                 "joints": joints_data,
@@ -414,6 +419,7 @@ class ZenohSubscriber(QtCore.QObject):
             pos = pose.get("position", {})
             orient = pose.get("orientation", {})
             return {
+                "time_stamp": header.get("timeStamp", header.get("time_stamp", 0)),
                 "frame_id": header.get("frameId", header.get("frame_id", "")),
                 "sequence": header.get("sequenceNum", header.get("sequence_num", 0)),
                 "source": source,

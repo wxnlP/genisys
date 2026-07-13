@@ -14,15 +14,8 @@ from typing import Dict, List, Optional
 
 from PyQt5 import QtCore
 
-from monitor.core.config import config as _cfg
+from monitor.core.record_client import RecordPlaybackClient
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-# No rolling window — data accumulates until the user manually clears it.
-# Memory usage depends on sample rate × uptime; for long sessions, click
-# the "Clear All" button in the plot toolbar to reset.
-DEFAULT_HISTORY_SECONDS = float("inf")
 _MAX_SAMPLES_UNLIMITED = None  # deque maxlen=None → no cap
 
 
@@ -66,47 +59,43 @@ class DataModel(QtCore.QObject):
 
     .. rubric:: Sampling strategy
 
-    *ingest()* only writes into a transient buffer (``_latest_buffer``)
-    — no timestamps, no series append.  *sample_snapshot()* is driven
-    by an external 10 ms DAQ timer and snapshots the entire buffer into
-    every series at the current ``time.time()`` instant.  All series share
-    an identical relative timestamp per tick, so the CSV is naturally
-    aligned.
+    *ingest()* appends samples immediately on message arrival.
+    Timestamp source priority:
+    1) message ``time_stamp`` (from protocol header)
+    2) local arrival monotonic clock fallback.
     """
 
     # Emitted after a batch of samples is ingested.
     # payload: {"new_keys": list[str], "latest": dict[str, float]}
     data_updated = QtCore.pyqtSignal(dict)
 
-    # Emitted when CSV export completes (in background thread).
-    csv_export_finished = QtCore.pyqtSignal(str)  # filepath
-    csv_export_failed = QtCore.pyqtSignal(str)    # error message
+    # Emitted when plugin-backed recording starts/stops/fails.
+    record_started = QtCore.pyqtSignal(str)   # output dir
+    record_stopped = QtCore.pyqtSignal(str)   # output dir
+    record_failed = QtCore.pyqtSignal(str)    # error message
 
     def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
         super().__init__(parent)
         self._series: Dict[str, JointStateSeries] = {}
         self._latest_buffer: Dict[str, float] = {}   # transient — high-frequency overwrite
         self._latest_full: dict = {}                  # last raw message
-        self._history_seconds = DEFAULT_HISTORY_SECONDS
-        self._start_time: Optional[float] = None      # wall-clock anchor (CSV window filter)
-        self._sample_step: float = 0.010              # 10 ms logical tick
-        self._next_logical_time: float = 0.0           # logical frame accumulator
+        self._start_time: Optional[float] = None      # wall-clock anchor
+        self._source_time_origin_ns: Optional[int] = None   # first message time_stamp(ns)
+        self._arrival_time_origin_ns: Optional[int] = None  # fallback origin (perf_counter_ns)
+        self._last_series_t: float = 0.0                    # enforce non-decreasing X
         self._sample_count: int = 0
         self._paused: bool = True                     # start paused — time frozen at 0
+        self._record_client = RecordPlaybackClient()
 
     # ------------------------------------------------------------------
     # public
     # ------------------------------------------------------------------
 
     def ingest(self, msg: dict) -> None:
-        """Write incoming joint-field / pose values into the transient buffer.
-
-        The buffer is overwritten in-place on every call — no timestamp
-        is recorded and nothing is appended to the time series.  That
-        happens exclusively in :meth:`sample_snapshot` on the DAQ timer.
-        """
+        """Ingest one decoded message and append to series immediately."""
         source = msg.get("source", "unknown")
         new_keys: List[str] = []
+        t = self._resolve_series_time(msg)
 
         # ── Joint data (joints array) ─────────────────────────────
         for j in msg.get("joints", []):
@@ -121,6 +110,8 @@ class DataModel(QtCore.QObject):
                     new_keys.append(key)
 
                 self._latest_buffer[key] = value
+                if not self._paused:
+                    self._series[key].append(t, value)
 
         # ── Pose data (single pose, no joints) ────────────────────
         for field in ("position_x", "position_y", "position_z",
@@ -133,47 +124,52 @@ class DataModel(QtCore.QObject):
                 self._series[key] = JointStateSeries()
                 new_keys.append(key)
             self._latest_buffer[key] = msg[field]
+            if not self._paused:
+                self._series[key].append(t, msg[field])
 
         self._latest_full = msg
+        if not self._paused:
+            self._sample_count += 1
         if new_keys:
             self.data_updated.emit(
                 {"new_keys": new_keys, "latest": dict(self._latest_buffer)}
             )
 
-    def sample_snapshot(self) -> None:
-        """Snapshot the transient buffer into every time series using a
-        **logical frame counter**.
-
-        Driven by the external 10 ms DAQ timer.  Timestamps are
-        mathematically guaranteed to be exactly *sample_step* apart
-        (0.000, 0.010, 0.020, …) regardless of OS jitter or timer drift.
-
-        When *paused*, this method returns immediately — the logical
-        clock is frozen and no data is written.
-        """
-        if self._paused or not self._latest_buffer:
-            return
-
-        # Anchor wall-clock time once so CSV window filtering still works.
+    def _resolve_series_time(self, msg: dict) -> float:
+        """Resolve non-decreasing relative time (seconds) for one message."""
         if self._start_time is None:
-            import time as _time
             self._start_time = _time.time()
 
-        t = self._next_logical_time
-        for key, value in self._latest_buffer.items():
-            self._series[key].append(t, value)
+        raw_ts = msg.get("time_stamp")
+        try:
+            ts_ns = int(raw_ts) if raw_ts is not None else 0
+        except (TypeError, ValueError):
+            ts_ns = 0
 
-        self._next_logical_time += self._sample_step
-        self._sample_count += 1
+        if ts_ns > 0:
+            if self._source_time_origin_ns is None:
+                self._source_time_origin_ns = ts_ns
+            t = (ts_ns - self._source_time_origin_ns) / 1_000_000_000.0
+        else:
+            now_ns = _time.perf_counter_ns()
+            if self._arrival_time_origin_ns is None:
+                self._arrival_time_origin_ns = now_ns
+            t = (now_ns - self._arrival_time_origin_ns) / 1_000_000_000.0
+
+        if t < self._last_series_t:
+            t = self._last_series_t
+        else:
+            self._last_series_t = t
+        return t
 
     # -- pause / resume ---------------------------------------------------
 
     def pause(self) -> None:
-        """Freeze the logical clock.  :meth:`sample_snapshot` becomes a no-op."""
+        """Pause appending incoming samples to the series."""
         self._paused = True
 
     def resume(self) -> None:
-        """Unfreeze the logical clock.  Sampling continues from where it left off."""
+        """Resume appending incoming samples to the series."""
         self._paused = False
 
     @property
@@ -183,7 +179,7 @@ class DataModel(QtCore.QObject):
     # -- session control --------------------------------------------------
 
     def reset_and_resume(self) -> None:
-        """Clear all data, reset logical time to zero, and **auto-resume**
+        """Clear all data, reset timeline to zero, and **auto-resume**
         so new data starts recording immediately.
 
         Use for: "Reset Data" — I want to start a fresh recording NOW.
@@ -192,7 +188,7 @@ class DataModel(QtCore.QObject):
         self._paused = False
 
     def reset_and_pause(self) -> None:
-        """Clear all data, reset logical time to zero, and **stay paused**
+        """Clear all data, reset timeline to zero, and **stay paused**
         so the user can add curves before manually resuming.
 
         Use for: "Clear Curves" — I want to look at other data.
@@ -207,120 +203,121 @@ class DataModel(QtCore.QObject):
     def get_series(self, key: str) -> Optional[JointStateSeries]:
         return self._series.get(key)
 
-    # ── CSV export in background thread ────────────────────────────────
+    # ── recording bridge to record_playback plugin ─────────────────────
 
-    def export_csv(self, filepath: str, plotted_keys: list[str],
-                   t_min: float | None = None,
-                   t_max: float | None = None) -> None:
-        """Export plotted curves to CSV in a background thread.
+    def export_recording(
+        self,
+        action_name: str = "record_joint_state",
+        preparation_duration_s: int = 0,
+        record_duration_s: int = 0,
+    ) -> None:
+        """Start a recording via the record_playback plugin and report its output dir."""
+        self._run_record_worker(
+            action_name,
+            mode="start",
+            preparation_duration_s=preparation_duration_s,
+            record_duration_s=record_duration_s,
+        )
 
-        All series share the same uniform time grid (guaranteed by
-        :meth:`sample_snapshot`).  Pick one visible series as the
-        global time axis and align every other column by row index.
+    def stop_recording(self, action_name: str = "record_joint_state") -> None:
+        """Stop a recording via the record_playback plugin."""
+        self._run_record_worker(action_name, mode="stop")
 
-        Only rows within *csv_export_window_s* (from ``config.yaml``) of
-        the current system time are included; set to 0 to export everything.
+    def set_record_rpc_base_url(self, base_url: str) -> None:
+        """Update record_playback RPC endpoint for subsequent requests."""
+        self._record_client.set_base_url(base_url)
 
-        Args:
-            filepath: Output path (e.g. ``/tmp/data.csv``).
-            plotted_keys: Curve keys to include.
-            t_min: Optional lower time bound for range export.
-            t_max: Optional upper time bound for range export.
-        """
-        # Snapshot data in the main thread, then hand off to worker.
-        window = _cfg.csv_export_window_s
-        now_abs = _time.time()
-
-        times: list[float] = []
-        for key in plotted_keys:
-            s = self._series.get(key)
-            if s is not None and s.times:
-                times = s.times
-                break
-
-        if window > 0 and self._start_time is not None:
-            cutoff_rel = now_abs - self._start_time - window
-            times = [t for t in times if t >= cutoff_rel]
-
-        if t_min is not None or t_max is not None:
-            lo = t_min if t_min is not None else float("-inf")
-            hi = t_max if t_max is not None else float("inf")
-            times = [t for t in times if lo <= t <= hi]
-
-        if not times:
-            return
-
-        columns = ["t"] + [k.replace("/", "_") for k in plotted_keys]
-
-        # Snapshot all column values
-        col_values: dict[str, list[float | str]] = {}
-        for key in plotted_keys:
-            s = self._series.get(key)
-            col_values[key] = list(s.values) if s is not None else []
-
-        self._run_csv_worker(filepath, columns, times, col_values, plotted_keys)
-
-    def _run_csv_worker(self, filepath: str, columns: list[str],
-                        times: list[float],
-                        col_values: dict[str, list[float | str]],
-                        plotted_keys: list[str]) -> None:
-        """Start a background thread to write CSV, then return immediately."""
-
+    def _run_record_worker(
+        self,
+        action_name: str,
+        mode: str,
+        preparation_duration_s: int = 0,
+        record_duration_s: int = 0,
+    ) -> None:
         class Worker(QtCore.QObject):
             done = QtCore.pyqtSignal(str)
             error = QtCore.pyqtSignal(str)
 
+            def __init__(
+                self,
+                client: RecordPlaybackClient,
+                action_name: str,
+                mode: str,
+                preparation_duration_s: int,
+                record_duration_s: int,
+            ) -> None:
+                super().__init__()
+                self._client = client
+                self._action_name = action_name
+                self._mode = mode
+                self._preparation_duration_s = preparation_duration_s
+                self._record_duration_s = record_duration_s
+
             def run(self) -> None:
                 try:
-                    # Build entire CSV in memory first (fast), then write once.
-                    lines = [",".join(columns)]
-                    vals = col_values
-                    for i, t in enumerate(times):
-                        row = [f"{t:.6f}"]
-                        for key in plotted_keys:
-                            vs = vals.get(key)
-                            if vs is not None and i < len(vs):
-                                row.append(f"{vs[i]:.6f}")
-                            else:
-                                row.append("")
-                        lines.append(",".join(row))
-                    full_csv = "\n".join(lines)
-
-                    with open(filepath, "w", newline="") as f:
-                        f.write(full_csv)   # single syscall → releases GIL
-                    self.done.emit(filepath)
-                except Exception as e:
-                    self.error.emit(str(e))
+                    if self._mode == "start":
+                        rsp = self._client.start_record(
+                            self._action_name,
+                            preparation_duration_s=self._preparation_duration_s,
+                            record_duration_s=self._record_duration_s,
+                        )
+                        output_dir = rsp.get("filefolder") or self._client.default_output_dir
+                        self.done.emit(output_dir)
+                    elif self._mode == "stop":
+                        self._client.stop_record(self._action_name)
+                        self.done.emit(self._client.default_output_dir)
+                    else:
+                        raise ValueError(f"unknown record mode: {self._mode}")
+                except Exception as exc:  # pragma: no cover - defensive path
+                    self.error.emit(str(exc))
 
         thread = QtCore.QThread(self)
-        worker = Worker()
+        worker = Worker(
+            self._record_client,
+            action_name,
+            mode,
+            preparation_duration_s,
+            record_duration_s,
+        )
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        worker.done.connect(lambda fp: (
-            self.csv_export_finished.emit(fp),
-            thread.quit(), thread.wait(), worker.deleteLater(), thread.deleteLater()
-        ))
-        worker.error.connect(lambda msg: (
-            self.csv_export_failed.emit(msg),
-            thread.quit(), thread.wait(), worker.deleteLater(), thread.deleteLater()
-        ))
+
+        def _cleanup() -> None:
+            thread.quit()
+            thread.wait()
+            worker.deleteLater()
+            thread.deleteLater()
+
+        def _on_done(out: str) -> None:
+            if mode == "start":
+                self.record_started.emit(out)
+            elif mode == "stop":
+                self.record_stopped.emit(out)
+            _cleanup()
+
+        def _on_error(msg: str) -> None:
+            self.record_failed.emit(msg)
+            _cleanup()
+
+        worker.done.connect(_on_done)
+        worker.error.connect(_on_error)
         thread.start()
 
     def clear_all(self) -> None:
-        """Discard all accumulated data and reset the logical clock."""
+        """Discard all accumulated data and reset timeline anchors."""
         self._series.clear()
         self._latest_buffer.clear()
         self._latest_full = {}
         self._start_time = None
-        self._next_logical_time = 0.0
+        self._source_time_origin_ns = None
+        self._arrival_time_origin_ns = None
+        self._last_series_t = 0.0
 
     def load_external_data(self, curves: dict) -> float:
         """Load externally recorded trajectory data (e.g. from NPZ import).
 
-        This bypasses the normal ``ingest()`` / ``sample_snapshot()`` pipeline
-        and writes directly into the time series.  The logical clock is
-        advanced past the imported data so any subsequent live data will
-        not collide.
+        This bypasses the normal ``ingest()`` pipeline
+        and writes directly into the time series.
 
         Args:
             curves: ``{key: (times_list, values_list)}``  where both lists
@@ -344,9 +341,9 @@ class DataModel(QtCore.QObject):
             if values:
                 self._latest_buffer[key] = values[-1]
 
-        # Advance logical time past imported data to avoid overlap
-        if max_t >= self._next_logical_time:
-            self._next_logical_time = max_t + self._sample_step
+        # Keep realtime append monotonic after imported data.
+        if max_t > self._last_series_t:
+            self._last_series_t = max_t
         if self._start_time is None:
             import time as _time
             self._start_time = _time.time()
@@ -365,10 +362,3 @@ class DataModel(QtCore.QObject):
     def latest_message(self) -> dict:
         return self._latest_full
 
-    @property
-    def history_seconds(self) -> float:
-        return self._history_seconds
-
-    @history_seconds.setter
-    def history_seconds(self, value: float) -> None:
-        self._history_seconds = max(1.0, min(value, 300.0))
