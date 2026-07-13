@@ -48,6 +48,43 @@ aimrt:
         path: ./libaimrt_zenoh_plugin.so
         options:
           native_cfg_path: ./cfg/zenoh_native_config.json5
+      - name: record_playback_plugin
+        path: ./libaimrt_record_playback_plugin.so
+        options:
+          timer_executor: storage_executor
+          type_support_pkgs:
+            - path: ./libsensor_pb_ts.so
+          record_actions:
+            - name: record_joint_state
+              options:
+                bag_path: ./bag
+                mode: signal
+                max_preparation_duration_s: 10
+                executor: record_thread
+                storage_policy:
+                  max_bag_size_m: 2048            # MB
+                  msg_write_interval: 1000        # message count period
+                  msg_write_interval_time: 1000   # ms
+                  compression_mode: zstd          # comression mode
+                  compression_level: default      # comression level
+                extra_attributes:
+                  platform: x86_64
+                  os: ubuntu-22.04
+                topic_meta_list:
+                  - topic_name: /geniarm/joint_state
+                    msg_type: pb:aimrt.protocols.sensor.JointStateArray
+                    serialization_type: pb 
+                    record_enabled: true
+                    sample_freq: 500
+      # - name: opentelemetry_plugin
+      #   path: ./libaimrt_opentelemetry_plugin.so
+      #   options:
+      #     node_name: geniarm_node
+      #     trace_otlp_http_exporter_url: http://localhost:4318/v1/traces
+      #     force_trace: true
+      #     attributes:
+      #       - key: sn
+      #         val: wxnlP
   executor:
     executors:
       - name: gui_executor
@@ -61,6 +98,12 @@ aimrt:
         type: asio_thread
         options:
           thread_num: 5
+      - name: storage_executor
+        type: asio_thread
+        options:
+          thread_num: 2
+      - name: record_thread
+        type: simple_thread
   channel:
     backends:
       - type: local # 官方支持local后端
