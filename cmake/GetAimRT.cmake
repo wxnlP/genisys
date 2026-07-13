@@ -4,8 +4,8 @@ message(STATUS "get aimrt ...")
 
 FetchContent_Declare(
   aimrt #
-  GIT_REPOSITORY https://gitee.com/agiros/AimRT.git
-  GIT_TAG v1.7.0)
+  GIT_REPOSITORY https://github.com/AimRT/AimRT.git
+  GIT_TAG main)
 
 FetchContent_GetProperties(aimrt)
 if(NOT aimrt_POPULATED)
