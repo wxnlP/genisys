@@ -12,7 +12,7 @@ robot:
       a: [0.0, 0.02, 0.26, 0.24668, 0.075, 0.0]
       d: [0.149, 0.0, 0.0, 0.0, 0.0, 0.0265]
       offset: [0.0, -180.0, 166.64, 13.36, 90.0, 0.0]
-  dynamics: ""
+  dynamics: "control_module/dynamics_zero.yaml"  # 动力学参数文件名，位于 cfg 目录下
   joints:
     - name: "shoulder_joint"
       MIT:
@@ -38,10 +38,13 @@ robot:
       MIT:
         stiffness: 20.0
         damping: 3.5
-
-gripper:
-  name: "geniarm_gripper"
-  max_range: 0.045
-  MIT:
-    stiffness: 200.0
-    damping: 10.0
+  tool:
+    frame: "tcp"
+    xyz: [0, 0, 0]
+    rpy: [0, 0, 0] # ZYX 欧拉角
+  gripper:
+    name: "geniarm_gripper"
+    max_range: 0.045
+    MIT:
+      stiffness: 200.0
+      damping: 10.0
