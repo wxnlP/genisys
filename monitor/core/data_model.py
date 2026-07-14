@@ -17,6 +17,7 @@ from PyQt5 import QtCore
 from monitor.core.record_client import RecordPlaybackClient
 
 _MAX_SAMPLES_UNLIMITED = None  # deque maxlen=None → no cap
+_MAX_SAMPLES_PER_SERIES = 200000  # safety cap to avoid unbounded memory growth
 
 
 class JointStateSeries:
@@ -25,9 +26,9 @@ class JointStateSeries:
     __slots__ = ("_times", "_values")
 
     def __init__(self) -> None:
-        # No maxlen — unlimited history until user clears manually.
-        self._times: deque[float] = deque(maxlen=_MAX_SAMPLES_UNLIMITED)
-        self._values: deque[float] = deque(maxlen=_MAX_SAMPLES_UNLIMITED)
+        # Per-series safety cap to avoid unbounded growth when topics are noisy.
+        self._times: deque[float] = deque(maxlen=_MAX_SAMPLES_PER_SERIES)
+        self._values: deque[float] = deque(maxlen=_MAX_SAMPLES_PER_SERIES)
 
     def append(self, t: float, v: float) -> None:
         self._times.append(t)
@@ -79,6 +80,9 @@ class DataModel(QtCore.QObject):
         self._series: Dict[str, JointStateSeries] = {}
         self._latest_buffer: Dict[str, float] = {}   # transient — high-frequency overwrite
         self._latest_full: dict = {}                  # last raw message
+        # Incoming-message queue (fast append from signal handler), processed
+        # in batches by the UI timer to avoid per-message overhead.
+        self._ingest_queue: deque[dict] = deque(maxlen=20000)
         self._start_time: Optional[float] = None      # wall-clock anchor
         self._source_time_origin_ns: Optional[int] = None   # first message time_stamp(ns)
         self._arrival_time_origin_ns: Optional[int] = None  # fallback origin (perf_counter_ns)
@@ -92,45 +96,86 @@ class DataModel(QtCore.QObject):
     # ------------------------------------------------------------------
 
     def ingest(self, msg: dict) -> None:
-        """Ingest one decoded message and append to series immediately."""
-        source = msg.get("source", "unknown")
+        """Backwards-compatible single-message ingest (kept for tests).
+
+        Prefer `ingest_batch()` when processing many messages.
+        """
+        self.ingest_batch([msg])
+
+    def enqueue(self, msg: dict) -> None:
+        """Quickly enqueue a decoded message for later batch processing.
+
+        This method should be used by GUI slots that receive high-rate
+        messages so they return quickly and avoid long per-message work.
+        """
+        try:
+            self._ingest_queue.append(msg)
+        except Exception:
+            # Defensive: ignore queue failures to avoid crashing the UI
+            pass
+
+    def process_queue(self, max_items: int = 200) -> int:
+        """Drain up to *max_items* messages from the ingest queue and
+        process them via a single batch ingest. Returns number processed.
+        """
+        if not self._ingest_queue:
+            return 0
+        items = []
+        for _ in range(min(max_items, len(self._ingest_queue))):
+            try:
+                items.append(self._ingest_queue.popleft())
+            except IndexError:
+                break
+        if items:
+            self.ingest_batch(items)
+        return len(items)
+
+    def ingest_batch(self, msgs: List[dict]) -> None:
+        """Process a batch of decoded messages and emit a single update.
+
+        This reduces signal churn and amortizes per-message overhead.
+        """
         new_keys: List[str] = []
-        t = self._resolve_series_time(msg)
+        for msg in msgs:
+            source = msg.get("source", "unknown")
+            t = self._resolve_series_time(msg)
 
-        # ── Joint data (joints array) ─────────────────────────────
-        for j in msg.get("joints", []):
-            name = j["name"]
-            for field, value in j.items():
-                if field == "name":
+            # ── Joint data (joints array) ─────────────────────────────
+            for j in msg.get("joints", []):
+                name = j["name"]
+                for field, value in j.items():
+                    if field == "name":
+                        continue
+                    key = f"{source}/{name}/{field}"
+
+                    if key not in self._series:
+                        self._series[key] = JointStateSeries()
+                        new_keys.append(key)
+
+                    self._latest_buffer[key] = value
+                    if not self._paused:
+                        self._series[key].append(t, value)
+
+            # ── Pose data (single pose, no joints) ────────────────────
+            for field in ("position_x", "position_y", "position_z",
+                          "orientation_x", "orientation_y", "orientation_z",
+                          "orientation_w", "roll", "pitch", "yaw"):
+                if field not in msg:
                     continue
-                key = f"{source}/{name}/{field}"
-
+                key = f"{source}/{field}"
                 if key not in self._series:
                     self._series[key] = JointStateSeries()
                     new_keys.append(key)
-
-                self._latest_buffer[key] = value
+                self._latest_buffer[key] = msg[field]
                 if not self._paused:
-                    self._series[key].append(t, value)
+                    self._series[key].append(t, msg[field])
 
-        # ── Pose data (single pose, no joints) ────────────────────
-        for field in ("position_x", "position_y", "position_z",
-                      "orientation_x", "orientation_y", "orientation_z",
-                      "orientation_w", "roll", "pitch", "yaw"):
-            if field not in msg:
-                continue
-            key = f"{source}/{field}"
-            if key not in self._series:
-                self._series[key] = JointStateSeries()
-                new_keys.append(key)
-            self._latest_buffer[key] = msg[field]
+            self._latest_full = msg
             if not self._paused:
-                self._series[key].append(t, msg[field])
+                self._sample_count += 1
 
-        self._latest_full = msg
-        if not self._paused:
-            self._sample_count += 1
         if new_keys:
+            # Emit once with all newly created keys and the latest snapshot
             self.data_updated.emit(
                 {"new_keys": new_keys, "latest": dict(self._latest_buffer)}
             )

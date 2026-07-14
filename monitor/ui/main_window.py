@@ -230,6 +230,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- UI ---
         self._data_panel = DataPanel()
         self._plot_panel = PlotPanel()
+        # When True, skip updating DataPanel tables to reduce UI workload.
+        # Initialize before _setup_ui so toolbar button text can read it.
+        self._suspend_table_updates: bool = False
         self._setup_ui()
         self._setup_wiring()
 
@@ -281,6 +284,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_record_config.clicked.connect(self._on_configure_start_record)
         self._btn_record_config.setToolTip("配置 StartRecord 参数与 RPC 地址")
         toolbar.addWidget(self._btn_record_config)
+
+        # Button to suspend/resume table updates (reduces UI load during heavy
+        # ingestion; plotting and recording remain active).
+        # Initial text reflects the current suspend state
+        init_text = "⏹  列表更新" if not self._suspend_table_updates else "▶️  列表已暂停"
+        self._btn_suspend_tables = QtWidgets.QPushButton(init_text)
+        self._btn_suspend_tables.setCheckable(True)
+        self._btn_suspend_tables.setToolTip("切换：暂停/恢复表格更新以降低 UI 负载；绘图与录制不受影响")
+        self._btn_suspend_tables.clicked.connect(self._on_toggle_suspend_tables)
+        # Set checked state to match internal flag
+        self._btn_suspend_tables.setChecked(self._suspend_table_updates)
+        toolbar.addWidget(self._btn_suspend_tables)
 
         toolbar.addSeparator()
 
@@ -352,11 +367,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._model.record_stopped.connect(self._on_record_stopped)
         self._model.record_failed.connect(self._on_record_failed)
 
-        # UI refresh timer — drives plot redraw only (interval from config.yaml).
-        # Data acquisition uses a separate timer below.
+        # UI refresh timer — drives plot redraw and batched ingestion.
+        # Cap interval to avoid extremely high-frequency updates that can
+        # overload the GUI when the user set a very small value in config.
+        interval_ms = max(int(self._cfg.refresh_interval_ms), 10)
         self._ui_timer = QtCore.QTimer(self)
-        self._ui_timer.timeout.connect(lambda: self._plot_panel.update_curves(self._model))
-        self._ui_timer.start(self._cfg.refresh_interval_ms)
+        self._ui_timer.timeout.connect(self._on_ui_tick)
+        self._ui_timer.start(interval_ms)
 
         # Sampling is message-driven in DataModel.ingest(); no DAQ snapshot timer.
 
@@ -379,9 +396,12 @@ class MainWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_data_received(self, msg: dict) -> None:
-        self._model.ingest(msg)
-        self._data_panel.update_from_message(msg)
-        self._sample_count += 1
+        # Fast path: enqueue message for batched processing in the UI timer
+        # tick. Avoid doing heavy work directly in the data-received slot.
+        self._model.enqueue(msg)
+        # Update a lightweight latest-sample indicator immediately so rate
+        # meter and status feel responsive even when batches are processed
+        # at the UI tick.
         self._last_update = QtCore.QTime.currentTime()
 
     def _on_raw_data(self, key: str, size: int) -> None:
@@ -608,6 +628,43 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._uptime_label.setText(f"⏱  {h}h{m:02d}m{s:02d}s")
             else:
                 self._uptime_label.setText(f"⏱  {m:02d}m{s:02d}s")
+
+    def _on_ui_tick(self) -> None:
+        """Called by the UI timer: process a bounded number of queued
+        incoming messages, update UI tables and redraw plots.
+        """
+        # Process up to N messages per tick — keeps main thread responsive.
+        processed = self._model.process_queue(max_items=200)
+        if processed:
+            # Update the lightweight UI table with the last received message
+            latest = self._model.latest_message
+            if latest and not self._suspend_table_updates:
+                self._data_panel.update_from_message(latest)
+            # Update sample count for rate meter
+            self._sample_count += processed
+
+        # Redraw plots (batch update)
+        self._plot_panel.update_curves(self._model)
+
+    def _on_toggle_suspend_tables(self, checked: bool) -> None:
+        """Toggle suspension of DataPanel table updates.
+
+        When resuming, immediately refresh the tables with the latest message
+        so the UI reflects the current state.
+        """
+        self._suspend_table_updates = bool(checked)
+        if self._suspend_table_updates:
+            # When suspended, show ▶️ to indicate pressing will resume updates.
+            self._btn_suspend_tables.setText("▶️  列表已暂停")
+            self._status_label.setText("⚠  已暂停表格更新（绘图与录制不受影响）")
+        else:
+            # When active, show ⏹ to indicate pressing will pause updates.
+            self._btn_suspend_tables.setText("⏹  列表更新")
+            self._status_label.setText("✅  已恢复表格更新")
+            # Immediately refresh the table with the latest message to catch up
+            latest = self._model.latest_message
+            if latest:
+                self._data_panel.update_from_message(latest)
 
     # ------------------------------------------------------------------
     # Zenoh lifecycle
