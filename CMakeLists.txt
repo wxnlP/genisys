@@ -58,12 +58,12 @@ if(ROBOTIC_ARM_BUILD_TESTS)
   enable_testing()
 endif()
 
+set(YAML_CPP_INSTALL ON)
+include(GetAimRT)
+
 if(ROBOTIC_ARM_BUILD_MUJOCO_SIM)
   include(GetMujocoSim)
 endif()
-
-set(YAML_CPP_INSTALL ON)
-include(GetAimRT)
 
 # find_package(rclcpp REQUIRED)
 

@@ -4,7 +4,7 @@
 #include "arm_manager.h"
 #include "joint_command.pb.h"
 #include "joint_state.pb.h"
-#include "service.h"
+#include "move_control.aimrt_rpc.pb.h"
 #include <vector>
 #include <string>
 #include <mutex>
@@ -39,10 +39,11 @@ class ControlModule : public aimrt::ModuleBase {
 
  private:
   aimrt::CoreRef core_;
-  aimrt::channel::PublisherRef pub_joint_cmd_;
-  aimrt::channel::PublisherRef pub_cart_expected_;
-  aimrt::channel::PublisherRef pub_cart_current_;
-  aimrt::channel::SubscriberRef sub_joint_state_;
+  std::shared_ptr<aimrt::context::Context> ctx_ptr_;
+  aimrt::context::res::Publisher<JointCommandArray> pub_joint_cmd_;
+  aimrt::context::res::Publisher<Pose> pub_cart_expected_;
+  aimrt::context::res::Publisher<Pose> pub_cart_current_;
+  aimrt::context::res::Subscriber<JointStateArray> sub_joint_state_;
   // 周期控制执行器（单独）
   aimrt::executor::ExecutorRef cycle_control_executor_;
 
@@ -64,8 +65,6 @@ class ControlModule : public aimrt::ModuleBase {
   std::shared_ptr<ArmManager> arm_manager_;
   std::shared_ptr<ArmController> arm_controller_;
   std::shared_ptr<GripperController> gripper_controller_;
-
-  std::shared_ptr<MoveControlServiceImpl> move_control_service_;
 
   // 记录上一帧有效指令，用于轨迹间保持
   ArmMotion::JointCommand last_arm_cmd_;

@@ -1,7 +1,7 @@
 #include "control_module/control_module.h"
 #include <fmt/ranges.h>
-#include <thread>
 #include <pthread.h>
+#include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "yaml-cpp/yaml.h"
 
@@ -10,56 +10,149 @@ namespace robotic_arm::control_module {
 bool ControlModule::Initialize(aimrt::CoreRef core) {
   // Save aimrt framework handle
   core_ = core;
-
+  ctx_ptr_ = std::make_shared<aimrt::context::Context>(core_);
+  ctx_ptr_->LetMe();
   try {
     // Read cfg
-    auto file_path = core_.GetConfigurator().GetConfigFilePath();
-    AIMRT_CHECK_ERROR_THROW(!file_path.empty(), "Config file path is empty");
+    auto file_path = ctx_ptr_->GetConfigFilePath();
 
-    YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
-    control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
-    topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
-    topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
-    topic_pub_cart_expected_ = cfg_node["topic_pub_cart_expected"].as<std::string>();
-    topic_pub_cart_current_ = cfg_node["topic_pub_cart_current"].as<std::string>();
-    control_frequency_ = cfg_node["control_frequency"].as<double>();
-    publish_frequency_ = cfg_node["publish_frequency"].as<double>();
-    auto robot_cfg_file = cfg_node["config_file"].as<std::string>();
+    if (!file_path.empty()) {
+      YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
+      control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
+      topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
+      topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
+      topic_pub_cart_expected_ = cfg_node["topic_pub_cart_expected"].as<std::string>();
+      topic_pub_cart_current_ = cfg_node["topic_pub_cart_current"].as<std::string>();
+      control_frequency_ = cfg_node["control_frequency"].as<double>();
+      publish_frequency_ = cfg_node["publish_frequency"].as<double>();
+      auto robot_cfg_file = cfg_node["config_file"].as<std::string>();
 
-    arm_manager_ = std::make_shared<ArmManager>(robot_cfg_file);
-    AIMRT_CHECK_ERROR_THROW(arm_manager_, "Failed to create ArmManager");
+      arm_manager_ = std::make_shared<ArmManager>(robot_cfg_file);
+      AIMRT_CHECK_ERROR_THROW(arm_manager_, "Failed to create ArmManager");
 
-    arm_controller_ = arm_manager_->GetArmController();
-    AIMRT_CHECK_ERROR_THROW(arm_controller_, "Failed to get ArmController");
+      arm_controller_ = arm_manager_->GetArmController();
+      AIMRT_CHECK_ERROR_THROW(arm_controller_, "Failed to get ArmController");
 
-    gripper_controller_ = arm_manager_->GetGripperController();
+      gripper_controller_ = arm_manager_->GetGripperController();
 
-    arm_manager_->GetJointNames(joint_names_);
-    AIMRT_INFO("\n---\n控制器器关节名称：{}\n---", joint_names_);
+      arm_manager_->GetJointNames(joint_names_);
+      AIMRT_INFO("\n---\n控制器器关节名称：{}\n---", joint_names_);
+    }
+    cycle_control_executor_ = ctx_ptr_->CreateExecutor(control_executor_name_);
 
-    cycle_control_executor_ = core_.GetExecutorManager().GetExecutor(control_executor_name_);
-    AIMRT_CHECK_ERROR_THROW(cycle_control_executor_, "Failed to get control executor '{}'", control_executor_name_);
+    pub_joint_cmd_ = ctx_ptr_->CreatePublisher<JointCommandArray>(topic_pub_joint_cmd_);
 
-    pub_joint_cmd_ = core_.GetChannelHandle().GetPublisher(topic_pub_joint_cmd_);
-    AIMRT_CHECK_ERROR_THROW(pub_joint_cmd_, "Failed to get publisher for topic '{}'", topic_pub_joint_cmd_);
-    aimrt::channel::RegisterPublishType<JointCommandArray>(pub_joint_cmd_);
+    pub_cart_expected_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_cart_expected_);
 
-    pub_cart_expected_ = core_.GetChannelHandle().GetPublisher(topic_pub_cart_expected_);
-    AIMRT_CHECK_ERROR_THROW(pub_cart_expected_, "Failed to get publisher for topic '{}'", topic_pub_cart_expected_);
-    aimrt::channel::RegisterPublishType<Pose>(pub_cart_expected_);
+    pub_cart_current_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_cart_current_);
 
-    pub_cart_current_ = core_.GetChannelHandle().GetPublisher(topic_pub_cart_current_);
-    AIMRT_CHECK_ERROR_THROW(pub_cart_current_, "Failed to get publisher for topic '{}'", topic_pub_cart_current_);
-    aimrt::channel::RegisterPublishType<Pose>(pub_cart_current_);
-
-    sub_joint_state_ = core_.GetChannelHandle().GetSubscriber(topic_sub_joint_state_);
-    AIMRT_CHECK_ERROR_THROW(sub_joint_state_, "Failed to get subscriber for topic '{}'", topic_sub_joint_state_);
-    aimrt::channel::Subscribe<JointStateArray>(
-        sub_joint_state_, std::bind(&ControlModule::JointStateCallback, this, std::placeholders::_1));
+    sub_joint_state_ = ctx_ptr_->CreateSubscriber<JointStateArray>(topic_sub_joint_state_, std::bind(&ControlModule::JointStateCallback, this, std::placeholders::_1));
 
     // 创建 RPC 服务，传入控制器指针
-    move_control_service_ = std::make_shared<MoveControlServiceImpl>(arm_controller_, gripper_controller_);
-    core_.GetRpcHandle().RegisterService(move_control_service_.get());
+    auto server_handle = ctx_ptr_->CreateServer<robotic_arm::protocols::MoveControlServiceCoServer>();
+
+    // MoveJ 服务处理
+    server_handle->MoveJ.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                            const ::robotic_arm::protocols::MoveJRequest& req,
+                                            ::robotic_arm::protocols::MoveResponse& rsp) {
+      AIMRT_INFO("\n---\n收到MoveJ请求\n---");
+      ArmMotion::Joint6Dof target_joint;
+      for (int i = 0; i < 6 && i < req.position().position_size(); ++i) {
+        target_joint[i] = req.position().position(i);
+      }
+
+      int ret = arm_controller_->MoveJ(target_joint, req.v(), req.a());
+      if (ret == 0) {
+        arm_controller_->WaitForCompletion();
+        rsp.mutable_error()->set_code(0);
+        rsp.mutable_error()->set_msg("MoveJ succeeded");
+      } else {
+        rsp.mutable_error()->set_code(ret);
+        rsp.mutable_error()->set_msg("MoveJ failed");
+      }
+
+      return aimrt::rpc::Status();
+    });
+
+    // MoveJMulti 服务处理
+    server_handle->MoveJMuti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                const ::robotic_arm::protocols::MoveJMutiRequest& req,
+                                                ::robotic_arm::protocols::MoveResponse& rsp) {
+      AIMRT_INFO("\n---\n收到MoveJMuti请求\n---");
+      std::vector<ArmMotion::Joint6Dof> points;
+      points.reserve(req.position_size());
+      for (int i = 0; i < req.position_size(); ++i) {
+        ArmMotion::Joint6Dof joint;
+        const auto& j = req.position(i);
+        for (int k = 0; k < 6 && k < j.position_size(); ++k) {
+          joint[k] = j.position(k);
+        }
+        points.push_back(joint);
+      }
+
+      int ret = arm_controller_->MoveJMulti(points, req.r(), req.v(), req.a());
+      if (ret == 0) {
+        arm_controller_->WaitForCompletion();
+        rsp.mutable_error()->set_code(0);
+        rsp.mutable_error()->set_msg("MoveJMuti succeeded");
+      } else {
+        rsp.mutable_error()->set_code(ret);
+        rsp.mutable_error()->set_msg("MoveJMuti failed");
+      }
+
+      return aimrt::rpc::Status();
+    });
+
+    // MoveL 服务处理
+    server_handle->MoveL.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                            const ::robotic_arm::protocols::MoveLRequest& req,
+                                            ::robotic_arm::protocols::MoveResponse& rsp) {
+      AIMRT_INFO("\n---\n收到MoveL请求\n---");
+      ArmMotion::Pose6Dof target_pose(
+          req.pose().position().x(), req.pose().position().y(), req.pose().position().z(),
+          req.pose().orientation().w(), req.pose().orientation().x(),
+          req.pose().orientation().y(), req.pose().orientation().z());
+
+      int ret = arm_controller_->MoveL(target_pose, req.v(), req.a());
+      if (ret == 0) {
+        arm_controller_->WaitForCompletion();
+        rsp.mutable_error()->set_code(0);
+        rsp.mutable_error()->set_msg("MoveL succeeded");
+      } else {
+        rsp.mutable_error()->set_code(ret);
+        rsp.mutable_error()->set_msg("MoveL failed");
+      }
+
+      return aimrt::rpc::Status();
+    });
+
+    // MoveLMulti 服务处理
+    server_handle->MoveLMuti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                const ::robotic_arm::protocols::MoveLMutiRequest& req,
+                                                ::robotic_arm::protocols::MoveResponse& rsp) {
+      AIMRT_INFO("\n---\n收到MoveLMuti请求\n---");
+      std::vector<ArmMotion::Pose6Dof> points;
+      points.reserve(req.pose_size());
+      for (int i = 0; i < req.pose_size(); ++i) {
+        const auto& p = req.pose(i);
+        points.emplace_back(
+            p.position().x(), p.position().y(), p.position().z(),
+            p.orientation().w(), p.orientation().x(),
+            p.orientation().y(), p.orientation().z());
+      }
+
+      int ret = arm_controller_->MoveLMulti(points, req.r(), req.v(), req.a());
+      if (ret == 0) {
+        arm_controller_->WaitForCompletion();
+        rsp.mutable_error()->set_code(0);
+        rsp.mutable_error()->set_msg("MoveLMuti succeeded");
+      } else {
+        rsp.mutable_error()->set_code(ret);
+        rsp.mutable_error()->set_msg("MoveLMuti failed");
+      }
+
+      return aimrt::rpc::Status();
+    });
 
   } catch (const std::exception& e) {
     AIMRT_ERROR("Init failed, {}", e.what());
@@ -74,8 +167,14 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 bool ControlModule::Start() {
   try {
     is_running_.store(true);
-    cycle_control_executor_.Execute(std::bind(&ControlModule::ControlLoop, this));
-    publish_thread_ = std::jthread(&ControlModule::PublishLoop, this);
+    cycle_control_executor_.Execute([this]() {
+      ctx_ptr_->LetMe();
+      ControlLoop();
+    });
+    publish_thread_ = std::jthread([this]() {
+      ctx_ptr_->LetMe();
+      PublishLoop();
+    });
 
   } catch (const std::exception& e) {
     AIMRT_ERROR("control_module Start failed, {}", e.what());
@@ -87,9 +186,7 @@ bool ControlModule::Start() {
 
 void ControlModule::Shutdown() {
   try {
-    is_running_.store(false);
-    stop_sig_.get_future().wait();
-    pub_stop_sig_.get_future().wait();
+    ctx_ptr_->StopRunning();
     if (arm_controller_) {
       arm_controller_->StopSampleThread();
     }
@@ -102,7 +199,7 @@ void ControlModule::Shutdown() {
 void ControlModule::ControlLoop() {
   try {
     // 计算周期
-    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / control_frequency_ * 1000000000));
+    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / control_frequency_ * 1000000000));
     // 记录下一次循环时间
     auto next_loop_time = std::chrono::steady_clock::now();
     // 序列
@@ -118,7 +215,7 @@ void ControlModule::ControlLoop() {
     int64_t cycle_max_us = 0;
     int64_t get_cmd_sum_us = 0, build_msg_sum_us = 0, publish_sum_us = 0;
 
-    while (is_running_.load()) {
+    while (ctx_ptr_->Running()) {
       auto t_start = std::chrono::steady_clock::now();
 
       joint_cmd_msg.Clear();
@@ -182,7 +279,7 @@ void ControlModule::ControlLoop() {
       }
       auto t_build_msg = std::chrono::steady_clock::now();
 
-      aimrt::channel::Publish(pub_joint_cmd_, joint_cmd_msg);
+      pub_joint_cmd_.Publish(joint_cmd_msg);
 
       auto t_publish = std::chrono::steady_clock::now();
 
@@ -207,19 +304,19 @@ void ControlModule::ControlLoop() {
         AIMRT_WARN(
             "\n---\nNow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs\n---",
             get_cmd_us, build_msg_us, publish_us, total_us);
-        next_loop_time = now + period;      // 放弃追赶，重新对齐
+        next_loop_time = now + period;  // 放弃追赶，重新对齐
       }
       std::this_thread::sleep_until(next_loop_time);
     }
   } catch (const std::exception& e) {
     AIMRT_ERROR("ControlLoop crashed: {}", e.what());
   }
-  stop_sig_.set_value();
+  // stop_sig_.set_value();
 }
 
 void ControlModule::PublishLoop() {
   // 计算周期
-  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1 / publish_frequency_ * 1000000000));
+  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / publish_frequency_ * 1000000000));
   // 记录下一次循环时间
   auto next_loop_time = std::chrono::steady_clock::now();
   // 序列
@@ -251,7 +348,7 @@ void ControlModule::PublishLoop() {
     pos->set_z(source_pose.z);
   };
 
-  while (is_running_) {
+  while (ctx_ptr_->Running()) {
     // 获取期望和当前笛卡尔位姿
     arm_controller_->GetCurrentPose(current_pose);
     {
@@ -271,8 +368,8 @@ void ControlModule::PublishLoop() {
     fill_pose_msg(expected_pose_msg, expected_pose, seq_count, time_ns);
     fill_pose_msg(current_pose_msg, current_pose, seq_count, time_ns);
 
-    aimrt::channel::Publish(pub_cart_expected_, expected_pose_msg);
-    aimrt::channel::Publish(pub_cart_current_, current_pose_msg);
+    pub_cart_expected_.Publish(expected_pose_msg);
+    pub_cart_current_.Publish(current_pose_msg);
 
     next_loop_time += period;
     std::this_thread::sleep_until(next_loop_time);
@@ -281,15 +378,10 @@ void ControlModule::PublishLoop() {
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {
-  if (!is_running_.load()) return;
+  if (!ctx_ptr_->Running()) { return; }
 
   ArmMotion::JointState joint_state;
   int n = msg->joints_size();
-  // int expected = gripper_controller_ ? 7 : 6;
-  // if (n < expected) {
-  //   AIMRT_ERROR("关节数量 {} < {}, 检查 {} channel", n, expected, topic_sub_joint_state_);
-  //   return;
-  // }
 
   for (int i = 0; i < 6; ++i) {
     joint_state.position[i] = msg->joints(i).position();
