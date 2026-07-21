@@ -91,10 +91,9 @@ aimrt:
         type: simple_thread
       - name: control_executor
         type: simple_thread
-        # options:
-          # Removed CPU bind and real-time scheduling for WSL/desktop safety
-          # thread_bind_cpu: [7]
-          # thread_sched_policy: SCHED_FIFO:80
+        options:
+          thread_bind_cpu: [7]
+          thread_sched_policy: SCHED_FIFO:80
       - name: work_executor
         type: asio_thread
         options:

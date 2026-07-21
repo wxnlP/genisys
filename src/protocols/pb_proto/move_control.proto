@@ -21,14 +21,14 @@ message MoveJRequest {
   double a = 3;
 }
 
-message MoveLMutiRequest {
+message MoveLMultiRequest {
   repeated Pose pose = 1;
   double r = 2;
   double v = 3;
   double a = 4;
 }
 
-message MoveJMutiRequest {
+message MoveJMultiRequest {
   repeated Joint position = 1;
   double r = 2;
   double v = 3;
@@ -49,7 +49,7 @@ message MoveResponse {
 service MoveControlService {
   rpc MoveL(MoveLRequest) returns (MoveResponse);
   rpc MoveJ(MoveJRequest) returns (MoveResponse);
-  rpc MoveLMuti(MoveLMutiRequest) returns (MoveResponse);
-  rpc MoveJMuti(MoveJMutiRequest) returns (MoveResponse);
+  rpc MoveLMulti(MoveLMultiRequest) returns (MoveResponse);
+  rpc MoveJMulti(MoveJMultiRequest) returns (MoveResponse);
   rpc Gripper(GripperRequest) returns (MoveResponse);
 }

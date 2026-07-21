@@ -37,6 +37,7 @@ class ActuatorModule : public aimrt::ModuleBase {
 
  private:
   aimrt::CoreRef core_;
+  std::shared_ptr<aimrt::context::ContextRef> ctx_ptr_;
   aimrt::channel::SubscriberRef sub_joint_cmd_;
   aimrt::channel::PublisherRef pub_joint_state_;
   aimrt::executor::ExecutorRef pub_executor_;

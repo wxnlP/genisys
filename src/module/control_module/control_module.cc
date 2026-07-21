@@ -75,8 +75,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     });
 
     // MoveJMulti 服务处理
-    server_handle->MoveJMuti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                const ::robotic_arm::protocols::MoveJMutiRequest& req,
+    server_handle->MoveJMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                const ::robotic_arm::protocols::MoveJMultiRequest& req,
                                                 ::robotic_arm::protocols::MoveResponse& rsp) {
       AIMRT_INFO("\n---\n收到MoveJMuti请求\n---");
       std::vector<ArmMotion::Joint6Dof> points;
@@ -127,10 +127,10 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     });
 
     // MoveLMulti 服务处理
-    server_handle->MoveLMuti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                const ::robotic_arm::protocols::MoveLMutiRequest& req,
+    server_handle->MoveLMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                const ::robotic_arm::protocols::MoveLMultiRequest& req,
                                                 ::robotic_arm::protocols::MoveResponse& rsp) {
-      AIMRT_INFO("\n---\n收到MoveLMuti请求\n---");
+      AIMRT_INFO("\n---\n收到MoveLMulti请求\n---");
       std::vector<ArmMotion::Pose6Dof> points;
       points.reserve(req.pose_size());
       for (int i = 0; i < req.pose_size(); ++i) {

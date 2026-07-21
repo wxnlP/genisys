@@ -36,7 +36,7 @@ YAW_DEG = -90.0
 ORI = rpy_to_quat(ROLL_DEG, PITCH_DEG, YAW_DEG)
 
 URL_MOVEJ = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/MoveJ"
-URL_MOVELMUTI = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/MoveLMuti"
+URL_MOVELMUTI = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/MoveLMulti"
 
 # 多个末端位姿路径点: 位置 (x, y, z) + 四元数 (w, x, y, z)
 payload = {

@@ -13,7 +13,7 @@ import requests
 import json
 
 # RPC endpoint
-URL = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/MoveJMuti"
+URL = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/MoveJMluti"
 
 # 多个关节角度路径点 [joint1, joint2, joint3, joint4, joint5, joint6] (弧度)
 payload = {
