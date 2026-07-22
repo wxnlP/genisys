@@ -1,10 +1,11 @@
 #pragma once
 
+#include <mutex>
+#include <semaphore>
 #include <string>
 #include <vector>
-#include <semaphore>
-#include <mutex>
 #include "actuator_manager.h"
+#include "aimrt_module_cpp_interface/context/context.h"
 #include "aimrt_module_cpp_interface/module_base.h"
 #include "joint_command.pb.h"
 #include "joint_state.pb.h"
@@ -37,9 +38,9 @@ class ActuatorModule : public aimrt::ModuleBase {
 
  private:
   aimrt::CoreRef core_;
-  std::shared_ptr<aimrt::context::ContextRef> ctx_ptr_;
-  aimrt::channel::SubscriberRef sub_joint_cmd_;
-  aimrt::channel::PublisherRef pub_joint_state_;
+  std::shared_ptr<aimrt::context::Context> ctx_ptr_;
+  aimrt::context::res::Subscriber<JointCommandArray> sub_joint_cmd_;
+  aimrt::context::res::Publisher<JointStateArray> pub_joint_state_;
   aimrt::executor::ExecutorRef pub_executor_;
   aimrt::executor::ExecutorRef write_executor_;
 

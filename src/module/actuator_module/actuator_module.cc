@@ -9,46 +9,40 @@ namespace robotic_arm::actuator_module {
 bool ActuatorModule::Initialize(aimrt::CoreRef core) {
   // Save aimrt framework handle
   core_ = core;
+  ctx_ptr_ = std::make_shared<aimrt::context::Context>(core_);
+  ctx_ptr_->LetMe();
 
   try {
     // Read cfg
-    auto file_path = core_.GetConfigurator().GetConfigFilePath();
-    AIMRT_CHECK_ERROR_THROW(!file_path.empty(), "Config file path is empty");
+    auto file_path = ctx_ptr_->GetConfigFilePath();
+    if (!file_path.empty()) {
+      YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
+      auto actuator_cfg_file = cfg_node["config_file"].as<std::string>();
+      topic_sub_joint_cmd_ = cfg_node["topic_sub_joint_cmd"].as<std::string>();
+      topic_pub_joint_state_ = cfg_node["topic_pub_joint_state"].as<std::string>();
+      pub_executor_name_ = cfg_node["pub_executor_name"].as<std::string>();
+      write_executor_name_ = cfg_node["write_executor_name"].as<std::string>();
+      publish_frequecy_ = cfg_node["pub_frequency"].as<double>();
 
-    YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
-    auto actuator_cfg_file = cfg_node["config_file"].as<std::string>();
-    topic_sub_joint_cmd_ = cfg_node["topic_sub_joint_cmd"].as<std::string>();
-    topic_pub_joint_state_ = cfg_node["topic_pub_joint_state"].as<std::string>();
-    pub_executor_name_ = cfg_node["pub_executor_name"].as<std::string>();
-    write_executor_name_ = cfg_node["write_executor_name"].as<std::string>();
-    publish_frequecy_ = cfg_node["pub_frequency"].as<double>();
+      actuator_manager_ = std::make_shared<ActuatorManager>(actuator_cfg_file);
+      AIMRT_CHECK_ERROR_THROW(actuator_manager_, "Failed to create ActuatorManager");
 
-    actuator_manager_ = std::make_shared<ActuatorManager>(actuator_cfg_file);
-    AIMRT_CHECK_ERROR_THROW(actuator_manager_, "Failed to create ActuatorManager");
+      arm_actuator_ = actuator_manager_->GetArmActuator();
+      AIMRT_CHECK_ERROR_THROW(arm_actuator_, "Failed to get ArmActuator");
 
-    arm_actuator_ = actuator_manager_->GetArmActuator();
-    AIMRT_CHECK_ERROR_THROW(arm_actuator_, "Failed to get ArmActuator");
+      gripper_actuator_ = actuator_manager_->GetGripperActuator();
 
-    gripper_actuator_ = actuator_manager_->GetGripperActuator();
+      actuator_manager_->GetJointNames(joint_names_);
+      AIMRT_INFO("\n---\n执行器关节名称：{}\n---", joint_names_);
+    }
 
-    actuator_manager_->GetJointNames(joint_names_);
-    AIMRT_INFO("\n---\n执行器关节名称：{}\n---", joint_names_);
+    pub_executor_ = ctx_ptr_->CreateExecutor(pub_executor_name_);
 
-    pub_executor_ = core_.GetExecutorManager().GetExecutor(pub_executor_name_);
-    AIMRT_CHECK_ERROR_THROW(pub_executor_, "Failed to get pub executor '{}'", pub_executor_name_);
+    write_executor_ = ctx_ptr_->CreateExecutor(write_executor_name_);
 
-    write_executor_ = core.GetExecutorManager().GetExecutor(write_executor_name_);
-    AIMRT_CHECK_ERROR_THROW(write_executor_, "Failed to get write executor '{}'", write_executor_name_);
+    pub_joint_state_ = ctx_ptr_->CreatePublisher<JointStateArray>(topic_pub_joint_state_);
 
-    pub_joint_state_ = core_.GetChannelHandle().GetPublisher(topic_pub_joint_state_);
-    AIMRT_CHECK_ERROR_THROW(pub_joint_state_, "Failed to get publisher for topic '{}'", topic_pub_joint_state_);
-    aimrt::channel::RegisterPublishType<JointStateArray>(pub_joint_state_);
-
-    sub_joint_cmd_ = core.GetChannelHandle().GetSubscriber(topic_sub_joint_cmd_);
-    AIMRT_CHECK_ERROR_THROW(sub_joint_cmd_, "Failed to get subscriber for topic '{}'", topic_sub_joint_cmd_);
-    aimrt::channel::Subscribe<JointCommandArray>(
-        sub_joint_cmd_,
-        std::bind(&ActuatorModule::JointCmdCallback, this, std::placeholders::_1));
+    sub_joint_cmd_ = ctx_ptr_->CreateSubscriber<JointCommandArray>(topic_sub_joint_cmd_, std::bind(&ActuatorModule::JointCmdCallback, this, std::placeholders::_1));
 
   } catch (const std::exception& e) {
     AIMRT_ERROR("Init failed, {}", e.what());
@@ -72,8 +66,14 @@ bool ActuatorModule::Start() {
 
     // 启动发布循环
     is_running_.store(true);
-    pub_executor_.Execute(std::bind(&ActuatorModule::PublishLoop, this));
-    write_executor_.Execute(std::bind(&ActuatorModule::WriteLoop, this));
+    pub_executor_.Execute([this] () {
+      ctx_ptr_->LetMe();
+      PublishLoop();
+    });
+    write_executor_.Execute([this] () {
+      ctx_ptr_->LetMe();
+      WriteLoop();
+    });
   } catch (const std::exception& e) {
     AIMRT_ERROR("Start failed, {}", e.what());
     return false;
@@ -84,11 +84,7 @@ bool ActuatorModule::Start() {
 
 void ActuatorModule::Shutdown() {
   try {
-    // 停止发布循环和 channel 回调
-    is_running_.store(false);
-    write_sem_.release();
-    pub_stop_sig_.get_future().wait();
-    write_stop_sig_.get_future().wait();
+    ctx_ptr_->StopRunning();
 
     // 失能各执行器
     if (arm_actuator_) {
@@ -121,8 +117,8 @@ void ActuatorModule::PublishLoop() {
     joint_state_msg.mutable_joints()->Reserve(7);
     ArmCtrlBase::JointState joint_state;
     GripperCtrlBase::GripperState gripper_state;
-
-    while (is_running_.load()) {
+    
+    while (ctx_ptr_->Running()) {
       joint_state_msg.Clear();
       if (!arm_actuator_->GetJointState(joint_state)) {
         AIMRT_ERROR("读取机械臂本体关节状态失败！");
@@ -158,7 +154,7 @@ void ActuatorModule::PublishLoop() {
         gripper_joint->set_effort(gripper_state.effort);
       }
 
-      aimrt::channel::Publish(pub_joint_state_, joint_state_msg);
+      pub_joint_state_.Publish(joint_state_msg);
 
       next_loop_time += period;
 
@@ -167,7 +163,6 @@ void ActuatorModule::PublishLoop() {
   } catch (const std::exception& e) {
     AIMRT_ERROR("PublishLoop crashed: {}", e.what());
   }
-  pub_stop_sig_.set_value();
   AIMRT_INFO("成功退出PublishLoop");
 }
 
@@ -175,9 +170,9 @@ void ActuatorModule::WriteLoop() {
   try {
     ArmCtrlBase::JointCommand joint_cmd;
     GripperCtrlBase::GripperCommand gripper_cmd;
-    while (is_running_.load()) {
+    while (ctx_ptr_->Running()) {
       write_sem_.acquire();
-      if (!is_running_.load()) {
+      if (!ctx_ptr_->Running()) {
         break;
       }
       {
@@ -193,19 +188,13 @@ void ActuatorModule::WriteLoop() {
   } catch (const std::exception& e) {
     AIMRT_ERROR("WriteLoop crashed: {}", e.what());
   }
-  write_stop_sig_.set_value();
   AIMRT_INFO("成功退出WriteLoop");
 }
 
 void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandArray>& msg) {
-  if (!is_running_.load()) return;
+  if (!ctx_ptr_->Running()) { return; }
   AIMRT_DEBUG("Received joint command message with {} joints.", msg->joints_size());
   int n = msg->joints_size();
-  // int expected = gripper_actuator_ ? 7 : 6;
-  // if (n < expected) {
-  //   AIMRT_ERROR("关节数量 {} < {}, 检查 {} channel", n, expected, topic_sub_joint_cmd_);
-  //   return;
-  // }
 
   {
     std::lock_guard<std::mutex> lock(cached_cmd_lock);

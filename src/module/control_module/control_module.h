@@ -1,14 +1,15 @@
 #pragma once
 
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+#include "aimrt_module_cpp_interface/context/context.h"
 #include "aimrt_module_cpp_interface/module_base.h"
 #include "arm_manager.h"
 #include "joint_command.pb.h"
 #include "joint_state.pb.h"
 #include "move_control.aimrt_rpc.pb.h"
-#include <vector>
-#include <string>
-#include <mutex>
-#include <thread>
 
 using JointStateArray = aimrt::protocols::sensor::JointStateArray;
 using JointCommandArray = aimrt::protocols::sensor::JointCommandArray;
