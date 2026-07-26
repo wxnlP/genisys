@@ -166,7 +166,6 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
 bool ControlModule::Start() {
   try {
-    is_running_.store(true);
     cycle_control_executor_.Execute([this]() {
       ctx_ptr_->LetMe();
       ControlLoop();
@@ -279,6 +278,7 @@ void ControlModule::ControlLoop() {
       }
       auto t_build_msg = std::chrono::steady_clock::now();
 
+      ctx_ptr_->LetMe();
       pub_joint_cmd_.Publish(joint_cmd_msg);
 
       auto t_publish = std::chrono::steady_clock::now();
@@ -309,72 +309,77 @@ void ControlModule::ControlLoop() {
       std::this_thread::sleep_until(next_loop_time);
     }
   } catch (const std::exception& e) {
-    AIMRT_ERROR("ControlLoop crashed: {}", e.what());
+    AIMRT_ERROR("ControlModule::ControlLoop crashed: {}", e.what());
   }
-  // stop_sig_.set_value();
+  AIMRT_INFO("成功退出 ControlModule::ControlLoop");
 }
 
 void ControlModule::PublishLoop() {
-  // 计算周期
-  auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / publish_frequency_ * 1000000000));
-  // 记录下一次循环时间
-  auto next_loop_time = std::chrono::steady_clock::now();
-  // 序列
-  uint64_t seq_count = 0;
+  try {
+    // 计算周期
+    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / publish_frequency_ * 1000000000));
+    // 记录下一次循环时间
+    auto next_loop_time = std::chrono::steady_clock::now();
+    // 序列
+    uint64_t seq_count = 0;
 
-  Pose expected_pose_msg;
-  Pose current_pose_msg;
-  ArmMotion::Pose6Dof current_pose;
-  ArmMotion::Joint6Dof joint_pos_cmd;
-  ArmMotion::Pose6Dof expected_pose;
+    Pose expected_pose_msg;
+    Pose current_pose_msg;
+    ArmMotion::Pose6Dof current_pose;
+    ArmMotion::Joint6Dof joint_pos_cmd;
+    ArmMotion::Pose6Dof expected_pose;
 
-  auto fill_pose_msg = [this](Pose& msg, const ArmMotion::Pose6Dof& source_pose, uint64_t& seq, const auto& time_ns) {
-    auto* header = msg.mutable_header();
-    header->set_time_stamp(time_ns);
-    header->set_frame_id("base_link");
-    header->set_sequence_num(seq++);
+    auto fill_pose_msg = [this](Pose& msg, const ArmMotion::Pose6Dof& source_pose, uint64_t& seq, const auto& time_ns) {
+      auto* header = msg.mutable_header();
+      header->set_time_stamp(time_ns);
+      header->set_frame_id("base_link");
+      header->set_sequence_num(seq++);
 
-    auto* pose = msg.mutable_pose();
+      auto* pose = msg.mutable_pose();
 
-    auto* quat = pose->mutable_orientation();
-    quat->set_x(source_pose.quat.x);
-    quat->set_y(source_pose.quat.y);
-    quat->set_z(source_pose.quat.z);
-    quat->set_w(source_pose.quat.w);
+      auto* quat = pose->mutable_orientation();
+      quat->set_x(source_pose.quat.x);
+      quat->set_y(source_pose.quat.y);
+      quat->set_z(source_pose.quat.z);
+      quat->set_w(source_pose.quat.w);
 
-    auto* pos = pose->mutable_position();
-    pos->set_x(source_pose.x);
-    pos->set_y(source_pose.y);
-    pos->set_z(source_pose.z);
-  };
+      auto* pos = pose->mutable_position();
+      pos->set_x(source_pose.x);
+      pos->set_y(source_pose.y);
+      pos->set_z(source_pose.z);
+    };
 
-  while (ctx_ptr_->Running()) {
-    // 获取期望和当前笛卡尔位姿
-    arm_controller_->GetCurrentPose(current_pose);
-    {
-      std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
-      joint_pos_cmd = last_arm_cmd_.position;
+    while (ctx_ptr_->Running()) {
+      // 获取期望和当前笛卡尔位姿
+      arm_controller_->GetCurrentPose(current_pose);
+      {
+        std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
+        joint_pos_cmd = last_arm_cmd_.position;
+      }
+      arm_controller_->JointToPose(joint_pos_cmd, expected_pose);
+
+      // 打包msg
+      expected_pose_msg.Clear();
+      current_pose_msg.Clear();
+
+      auto now = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
+      auto time_ns = duration.count();
+
+      fill_pose_msg(expected_pose_msg, expected_pose, seq_count, time_ns);
+      fill_pose_msg(current_pose_msg, current_pose, seq_count, time_ns);
+
+      ctx_ptr_->LetMe();
+      pub_cart_expected_.Publish(expected_pose_msg);
+      pub_cart_current_.Publish(current_pose_msg);
+
+      next_loop_time += period;
+      std::this_thread::sleep_until(next_loop_time);
     }
-    arm_controller_->JointToPose(joint_pos_cmd, expected_pose);
-
-    // 打包msg
-    expected_pose_msg.Clear();
-    current_pose_msg.Clear();
-
-    auto now = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
-    auto time_ns = duration.count();
-
-    fill_pose_msg(expected_pose_msg, expected_pose, seq_count, time_ns);
-    fill_pose_msg(current_pose_msg, current_pose, seq_count, time_ns);
-
-    pub_cart_expected_.Publish(expected_pose_msg);
-    pub_cart_current_.Publish(current_pose_msg);
-
-    next_loop_time += period;
-    std::this_thread::sleep_until(next_loop_time);
+  } catch (const std::exception& e) {
+    AIMRT_ERROR("ControlModule::PublishLoop crashed: {}", e.what());
   }
-  pub_stop_sig_.set_value();
+  AIMRT_INFO("成功退出 ControlModule::PublishLoop");
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {

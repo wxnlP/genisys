@@ -63,9 +63,7 @@ bool ActuatorModule::Start() {
     if (gripper_actuator_) {
       gripper_actuator_->Enable();
     }
-
-    // 启动发布循环
-    is_running_.store(true);
+    
     pub_executor_.Execute([this] () {
       ctx_ptr_->LetMe();
       PublishLoop();
@@ -85,6 +83,7 @@ bool ActuatorModule::Start() {
 void ActuatorModule::Shutdown() {
   try {
     ctx_ptr_->StopRunning();
+    write_sem_.release();
 
     // 失能各执行器
     if (arm_actuator_) {
@@ -154,6 +153,7 @@ void ActuatorModule::PublishLoop() {
         gripper_joint->set_effort(gripper_state.effort);
       }
 
+      ctx_ptr_->LetMe();
       pub_joint_state_.Publish(joint_state_msg);
 
       next_loop_time += period;
@@ -161,9 +161,9 @@ void ActuatorModule::PublishLoop() {
       std::this_thread::sleep_until(next_loop_time);
     }
   } catch (const std::exception& e) {
-    AIMRT_ERROR("PublishLoop crashed: {}", e.what());
+    AIMRT_ERROR("ActuatorModule::PublishLoop crashed: {}", e.what());
   }
-  AIMRT_INFO("成功退出PublishLoop");
+  AIMRT_INFO("成功退出 ActuatorModule::PublishLoop");
 }
 
 void ActuatorModule::WriteLoop() {
@@ -171,7 +171,9 @@ void ActuatorModule::WriteLoop() {
     ArmCtrlBase::JointCommand joint_cmd;
     GripperCtrlBase::GripperCommand gripper_cmd;
     while (ctx_ptr_->Running()) {
-      write_sem_.acquire();
+      if (!write_sem_.try_acquire_for(std::chrono::milliseconds(100))) {
+        continue;
+      }
       if (!ctx_ptr_->Running()) {
         break;
       }
@@ -186,9 +188,9 @@ void ActuatorModule::WriteLoop() {
       }
     }
   } catch (const std::exception& e) {
-    AIMRT_ERROR("WriteLoop crashed: {}", e.what());
+    AIMRT_ERROR("ActuatorModule::WriteLoop crashed: {}", e.what());
   }
-  AIMRT_INFO("成功退出WriteLoop");
+  AIMRT_INFO("成功退出 ActuatorModule::WriteLoop");
 }
 
 void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandArray>& msg) {
