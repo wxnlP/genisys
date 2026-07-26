@@ -48,6 +48,8 @@ class ControlModule : public aimrt::ModuleBase {
   // 周期控制执行器（单独）
   aimrt::executor::ExecutorRef cycle_control_executor_;
 
+  std::promise<void> pub_stop_sig_;
+  std::promise<void> control_stop_sig_;
   std::mutex last_arm_cmd_mutex_;
   std::jthread publish_thread_;
 
