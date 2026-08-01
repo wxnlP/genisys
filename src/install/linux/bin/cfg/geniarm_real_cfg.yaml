@@ -61,8 +61,8 @@ aimrt:
             listen_port: 50080
       - name: zenoh_plugin
         path: ./libaimrt_zenoh_plugin.so
-        options:
-          native_cfg_path: ./cfg/zenoh_native_config.json5
+        # options:
+        #   native_cfg_path: ./cfg/zenoh_native_config.json5
       - name: record_playback_plugin
         path: ./libaimrt_record_playback_plugin.so
         options:
@@ -95,6 +95,10 @@ aimrt:
     backends:
       - type: local # 官方支持local后端
       - type: zenoh
+        options:
+          pub_topics_options:
+            - topic_name: "(.*)"
+              shm_enabled: false
     pub_topics_options:
       # - topic_name: "/geniarm/joint_state"
       #   enable_backends: [local, zenoh]

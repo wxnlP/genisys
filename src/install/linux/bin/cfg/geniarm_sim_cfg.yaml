@@ -46,8 +46,8 @@ aimrt:
             listen_port: 50080
       - name: zenoh_plugin
         path: ./libaimrt_zenoh_plugin.so
-        options:
-          native_cfg_path: ./cfg/zenoh_native_config.json5
+        # options:
+          # native_cfg_path: ./cfg/zenoh_native_config.json5
       - name: record_playback_plugin
         path: ./libaimrt_record_playback_plugin.so
         options:
@@ -108,13 +108,11 @@ aimrt:
     backends:
       - type: local # 官方支持local后端
       - type: zenoh
+        options:
+          pub_topics_options:
+            - topic_name: "(.*)"
+              shm_enabled: false
     pub_topics_options:
-      # - topic_name: "/geniarm/joint_state"
-      #   enable_backends: [local, zenoh]
-      #   enable_filters: []
-      # - topic_name: "/geniarm/joint_cmd"
-      #   enable_backends: [local, zenoh]
-        # enable_filters: []
       - topic_name: "(.*)"
         enable_backends: [local, zenoh]
         enable_filters: []
@@ -133,9 +131,10 @@ aimrt:
       - func_name: "(.*)"
         enable_backends: [http]
         enable_filters: []
+
 # Module custom configuration
 MujocoSimModule:
-  simulation_model_path: ./cfg/model/geniarm_v1.1.3_mit.xml
+  simulation_model_path: ./cfg/model/geniarm_v1.1.3_with_gripper.xml
   sim_executor: work_executor
   gui_executor: gui_executor
   subscriber_options:
