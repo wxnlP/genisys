@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -10,10 +12,14 @@
 #include "joint_command.pb.h"
 #include "joint_state.pb.h"
 #include "move_control.aimrt_rpc.pb.h"
+#include "servo.pb.h"
 
 using JointStateArray = aimrt::protocols::sensor::JointStateArray;
 using JointCommandArray = aimrt::protocols::sensor::JointCommandArray;
 using Pose = robotic_arm::protocols::PoseStamped;
+using ServoJCommand = robotic_arm::protocols::ServoJCommand;
+using ServoJPoseCommand = robotic_arm::protocols::ServoJPoseCommand;
+using ServoLCommand = robotic_arm::protocols::ServoLCommand;
 
 namespace robotic_arm::control_module {
 
@@ -33,10 +39,14 @@ class ControlModule : public aimrt::ModuleBase {
   void Shutdown() override;
 
  private:
+
   auto GetLogger() { return core_.GetLogger(); }
   void ControlLoop();
   void PublishLoop();
   void JointStateCallback(const std::shared_ptr<const JointStateArray>& msg);
+  void ServoJCommandCallback(const std::shared_ptr<const ServoJCommand>& msg);
+  void ServoJPoseCommandCallback(const std::shared_ptr<const ServoJPoseCommand>& msg);
+  void ServoLCommandCallback(const std::shared_ptr<const ServoLCommand>& msg);
 
  private:
   aimrt::CoreRef core_;
@@ -45,6 +55,9 @@ class ControlModule : public aimrt::ModuleBase {
   aimrt::context::res::Publisher<Pose> pub_cart_expected_;
   aimrt::context::res::Publisher<Pose> pub_cart_current_;
   aimrt::context::res::Subscriber<JointStateArray> sub_joint_state_;
+  aimrt::context::res::Subscriber<ServoJCommand> sub_servoj_cmd_;
+  aimrt::context::res::Subscriber<ServoJPoseCommand> sub_servoj_pose_cmd_;
+  aimrt::context::res::Subscriber<ServoLCommand> sub_servol_cmd_;
   // 周期控制执行器（单独）
   aimrt::executor::ExecutorRef cycle_control_executor_;
 
@@ -57,6 +70,9 @@ class ControlModule : public aimrt::ModuleBase {
   std::string topic_sub_joint_state_;
   std::string topic_pub_cart_expected_;
   std::string topic_pub_cart_current_;
+  std::string topic_sub_servoj_cmd_;
+  std::string topic_sub_servoj_pose_cmd_;
+  std::string topic_sub_servol_cmd_;
   std::string control_executor_name_;
   double control_frequency_;
   double publish_frequency_;

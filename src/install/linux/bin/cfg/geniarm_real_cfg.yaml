@@ -139,6 +139,9 @@ ControlModule:
   topic_sub_joint_state: /geniarm/joint_state
   topic_pub_cart_expected: /geniarm/pose_expected
   topic_pub_cart_current: /geniarm/pose_current
+  topic_sub_servoj_cmd: /geniarm/servoj_cmd
+  topic_sub_servoj_pose_cmd: /geniarm/servoj_pose_cmd
+  topic_sub_servol_cmd: /geniarm/servol_cmd
   control_executor_name: control_executor
   control_frequency: 500
   publish_frequency: 500

@@ -1,4 +1,5 @@
 #include "control_module/control_module.h"
+#include <algorithm>
 #include <fmt/ranges.h>
 #include <pthread.h>
 #include <thread>
@@ -25,6 +26,9 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       topic_pub_cart_current_ = cfg_node["topic_pub_cart_current"].as<std::string>();
       control_frequency_ = cfg_node["control_frequency"].as<double>();
       publish_frequency_ = cfg_node["publish_frequency"].as<double>();
+      topic_sub_servoj_cmd_ = cfg_node["topic_sub_servoj_cmd"].as<std::string>();
+      topic_sub_servoj_pose_cmd_ = cfg_node["topic_sub_servoj_pose_cmd"].as<std::string>();
+      topic_sub_servol_cmd_ = cfg_node["topic_sub_servol_cmd"].as<std::string>();
       auto robot_cfg_file = cfg_node["config_file"].as<std::string>();
 
       arm_manager_ = std::make_shared<ArmManager>(robot_cfg_file);
@@ -47,6 +51,14 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     pub_cart_current_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_cart_current_);
 
     sub_joint_state_ = ctx_ptr_->CreateSubscriber<JointStateArray>(topic_sub_joint_state_, std::bind(&ControlModule::JointStateCallback, this, std::placeholders::_1));
+
+    // 伺服指令通道（Channel）
+    sub_servoj_cmd_ = ctx_ptr_->CreateSubscriber<ServoJCommand>(
+        topic_sub_servoj_cmd_, std::bind(&ControlModule::ServoJCommandCallback, this, std::placeholders::_1));
+    sub_servoj_pose_cmd_ = ctx_ptr_->CreateSubscriber<ServoJPoseCommand>(
+        topic_sub_servoj_pose_cmd_, std::bind(&ControlModule::ServoJPoseCommandCallback, this, std::placeholders::_1));
+    sub_servol_cmd_ = ctx_ptr_->CreateSubscriber<ServoLCommand>(
+        topic_sub_servol_cmd_, std::bind(&ControlModule::ServoLCommandCallback, this, std::placeholders::_1));
 
     // 创建 RPC 服务，传入控制器指针
     auto server_handle = ctx_ptr_->CreateServer<robotic_arm::protocols::MoveControlServiceCoServer>();
@@ -454,6 +466,81 @@ void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArr
   if (gripper_controller_) {
     auto joint = msg->joints(6);
     gripper_controller_->SetGripperState(joint.position(), joint.velocity(), joint.effort());
+  }
+}
+
+void ControlModule::ServoJCommandCallback(const std::shared_ptr<const ServoJCommand>& msg) {
+  if (!ctx_ptr_->Running() || !msg) {
+    return;
+  }
+
+  if (msg->target_size() < 6) {
+    AIMRT_ERROR("[ServoJ] invalid target size: {}", msg->target_size());
+    return;
+  }
+
+  const double dt = msg->dt();
+
+  ArmMotion::Joint6Dof target_joint;
+  for (int i = 0; i < 6; ++i) {
+    target_joint[i] = msg->target(i);
+  }
+
+  if (arm_controller_->ServoJ(target_joint, dt) != 0) {
+    AIMRT_ERROR("[ServoJ] ServoJ failed");
+    return;
+  }
+  // 最后一条指令显式停止
+  if (msg->stop()) {
+    arm_controller_->ServoStop();
+  }
+}
+
+void ControlModule::ServoJPoseCommandCallback(const std::shared_ptr<const ServoJPoseCommand>& msg) {
+  if (!ctx_ptr_->Running() || !msg) {
+    return;
+  }
+
+  const double dt = msg->dt();
+
+  const auto& p = msg->target();
+  ArmMotion::Pose6Dof target_pose(
+      p.position().x(), p.position().y(), p.position().z(),
+      p.orientation().w(), p.orientation().x(),
+      p.orientation().y(), p.orientation().z());
+
+  if (arm_controller_->ServoJ(target_pose, dt) != 0) {
+    AIMRT_ERROR("[ServoJPose] ServoJ(pose) failed");
+    return;
+  }
+
+  // 最后一条指令显式停止
+  if (msg->stop()) {
+    arm_controller_->ServoStop();
+  }
+}
+
+void ControlModule::ServoLCommandCallback(const std::shared_ptr<const ServoLCommand>& msg) {
+  if (!ctx_ptr_->Running() || !msg) {
+    return;
+  }
+
+  const double dt = msg->dt();
+
+  const auto& p = msg->target();
+  ArmMotion::Pose6Dof target_pose(
+      p.position().x(), p.position().y(), p.position().z(),
+      p.orientation().w(), p.orientation().x(),
+      p.orientation().y(), p.orientation().z());
+
+  if (arm_controller_->ServoL(target_pose, dt) != 0) {
+    AIMRT_ERROR("[ServoL] ServoL failed");
+    return;
+  }
+
+  // 最后一条指令显式停止
+  if (msg->stop()) {
+    arm_controller_->ServoStop();
   }
 }
 

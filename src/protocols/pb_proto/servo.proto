@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+import "header.proto";
+import "pose.proto";
+
+package robotic_arm.protocols;
+
+
+message ServoJCommand {
+  aimrt.protocols.common.Header header = 1;
+
+  repeated double target = 2;
+
+  double dt = 3;
+
+  bool stop = 4;
+}
+
+message ServoJPoseCommand {
+  aimrt.protocols.common.Header header = 1;
+
+  Pose target = 2;
+
+  double dt = 3;
+
+  bool stop = 4;
+}
+
+message ServoLCommand {
+  aimrt.protocols.common.Header header = 1;
+
+  Pose target = 2;
+
+  double dt = 3;
+
+  bool stop = 4;
+}
+
