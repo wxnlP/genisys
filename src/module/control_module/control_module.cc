@@ -74,6 +74,29 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       return aimrt::rpc::Status();
     });
 
+    // MoveJPose 服务处理（MoveJ 的位姿输入重载）
+    server_handle->MoveJPose.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                const ::robotic_arm::protocols::MoveJPoseRequest& req,
+                                                ::robotic_arm::protocols::MoveResponse& rsp) {
+      AIMRT_INFO("\n---\n收到MoveJPose请求\n---");
+      ArmMotion::Pose6Dof target_pose(
+          req.pose().position().x(), req.pose().position().y(), req.pose().position().z(),
+          req.pose().orientation().w(), req.pose().orientation().x(),
+          req.pose().orientation().y(), req.pose().orientation().z());
+
+      int ret = arm_controller_->MoveJ(target_pose, req.v(), req.a());
+      if (ret == 0) {
+        arm_controller_->WaitForCompletion();
+        rsp.mutable_error()->set_code(0);
+        rsp.mutable_error()->set_msg("MoveJPose succeeded");
+      } else {
+        rsp.mutable_error()->set_code(ret);
+        rsp.mutable_error()->set_msg("MoveJPose failed");
+      }
+
+      return aimrt::rpc::Status();
+    });
+
     // MoveJMulti 服务处理
     server_handle->MoveJMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
                                                 const ::robotic_arm::protocols::MoveJMultiRequest& req,
@@ -82,12 +105,9 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       std::vector<ArmMotion::Joint6Dof> points;
       points.reserve(req.position_size());
       for (int i = 0; i < req.position_size(); ++i) {
-        ArmMotion::Joint6Dof joint;
         const auto& j = req.position(i);
-        for (int k = 0; k < 6 && k < j.position_size(); ++k) {
-          joint[k] = j.position(k);
-        }
-        points.push_back(joint);
+        points.emplace_back(j.position(0), j.position(1), j.position(2),
+                            j.position(3), j.position(4), j.position(5));
       }
 
       int ret = arm_controller_->MoveJMulti(points, req.r(), req.v(), req.a());
@@ -98,6 +118,34 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       } else {
         rsp.mutable_error()->set_code(ret);
         rsp.mutable_error()->set_msg("MoveJMuti failed");
+      }
+
+      return aimrt::rpc::Status();
+    });
+
+    // MoveJPoseMulti 服务处理（MoveJMulti 的位姿输入重载）
+    server_handle->MoveJPoseMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                     const ::robotic_arm::protocols::MoveJPoseMultiRequest& req,
+                                                     ::robotic_arm::protocols::MoveResponse& rsp) {
+      AIMRT_INFO("\n---\n收到MoveJPoseMulti请求\n---");
+      std::vector<ArmMotion::Pose6Dof> points;
+      points.reserve(req.pose_size());
+      for (int i = 0; i < req.pose_size(); ++i) {
+        const auto& p = req.pose(i);
+        points.emplace_back(
+            p.position().x(), p.position().y(), p.position().z(),
+            p.orientation().w(), p.orientation().x(),
+            p.orientation().y(), p.orientation().z());
+      }
+
+      int ret = arm_controller_->MoveJMulti(points, req.r(), req.v(), req.a());
+      if (ret == 0) {
+        arm_controller_->WaitForCompletion();
+        rsp.mutable_error()->set_code(0);
+        rsp.mutable_error()->set_msg("MoveJPoseMulti succeeded");
+      } else {
+        rsp.mutable_error()->set_code(ret);
+        rsp.mutable_error()->set_msg("MoveJPoseMulti failed");
       }
 
       return aimrt::rpc::Status();
