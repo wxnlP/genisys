@@ -42,9 +42,9 @@ robot:
     frame: "tcp"
     xyz: [0, 0, 0]
     rpy: [0, 0, 0] # ZYX 欧拉角
-  gripper:
-    name: "geniarm_gripper"
-    max_range: 1.95
-    MIT:
-      stiffness: 8.0
-      damping: 1.0
+  # gripper:
+  #   name: "geniarm_gripper"
+  #   max_range: 1.95
+  #   MIT:
+  #     stiffness: 8.0
+  #     damping: 1.0

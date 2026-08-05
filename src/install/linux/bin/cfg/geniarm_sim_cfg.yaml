@@ -134,7 +134,7 @@ aimrt:
 
 # Module custom configuration
 MujocoSimModule:
-  simulation_model_path: ./cfg/model/geniarm_v1.1.3.xml
+  simulation_model_path: ./cfg/model/geniarm_v1.1.3_high.xml
   sim_executor: work_executor
   gui_executor: gui_executor
   subscriber_options:
