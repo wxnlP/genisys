@@ -88,9 +88,9 @@ aimrt:
   executor:
     executors:
       - name: gui_executor
-        type: simple_thread
+        type: asio_thread
       - name: control_executor
-        type: simple_thread
+        type: asio_thread
         options:
           thread_bind_cpu: [7]
           thread_sched_policy: SCHED_FIFO:80
@@ -103,7 +103,7 @@ aimrt:
         options:
           thread_num: 2
       - name: record_thread
-        type: simple_thread
+        type: asio_thread
   channel:
     backends:
       - type: local # 官方支持local后端
@@ -117,9 +117,16 @@ aimrt:
         enable_backends: [local, zenoh]
         enable_filters: []
     sub_topics_options:
-      - topic_name: "(.*)"
-        enable_backends: [local, zenoh]
-        enable_filters: []
+      - topic_name: "/geniarm/servoj_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/servoj_pose_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/servol_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/joint_cmd" 
+        enable_backends: [local]
+      - topic_name: "/geniarm/joint_state" 
+        enable_backends: [local]
   rpc:
     backends:
       - type: http

@@ -21,20 +21,29 @@ aimrt:
   executor:
     executors:
       - name: actuator_pub_executor
-        type: simple_thread
+        type: asio_thread
+        options:
+          thread_bind_cpu: [1]
+          thread_sched_policy: SCHED_FIFO:85
       - name: control_executor
-        type: simple_thread
+        type: asio_thread
         options:
           thread_bind_cpu: [0]  # 绑定 RK3588 A55 小核
           thread_sched_policy: SCHED_FIFO:80
       - name: write_cmd_thread
-        type: simple_thread
+        type: asio_thread
+        options:
+          thread_bind_cpu: [2]
+          thread_sched_policy: SCHED_FIFO:75
       - name: storage_executor
         type: asio_thread
         options:
           thread_num: 2
+          thread_bind_cpu: [4, 5]
       - name: record_thread
-        type: simple_thread
+        type: asio_thread
+        options:
+          thread_bind_cpu: [6]
   plugin:
     plugins:
       # - name: ros2_plugin
@@ -80,11 +89,11 @@ aimrt:
                   max_bag_size_m: 2048            # MB
                   msg_write_interval: 1000        # message count period
                   msg_write_interval_time: 1000   # ms
-                  compression_mode: zstd          # comression mode
+                  compression_mode: none          # comression mode
                   compression_level: default      # comression level
                 extra_attributes:
-                  platform: x86_64
-                  os: ubuntu-22.04
+                  platform: aarch64
+                  os: ubuntu-24.04
                 topic_meta_list:
                   - topic_name: /geniarm/joint_state
                     msg_type: pb:aimrt.protocols.sensor.JointStateArray
@@ -100,19 +109,20 @@ aimrt:
             - topic_name: "(.*)"
               shm_enabled: false
     pub_topics_options:
-      # - topic_name: "/geniarm/joint_state"
-      #   enable_backends: [local, zenoh]
-      #   enable_filters: []
-      # - topic_name: "/geniarm/joint_cmd"
-      #   enable_backends: [local, zenoh]
-      #   enable_filters: []
       - topic_name: "(.*)" # 正则表达式
         enable_backends: [local, zenoh]
         enable_filters: []
     sub_topics_options:
-      - topic_name: "(.*)" # 正则表达式
+      - topic_name: "/geniarm/servoj_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/servoj_pose_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/servol_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/joint_cmd" 
         enable_backends: [local]
-        enable_filters: []
+      - topic_name: "/geniarm/joint_state" 
+        enable_backends: [local]
   rpc:
     backends:
       - type: http
