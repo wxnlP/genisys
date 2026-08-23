@@ -99,7 +99,7 @@ aimrt:
                     msg_type: pb:aimrt.protocols.sensor.JointStateArray
                     serialization_type: pb 
                     record_enabled: true
-                    sample_freq: 500
+                    sample_freq: 0
   channel:
     backends:
       - type: local # 官方支持local后端
