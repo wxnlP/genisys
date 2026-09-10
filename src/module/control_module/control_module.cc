@@ -297,11 +297,18 @@ void ControlModule::ControlLoop() {
           // 无规划轨迹 — 复用上一帧指令保持
           if (last_arm_cmd_.stiffness[0] > 0.0) {
             joint_cmd = last_arm_cmd_;
+          } else if (joint_state_received_.load()) {
+            ArmMotion::Joint6Dof current_joint;
+            arm_controller_->GetCurrentJoint(current_joint);
+            joint_cmd.position = current_joint;
+            joint_cmd.velocity = ArmMotion::Joint6Dof{};
+            joint_cmd.effort = ArmMotion::Joint6Dof{};
+            last_arm_cmd_ = joint_cmd;
           } else {
-            // 尚无有效历史指令
-            joint_cmd.position = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-            joint_cmd.velocity = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-            joint_cmd.effort = ArmMotion::Joint6Dof{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+            joint_cmd.velocity = ArmMotion::Joint6Dof{};
+            joint_cmd.effort = ArmMotion::Joint6Dof{};
+            joint_cmd.stiffness = ArmMotion::Joint6Dof{};
+            joint_cmd.damping = ArmMotion::Joint6Dof{};
           }
         } else {
           last_arm_cmd_ = joint_cmd;
@@ -454,6 +461,9 @@ void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArr
   ArmMotion::JointState joint_state;
   int n = msg->joints_size();
 
+  if (n < 6) { return; }
+  joint_state_received_.store(true);
+
   for (int i = 0; i < 6; ++i) {
     joint_state.position[i] = msg->joints(i).position();
     joint_state.velocity[i] = msg->joints(i).velocity();
@@ -463,7 +473,7 @@ void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArr
   // 更新机械臂控制的状态
   arm_controller_->SetJointState(joint_state);
   // 更新夹爪控制器的状态
-  if (gripper_controller_) {
+  if (gripper_controller_ && n >= 7) {
     auto joint = msg->joints(6);
     gripper_controller_->SetGripperState(joint.position(), joint.velocity(), joint.effort());
   }
