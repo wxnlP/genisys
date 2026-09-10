@@ -48,32 +48,32 @@
       <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="base_link_mat" type="mesh" mesh="base_link" />
       <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="base_link" />
       <body name="shoulder_link" pos="0 0 0.1459" quat="1 0 0 0">
-        <joint name="shoulder_joint" type="hinge" axis="0 0 1" limited="true" range="-2.61 2.61" frictionloss="0.8" armature="0.008"/>
+        <joint name="shoulder_joint" type="hinge" axis="0 0 1" limited="true" range="-2.61 2.61" frictionloss="0.8" armature="0.032"/>
         <inertial pos="0.00461 0.000543 -0.029142" mass="0.215" fullinertia="0.00030957 0.0002074 0.00028536 -1.79e-06 -4.071e-05 -3.4e-06"/>
         <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="shoulder_link_mat" type="mesh" mesh="shoulder_link" />
         <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="shoulder_link" />
         <body name="upper_arm_link" pos="0.02 0 0" quat="2.5973435e-06 2.597353e-06 -0.70710808 -0.70710548">
-          <joint name="upper_arm_joint" type="hinge" axis="0 0 1" limited="true" range="0.0 3.7" frictionloss="1.0" armature="0.014"/>
+          <joint name="upper_arm_joint" type="hinge" axis="0 0 1" limited="true" range="0.0 3.7" frictionloss="1.0" armature="0.032"/>
           <inertial pos="0.13 -4.5e-05 0" mass="1.111" fullinertia="0.00058895 0.01612706 0.01598478 0 -0.00020503 0"/>
           <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="upper_arm_link_mat" type="mesh" mesh="upper_arm_link" />
           <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="upper_arm_link" />
           <body name="elbow_link" pos="0.26 0 0" quat="0.11633232 0 0 0.99321035">
-            <joint name="elbow_joint" type="hinge" axis="0 0 1" limited="true" range="-3.7 0.0" frictionloss="0.8" armature="0.01"/>
+            <joint name="elbow_joint" type="hinge" axis="0 0 1" limited="true" range="-3.7 0.0" frictionloss="0.8" armature="0.032"/>
             <inertial pos="0.17121 -0.012609 0.000759" mass="0.682" fullinertia="0.00062101 0.00615984 0.00618878 -0.00077041 -6.785e-05 -6.1e-06"/>
             <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="elbow_link_mat" type="mesh" mesh="elbow_link" />
             <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="elbow_link" />
             <body name="wrist1_link" pos="0.24668 0 0" quat="0.99321108 0 0 0.11632604">
-              <joint name="wrist1_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.3" armature="0.0015"/>
+              <joint name="wrist1_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.3" armature="0.0018"/>
               <inertial pos="0.061483 -0.05823 -0.000658" mass="0.427" fullinertia="0.0004353 0.00052406 0.00065882 0.00024915 -5.52e-06 4.79e-06"/>
               <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist1_link_mat" type="mesh" mesh="wrist1_link" />
               <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist1_link" />
               <body name="wrist2_link" pos="0.075 0 0" quat="0.49999816 -0.50000184 0.5 0.5">
-                <joint name="wrist2_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.3" armature="0.0012"/>
+                <joint name="wrist2_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.3" armature="0.0018"/>
                 <inertial pos="0.000374 -0.000611 -0.003599" mass="0.362" fullinertia="0.00019793 0.00020475 0.00014485 0 -8e-08 2.51e-06"/>
                 <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist2_link_mat" type="mesh" mesh="wrist2_link" />
                 <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist2_link" />
                 <body name="wrist3_link" pos="0 -0.031 0" quat="2.5973435e-06 -2.597353e-06 -0.70710808 0.70710548">
-                  <joint name="wrist3_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.2" armature="0.0008"/>
+                  <joint name="wrist3_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.2" armature="0.0018"/>
                   <inertial pos="-0.000502 0.00022 -0.002897" mass="0.009" fullinertia="6.7e-07 7.4e-07 1.36e-06 -6e-08 0 0"/>
                   <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist3_link_mat" type="mesh" mesh="wrist3_link" />
                   <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist3_link" />
@@ -109,6 +109,16 @@
     <exclude body1="elbow_link" body2="wrist1_link" />
     <exclude body1="wrist1_link" body2="wrist2_link" />
     <exclude body1="wrist2_link" body2="wrist3_link" />
+    <exclude body1="shoulder_link" body2="wrist1_link" />
+    <exclude body1="shoulder_link" body2="wrist2_link" />
+    <exclude body1="shoulder_link" body2="wrist3_link" />
+    <exclude body1="upper_arm_link" body2="wrist1_link" />
+    <exclude body1="upper_arm_link" body2="wrist2_link" />
+    <exclude body1="upper_arm_link" body2="wrist3_link" />
+    <exclude body1="base_link" body2="elbow_link" />
+    <exclude body1="base_link" body2="wrist1_link" />
+    <exclude body1="base_link" body2="wrist2_link" />
+    <exclude body1="base_link" body2="wrist3_link" />
     <exclude body1="wrist3_link" body2="gripper_base_link" />
     <exclude body1="gripper_base_link" body2="gripper_right_link" />
     <exclude body1="gripper_base_link" body2="gripper_left_link" />
