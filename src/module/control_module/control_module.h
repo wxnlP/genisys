@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -83,8 +84,8 @@ class ControlModule : public aimrt::ModuleBase {
   std::shared_ptr<GripperController> gripper_controller_;
 
   // 记录上一帧有效指令，用于轨迹间保持
-  ArmMotion::JointCommand last_arm_cmd_;
-  GripperController::GripperCommand last_gripper_cmd_;
+  std::optional<ArmMotion::JointCommand> last_arm_cmd_;
+  std::optional<GripperController::GripperCommand> last_gripper_cmd_;
   std::atomic<bool> joint_state_received_{false};
 };
 

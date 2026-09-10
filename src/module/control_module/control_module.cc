@@ -295,8 +295,8 @@ void ControlModule::ControlLoop() {
         std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
         if (!arm_controller_->GetJointCommand(joint_cmd)) {
           // 无规划轨迹 — 复用上一帧指令保持
-          if (last_arm_cmd_.stiffness[0] > 0.0) {
-            joint_cmd = last_arm_cmd_;
+          if (last_arm_cmd_.has_value()) {
+            joint_cmd = *last_arm_cmd_;
           } else if (joint_state_received_.load()) {
             ArmMotion::Joint6Dof current_joint;
             arm_controller_->GetCurrentJoint(current_joint);
@@ -328,13 +328,20 @@ void ControlModule::ControlLoop() {
       if (gripper_controller_) {
         if (gripper_controller_->GetGripperCommand(gripper_cmd) == -1) {
           // 无规划轨迹 — 复用上一帧指令保持
-          if (last_gripper_cmd_.stiffness > 0.0) {
-            gripper_cmd = last_gripper_cmd_;
-          } else {
-            // 尚无有效历史指令
-            gripper_cmd.position = 0.0;
+          if (last_gripper_cmd_.has_value()) {
+            gripper_cmd = *last_gripper_cmd_;
+          } else if (joint_state_received_.load()) {
+            double current_position = 0.0;
+            gripper_controller_->GetCurrentPosition(current_position);
+            gripper_cmd.position = current_position;
             gripper_cmd.velocity = 0.0;
             gripper_cmd.effort = 0.0;
+            last_gripper_cmd_ = gripper_cmd;
+          } else {
+            gripper_cmd.velocity = 0.0;
+            gripper_cmd.effort = 0.0;
+            gripper_cmd.stiffness = 0.0;
+            gripper_cmd.damping = 0.0;
           }
         } else {
           last_gripper_cmd_ = gripper_cmd;
@@ -426,7 +433,9 @@ void ControlModule::PublishLoop() {
       arm_controller_->GetCurrentPose(current_pose);
       {
         std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
-        joint_pos_cmd = last_arm_cmd_.position;
+        if (last_arm_cmd_.has_value()) {
+          joint_pos_cmd = last_arm_cmd_->position;
+        }
       }
       arm_controller_->JointToPose(joint_pos_cmd, expected_pose);
 
