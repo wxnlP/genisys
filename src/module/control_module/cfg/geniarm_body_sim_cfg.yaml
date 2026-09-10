@@ -12,7 +12,7 @@ robot:
       a: [0.0, 0.02, 0.26, 0.24668, 0.075, 0.0]
       d: [0.1459, 0.0, 0.0, 0.0, 0.0, 0.031]
       offset: [0.0, -180.0, 166.64, 13.36, 90.0, 0.0]
-  dynamics: "control_module/gravity_from_urdf.yaml"  # 动力学参数文件名，位于 cfg 目录下（纯重力补偿版）
+  dynamics: "control_module/dynamics_zero.yaml"  # 动力学参数文件名，位于 cfg 目录下（纯重力补偿版）
   joints:
     - name: "shoulder_joint"
       MIT:
