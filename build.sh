@@ -8,6 +8,8 @@ if [ -d ./build/install ]; then
 fi
 
 cmake -B build \
+    -Dbackward_DOWNLOAD_URL=https://ghfast.top/https://github.com/bombela/backward-cpp/archive/refs/tags/v1.6.tar.gz \
+    -Dmujoco_DOWNLOAD_URL=https://ghfast.top/https://github.com/deepmind/mujoco/archive/3.1.6.tar.gz \
     -Dboost_DOWNLOAD_URL=https://gitee.com/AimRT/boost/releases/download/1.82.0/boost-1.82.0.tar.xz \
     -Dasio_DOWNLOAD_URL=https://gitee.com/AimRT/asio/repository/archive/asio-1-30-2.zip \
     -Dfmt_DOWNLOAD_URL=https://gitee.com/AimRT/fmt/repository/archive/10.2.1.zip \
@@ -31,6 +33,7 @@ cmake -B build \
     -Dmcap_DOWNLOAD_URL=https://gitee.com/AimRT/mcap/repository/archive/releases/cpp/v2.0.0.zip \
     -Dlz4_DOWNLOAD_URL=https://gitee.com/mirrors/LZ4_old1/repository/archive/v1.10.0.zip \
     -Dzstd_DOWNLOAD_URL=https://gitee.com/mirrors/facebook-zstd/repository/archive/v1.5.7.zip \
+    -Dzlib_DOWNLOAD_URL=https://gitee.com/mirrors/zlib/repository/archive/v1.3.1.zip \
     -DCMAKE_INSTALL_PREFIX=./build/install \
     -DAIMRT_BUILD_WITH_ROS2=OFF \
     -DAIMRT_BUILD_WITH_PROTOBUF=ON \
