@@ -10,7 +10,7 @@ Dependencies
 ------------
 - PyQt5
 - pyqtgraph
-- eclipse-zenoh
+- aimrt_py (must match the robot's AIMRT version)
 - protobuf
 """
 

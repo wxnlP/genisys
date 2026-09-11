@@ -101,6 +101,4 @@ aimrt:
 - AIMRT 运行时运行在独立子进程（`monitor/core/aimrt_worker.py`），通过管道把
   解码后的消息送回 GUI。这样每个会话都能干净地重建，zenoh 配置错误也只终止
   worker 而不会影响 GUI。
-- `monitor/core/zenoh_client.py` 是旧的 zenoh-python 实现，默认不使用，保留作
-  回退参考（需要自行安装 `eclipse-zenoh`）。
 

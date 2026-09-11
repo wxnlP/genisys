@@ -123,7 +123,7 @@ source $HOME/.cargo/env
 
 | 组件 | 功能 |
 |:---|:---|
-| `ZenohSubscriber` | zenoh 多话题订阅，protobuf 解码 JointStateArray / JointCommandArray |
+| `AimrtSubscriber` | 经 AIMRT（zenoh 后端）精确订阅话题并解码 protobuf，运行时隔离在子进程 |
 | `DataModel` | 支持采样快照与 CSV 导出 |
 | `DataPanel` | 左侧表格面板，实时显示各关节状态，右键添加绘图曲线 |
 | `PlotPanel` | 右侧 pyqtgraph 曲线面板，支持轴独立缩放、曲线高亮、暂停浏览 |
