@@ -122,29 +122,33 @@ void ActuatorModule::PublishLoop() {
     joint_state_msg.mutable_joints()->Reserve(7);
     ArmCtrlBase::JointState joint_state;
     GripperCtrlBase::GripperState gripper_state;
-    // 告警计数（每 kWarnInterval 次失败打一条）
+    // 告警计数
     uint32_t arm_warn_count = 0;
     uint32_t gripper_warn_count = 0;
     
     while (ctx_ptr_->Running()) {
       joint_state_msg.Clear();
       if (!arm_actuator_->GetJointState(joint_state)) {
-        if (arm_warn_count++ % kWarnInterval == 0) {
+        // 警告处理
+        if (arm_warn_count++ % kWarnInterval == 0 && arm_warn_count > 10) {
           AIMRT_WARN("读取机械臂本体关节状态失败！");
         }
         next_loop_time += period;
         std::this_thread::sleep_until(next_loop_time);
         continue;
       }
+      arm_warn_count = 0;
       if (gripper_actuator_) {
         if (!gripper_actuator_->ReceiveState(gripper_state)) {
-          if (gripper_warn_count++ % kWarnInterval == 0) {
+          // 警告处理
+          if (gripper_warn_count++ % kWarnInterval == 0 && gripper_warn_count > 10) {
             AIMRT_WARN("读取夹爪状态失败！");
           }
           next_loop_time += period;
           std::this_thread::sleep_until(next_loop_time);
           continue;
         }
+        gripper_warn_count = 0;
       }
 
       auto now = std::chrono::steady_clock::now();

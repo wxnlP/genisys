@@ -275,9 +275,7 @@ void ControlModule::ControlLoop() {
     joint_cmd_msg.mutable_joints()->Reserve(7);
     ArmMotion::JointCommand joint_cmd;
     GripperController::GripperCommand gripper_cmd;
-    // 告警计数（每 kWarnInterval 次失败打一条）
-    uint32_t arm_warn_count = 0;
-    uint32_t gripper_warn_count = 0;
+    // 告警计数
     uint32_t lag_warn_count = 0;
 
     // 周期计时统计
@@ -307,9 +305,6 @@ void ControlModule::ControlLoop() {
           } else {
             ArmMotion::Joint6Dof current_joint;
             if (arm_controller_->GetCurrentJoint(current_joint) != 0) {
-              if (arm_warn_count++ % kWarnInterval == 0) {
-                AIMRT_WARN("Failed to get current joint state, skipping this cycle.");
-              }
               next_loop_time += period;
               std::this_thread::sleep_until(next_loop_time);
               continue;
@@ -343,9 +338,6 @@ void ControlModule::ControlLoop() {
           } else {
             double current_position = 0.0;
             if (gripper_controller_->GetCurrentPosition(current_position) != 0) {
-              if (gripper_warn_count++ % kWarnInterval == 0) {
-                AIMRT_WARN("Failed to get current gripper position, skipping this cycle.");
-              }
               next_loop_time += period;
               std::this_thread::sleep_until(next_loop_time);
               continue;
@@ -447,13 +439,14 @@ void ControlModule::PublishLoop() {
     while (ctx_ptr_->Running()) {
       // 获取期望和当前笛卡尔位姿
       if (arm_controller_->GetCurrentPose(current_pose) != 0) {
-        if (pose_warn_count++ % kWarnInterval == 0) {
-          AIMRT_WARN("[PublishLoop] failed to get current pose");
+        if (pose_warn_count++ % kWarnInterval == 0 && pose_warn_count > 10) {
+          AIMRT_WARN("failed to get current pose");
         }
         next_loop_time += period;
         std::this_thread::sleep_until(next_loop_time);
         continue;
       }
+      pose_warn_count = 0;
       {
         std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
         if (last_arm_cmd_.has_value()) {
