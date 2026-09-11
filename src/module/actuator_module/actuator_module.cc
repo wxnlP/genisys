@@ -123,11 +123,17 @@ void ActuatorModule::PublishLoop() {
     while (ctx_ptr_->Running()) {
       joint_state_msg.Clear();
       if (!arm_actuator_->GetJointState(joint_state)) {
-        AIMRT_ERROR("读取机械臂本体关节状态失败！");
+        AIMRT_WARN("读取机械臂本体关节状态失败！");
+        next_loop_time += period;
+        std::this_thread::sleep_until(next_loop_time);
+        continue;
       }
       if (gripper_actuator_) {
         if (!gripper_actuator_->ReceiveState(gripper_state)) {
-          AIMRT_ERROR("读取夹爪状态失败！");
+          AIMRT_WARN("读取夹爪状态失败！");
+          next_loop_time += period;
+          std::this_thread::sleep_until(next_loop_time);
+          continue;
         }
       }
 

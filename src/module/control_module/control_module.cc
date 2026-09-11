@@ -1,7 +1,7 @@
 #include "control_module/control_module.h"
-#include <algorithm>
 #include <fmt/ranges.h>
 #include <pthread.h>
+#include <algorithm>
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "yaml-cpp/yaml.h"
@@ -111,8 +111,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     // MoveJMulti 服务处理
     server_handle->MoveJMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                const ::robotic_arm::protocols::MoveJMultiRequest& req,
-                                                ::robotic_arm::protocols::MoveResponse& rsp) {
+                                                 const ::robotic_arm::protocols::MoveJMultiRequest& req,
+                                                 ::robotic_arm::protocols::MoveResponse& rsp) {
       AIMRT_INFO("\n---\n收到MoveJMuti请求\n---");
       std::vector<ArmMotion::Joint6Dof> points;
       points.reserve(req.position_size());
@@ -188,8 +188,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     // MoveLMulti 服务处理
     server_handle->MoveLMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                const ::robotic_arm::protocols::MoveLMultiRequest& req,
-                                                ::robotic_arm::protocols::MoveResponse& rsp) {
+                                                 const ::robotic_arm::protocols::MoveLMultiRequest& req,
+                                                 ::robotic_arm::protocols::MoveResponse& rsp) {
       AIMRT_INFO("\n---\n收到MoveLMulti请求\n---");
       std::vector<ArmMotion::Pose6Dof> points;
       points.reserve(req.pose_size());
@@ -297,20 +297,21 @@ void ControlModule::ControlLoop() {
           // 无规划轨迹 — 复用上一帧指令保持
           if (last_arm_cmd_.has_value()) {
             joint_cmd = *last_arm_cmd_;
-          } else if (joint_state_received_.load()) {
+          } else {
             ArmMotion::Joint6Dof current_joint;
-            arm_controller_->GetCurrentJoint(current_joint);
+            if (arm_controller_->GetCurrentJoint(current_joint) != 0) {
+              AIMRT_WARN("Failed to get current joint state, skipping this cycle.");
+              next_loop_time += period;
+              std::this_thread::sleep_until(next_loop_time);
+              continue;
+            }
             joint_cmd.position = current_joint;
             joint_cmd.velocity = ArmMotion::Joint6Dof{};
             joint_cmd.effort = ArmMotion::Joint6Dof{};
             last_arm_cmd_ = joint_cmd;
-          } else {
-            joint_cmd.velocity = ArmMotion::Joint6Dof{};
-            joint_cmd.effort = ArmMotion::Joint6Dof{};
-            joint_cmd.stiffness = ArmMotion::Joint6Dof{};
-            joint_cmd.damping = ArmMotion::Joint6Dof{};
           }
         } else {
+          // 记录上一次指令
           last_arm_cmd_ = joint_cmd;
         }
       }
@@ -330,18 +331,18 @@ void ControlModule::ControlLoop() {
           // 无规划轨迹 — 复用上一帧指令保持
           if (last_gripper_cmd_.has_value()) {
             gripper_cmd = *last_gripper_cmd_;
-          } else if (joint_state_received_.load()) {
+          } else {
             double current_position = 0.0;
-            gripper_controller_->GetCurrentPosition(current_position);
+            if (gripper_controller_->GetCurrentPosition(current_position) != 0) {
+              AIMRT_WARN("Failed to get current gripper position, skipping this cycle.");
+              next_loop_time += period;
+              std::this_thread::sleep_until(next_loop_time);
+              continue;
+            }
             gripper_cmd.position = current_position;
             gripper_cmd.velocity = 0.0;
             gripper_cmd.effort = 0.0;
             last_gripper_cmd_ = gripper_cmd;
-          } else {
-            gripper_cmd.velocity = 0.0;
-            gripper_cmd.effort = 0.0;
-            gripper_cmd.stiffness = 0.0;
-            gripper_cmd.damping = 0.0;
           }
         } else {
           last_gripper_cmd_ = gripper_cmd;
@@ -430,7 +431,10 @@ void ControlModule::PublishLoop() {
 
     while (ctx_ptr_->Running()) {
       // 获取期望和当前笛卡尔位姿
-      arm_controller_->GetCurrentPose(current_pose);
+      if (arm_controller_->GetCurrentPose(current_pose) != 0) {
+        AIMRT_WARN("[PublishLoop] failed to get current pose");
+        continue;
+      }
       {
         std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
         if (last_arm_cmd_.has_value()) {
@@ -465,13 +469,16 @@ void ControlModule::PublishLoop() {
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {
-  if (!ctx_ptr_->Running()) { return; }
+  if (!ctx_ptr_->Running()) {
+    return;
+  }
 
   ArmMotion::JointState joint_state;
   int n = msg->joints_size();
 
-  if (n < 6) { return; }
-  joint_state_received_.store(true);
+  if (n < 6) {
+    return;
+  }
 
   for (int i = 0; i < 6; ++i) {
     joint_state.position[i] = msg->joints(i).position();

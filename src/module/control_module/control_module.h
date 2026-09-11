@@ -86,7 +86,6 @@ class ControlModule : public aimrt::ModuleBase {
   // 记录上一帧有效指令，用于轨迹间保持
   std::optional<ArmMotion::JointCommand> last_arm_cmd_;
   std::optional<GripperController::GripperCommand> last_gripper_cmd_;
-  std::atomic<bool> joint_state_received_{false};
 };
 
 }  // namespace robotic_arm::control_module
