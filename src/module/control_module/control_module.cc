@@ -8,6 +8,9 @@
 
 namespace robotic_arm::control_module {
 
+// 状态读取失败的告警节流：每 N 次失败打一条，避免 500Hz 循环刷屏
+constexpr uint32_t kWarnInterval = 500;
+
 bool ControlModule::Initialize(aimrt::CoreRef core) {
   // Save aimrt framework handle
   core_ = core;
@@ -272,6 +275,10 @@ void ControlModule::ControlLoop() {
     joint_cmd_msg.mutable_joints()->Reserve(7);
     ArmMotion::JointCommand joint_cmd;
     GripperController::GripperCommand gripper_cmd;
+    // 告警计数（每 kWarnInterval 次失败打一条）
+    uint32_t arm_warn_count = 0;
+    uint32_t gripper_warn_count = 0;
+    uint32_t lag_warn_count = 0;
 
     // 周期计时统计
     uint64_t dbg_cycle = 0;
@@ -300,7 +307,9 @@ void ControlModule::ControlLoop() {
           } else {
             ArmMotion::Joint6Dof current_joint;
             if (arm_controller_->GetCurrentJoint(current_joint) != 0) {
-              AIMRT_WARN("Failed to get current joint state, skipping this cycle.");
+              if (arm_warn_count++ % kWarnInterval == 0) {
+                AIMRT_WARN("Failed to get current joint state, skipping this cycle.");
+              }
               next_loop_time += period;
               std::this_thread::sleep_until(next_loop_time);
               continue;
@@ -334,7 +343,9 @@ void ControlModule::ControlLoop() {
           } else {
             double current_position = 0.0;
             if (gripper_controller_->GetCurrentPosition(current_position) != 0) {
-              AIMRT_WARN("Failed to get current gripper position, skipping this cycle.");
+              if (gripper_warn_count++ % kWarnInterval == 0) {
+                AIMRT_WARN("Failed to get current gripper position, skipping this cycle.");
+              }
               next_loop_time += period;
               std::this_thread::sleep_until(next_loop_time);
               continue;
@@ -379,10 +390,12 @@ void ControlModule::ControlLoop() {
       next_loop_time += period;
       now = std::chrono::steady_clock::now();
       if (next_loop_time < now - period) {  // 落后超过 1 个周期
-        AIMRT_WARN("Control loop is lagging behind, skip to next cycle.");
-        AIMRT_WARN(
-            "\n---\nNow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs\n---",
-            get_cmd_us, build_msg_us, publish_us, total_us);
+        if (lag_warn_count++ % kWarnInterval == 0) {
+          AIMRT_WARN("Control loop is lagging behind, skip to next cycle.");
+          AIMRT_WARN(
+              "\n---\nNow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs\n---",
+              get_cmd_us, build_msg_us, publish_us, total_us);
+        }
         next_loop_time = now + period;  // 放弃追赶，重新对齐
       }
       std::this_thread::sleep_until(next_loop_time);
@@ -408,6 +421,8 @@ void ControlModule::PublishLoop() {
     ArmMotion::Pose6Dof current_pose;
     ArmMotion::Joint6Dof joint_pos_cmd;
     ArmMotion::Pose6Dof expected_pose;
+    // 告警计数（每 kWarnInterval 次失败打一条）
+    uint32_t pose_warn_count = 0;
 
     auto fill_pose_msg = [this](Pose& msg, const ArmMotion::Pose6Dof& source_pose, uint64_t& seq, const auto& time_ns) {
       auto* header = msg.mutable_header();
@@ -432,7 +447,11 @@ void ControlModule::PublishLoop() {
     while (ctx_ptr_->Running()) {
       // 获取期望和当前笛卡尔位姿
       if (arm_controller_->GetCurrentPose(current_pose) != 0) {
-        AIMRT_WARN("[PublishLoop] failed to get current pose");
+        if (pose_warn_count++ % kWarnInterval == 0) {
+          AIMRT_WARN("[PublishLoop] failed to get current pose");
+        }
+        next_loop_time += period;
+        std::this_thread::sleep_until(next_loop_time);
         continue;
       }
       {

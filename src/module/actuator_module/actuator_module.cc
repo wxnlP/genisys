@@ -6,6 +6,9 @@
 
 namespace robotic_arm::actuator_module {
 
+// 状态读取失败的告警节流：每 N 次失败打一条，避免 500Hz 循环刷屏
+constexpr uint32_t kWarnInterval = 500;
+
 bool ActuatorModule::Initialize(aimrt::CoreRef core) {
   // Save aimrt framework handle
   core_ = core;
@@ -119,18 +122,25 @@ void ActuatorModule::PublishLoop() {
     joint_state_msg.mutable_joints()->Reserve(7);
     ArmCtrlBase::JointState joint_state;
     GripperCtrlBase::GripperState gripper_state;
+    // 告警计数（每 kWarnInterval 次失败打一条）
+    uint32_t arm_warn_count = 0;
+    uint32_t gripper_warn_count = 0;
     
     while (ctx_ptr_->Running()) {
       joint_state_msg.Clear();
       if (!arm_actuator_->GetJointState(joint_state)) {
-        AIMRT_WARN("读取机械臂本体关节状态失败！");
+        if (arm_warn_count++ % kWarnInterval == 0) {
+          AIMRT_WARN("读取机械臂本体关节状态失败！");
+        }
         next_loop_time += period;
         std::this_thread::sleep_until(next_loop_time);
         continue;
       }
       if (gripper_actuator_) {
         if (!gripper_actuator_->ReceiveState(gripper_state)) {
-          AIMRT_WARN("读取夹爪状态失败！");
+          if (gripper_warn_count++ % kWarnInterval == 0) {
+            AIMRT_WARN("读取夹爪状态失败！");
+          }
           next_loop_time += period;
           std::this_thread::sleep_until(next_loop_time);
           continue;
