@@ -9,18 +9,39 @@ topics:
 
 
 # ---------------------------------------------------------------------------
-# Zenoh 远程连接端点（可选）
+# AIMRT 传输层（aimrt_py + zenoh 后端）
 # ---------------------------------------------------------------------------
-# 当 monitor 和 robot 运行在不同机器上时，填写 robot 的 IP 和端口。
-#   - 同一台机器或本地子网组播能通 → 留空即可（默认靠组播自动发现）
-#   - 不同机器 / WiFi AP 隔离阻断组播 → 填写 robot 的 tcp 端点
+# monitor 不再直接使用 zenoh-python，而是通过 AIMRT python 运行时订阅话题。
+# 好处：精确话题订阅（不再 ** 全量接收）、框架在 C++ 侧完成组帧与解码、
+#       与机器人使用同一套 AIMRT / zenoh 版本。
 #
-# 示例（robot IP 为 192.168.1.100）:
-#   zenoh_connect_endpoints:
-#     - "tcp/192.168.1.100:7447"
-#
-# robot 端默认监听 tcp/0.0.0.0:7447，端口在
-# src/install/linux/bin/cfg/zenoh_native_config.json5 的 listen.endpoints 中配置。
+# 下面的选项会生成一个临时 AIMRT 配置 + zenoh native 配置，无需手工维护。
+aimrt:
+  # 同网段零配置：保持 true 即可靠组播自动发现 robot。
+  # 跨三层 / WiFi AP 隔离阻断组播时，改为 false 并填 connect_endpoints。
+  multicast_scouting: true
+
+  # 需要主动连到对端时填写（monitor 作为连接方）。
+  # 注意：robot 端必须有一个固定监听端口才能被连上，默认配置下 zenoh 用的是
+  # 随机临时端口，写死 7447 通常连不通。
+  #   connect_endpoints: ["tcp/192.168.1.100:7447"]
+  connect_endpoints: []
+
+  # 需要被对端连入时填写（monitor 作为被连方），例如多机协同调试。
+  #   listen_endpoints: ["tcp/0.0.0.0:7448"]
+  listen_endpoints: []
+
+  # 高级用法：直接指定自己的 zenoh json5，设置后上面的选项全部忽略。
+  native_cfg_path: ""
+
+  # AIMRT 日志级别：trace / debug / info / warn / error / fatal / off
+  log_level: warn
+
+
+# ---------------------------------------------------------------------------
+# [已弃用] 旧版 zenoh 直连端点
+# ---------------------------------------------------------------------------
+# 保留仅为兼容旧配置；请改用上面的 aimrt.connect_endpoints。
 zenoh_connect_endpoints: []
 
 

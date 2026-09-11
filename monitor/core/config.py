@@ -57,13 +57,51 @@ class _Config:
     def y_range_min(self) -> float:
         return float(self._data.get("y_range_min", 0))
 
-    # -- remote zenoh endpoints --------------------------------------------
+    # -- remote zenoh endpoints (legacy key, still honoured) ---------------
     @property
     def zenoh_connect_endpoints(self) -> list[str]:
         raw = self._data.get("zenoh_connect_endpoints", [])
         if isinstance(raw, list):
             return [str(e) for e in raw]
         return []
+
+    # -- AIMRT transport ---------------------------------------------------
+    @property
+    def _aimrt(self) -> dict:
+        raw = self._data.get("aimrt")
+        return raw if isinstance(raw, dict) else {}
+
+    @property
+    def aimrt_multicast_scouting(self) -> bool:
+        return bool(self._aimrt.get("multicast_scouting", True))
+
+    @property
+    def aimrt_connect_endpoints(self) -> list[str]:
+        raw = self._aimrt.get("connect_endpoints")
+        if isinstance(raw, list) and raw:
+            return [str(e) for e in raw]
+        # Backwards compatible with the pre-AIMRT config key.
+        return self.zenoh_connect_endpoints
+
+    @property
+    def aimrt_listen_endpoints(self) -> list[str]:
+        raw = self._aimrt.get("listen_endpoints", [])
+        if isinstance(raw, list):
+            return [str(e) for e in raw]
+        return []
+
+    @property
+    def aimrt_native_cfg_path(self) -> str:
+        return str(self._aimrt.get("native_cfg_path") or "").strip()
+
+    @property
+    def aimrt_log_level(self) -> str:
+        """Normalise to the capitalised level names AIMRT expects."""
+        raw = str(self._aimrt.get("log_level") or "warn").strip().lower()
+        return {
+            "trace": "Trace", "debug": "Debug", "info": "Info", "warn": "Warn",
+            "warning": "Warn", "error": "Error", "fatal": "Fatal", "off": "Off",
+        }.get(raw, "Warn")
 
     # -- UI scale factor ----------------------------------------------------
     @property

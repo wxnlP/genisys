@@ -15,7 +15,7 @@ from monitor.core.data_model import DataModel
 from monitor.core.tag_manager import PlotTagManager
 from monitor.ui.data_panel import DataPanel
 from monitor.ui.plot_panel import PlotPanel
-from monitor.core.zenoh_client import ZenohSubscriber
+from monitor.core.aimrt_client import AimrtSubscriber
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +225,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Core components ---
         self._model = DataModel(self)
-        self._zenoh = ZenohSubscriber(parent=self)
+        self._transport = AimrtSubscriber(parent=self)
 
         # --- UI ---
         self._data_panel = DataPanel()
@@ -268,16 +268,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._btn_connect = QtWidgets.QPushButton("🟢  Connect")
         self._btn_connect.setProperty("accent", "true")
-        self._btn_connect.clicked.connect(self._start_zenoh)
+        self._btn_connect.clicked.connect(self._start_transport)
         topics_display = ", ".join(self._cfg.topics.values())
-        self._btn_connect.setToolTip(f"Connect to zenoh ({topics_display})")
+        self._btn_connect.setToolTip(f"Connect via AIMRT/zenoh ({topics_display})")
         toolbar.addWidget(self._btn_connect)
 
         self._btn_disconnect = QtWidgets.QPushButton("🔴  Disconnect")
         self._btn_disconnect.setProperty("danger", "true")
-        self._btn_disconnect.clicked.connect(self._stop_zenoh)
+        self._btn_disconnect.clicked.connect(self._stop_transport)
         self._btn_disconnect.setEnabled(False)
-        self._btn_disconnect.setToolTip("Disconnect from zenoh")
+        self._btn_disconnect.setToolTip("Disconnect the AIMRT session")
         toolbar.addWidget(self._btn_disconnect)
 
         self._btn_record_config = QtWidgets.QPushButton("🛠  录制配置")
@@ -352,10 +352,10 @@ class MainWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------
 
     def _setup_wiring(self) -> None:
-        self._zenoh.data_received.connect(self._on_data_received)
-        self._zenoh.connection_changed.connect(self._on_connection_changed)
-        self._zenoh.error_occurred.connect(self._on_error)
-        self._zenoh.raw_data_received.connect(self._on_raw_data)
+        self._transport.data_received.connect(self._on_data_received)
+        self._transport.connection_changed.connect(self._on_connection_changed)
+        self._transport.error_occurred.connect(self._on_error)
+        self._transport.raw_data_received.connect(self._on_raw_data)
         self._data_panel.add_to_plot_requested.connect(self._on_add_to_plot)
         self._plot_panel.clear_data_requested.connect(self._on_reset_data)
         self._plot_panel.clear_curves_requested.connect(self._on_clear_curves)
@@ -667,19 +667,19 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._data_panel.update_from_message(latest)
 
     # ------------------------------------------------------------------
-    # Zenoh lifecycle
+    # AIMRT transport lifecycle
     # ------------------------------------------------------------------
 
-    def _start_zenoh(self) -> None:
-        self._zenoh.start()
+    def _start_transport(self) -> None:
+        self._transport.start()
 
-    def _stop_zenoh(self) -> None:
-        self._zenoh.stop()
+    def _stop_transport(self) -> None:
+        self._transport.stop()
 
     # ------------------------------------------------------------------
     # Qt close
     # ------------------------------------------------------------------
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        self._zenoh.stop()
+        self._transport.stop()
         super().closeEvent(event)
