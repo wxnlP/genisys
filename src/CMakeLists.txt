@@ -11,6 +11,10 @@ add_subdirectory(module/actuator_module)
 add_subdirectory(module/robotic_arm_sdk/actuator)
 add_subdirectory(module/robotic_arm_sdk/arm_control)
 
+if(ROBOTIC_ARM_BUILD_SDK_EXAMPLES)
+  add_subdirectory(module/robotic_arm_sdk/example)
+endif()
+
 # pkg
 add_subdirectory(pkg/arm_control_pkg)
 

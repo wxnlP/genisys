@@ -48,7 +48,7 @@ if(WIN32)
 endif()
 
 option(ROBOTIC_ARM_BUILD_MUJOCO_SIM "Build AimRT Mujoco Sim" OFF)
-
+option(ROBOTIC_ARM_BUILD_SDK_EXAMPLES "Build robotic arm sdk examples" OFF)
 
 # Include cmake module
 include(NamespaceTool)
