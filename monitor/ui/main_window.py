@@ -550,12 +550,14 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_record_started(self, output_dir: str) -> None:
         self._record_pending_action = None
         self._plot_panel.set_recording(True)
-        self._status_label.setText(f"⏺  录制已开始: {output_dir}")
+        self._status_label.setText(
+            f"⏺  录制已开始: {output_dir}" if output_dir else "⏺  录制已开始")
 
     def _on_record_stopped(self, output_dir: str) -> None:
         self._record_pending_action = None
         self._plot_panel.set_recording(False)
-        self._status_label.setText(f"⏹  录制已停止: {output_dir}")
+        self._status_label.setText(
+            f"⏹  录制已停止: {output_dir}" if output_dir else "⏹  录制已停止")
 
     def _on_record_failed(self, error_text: str) -> None:
         pending = self._record_pending_action

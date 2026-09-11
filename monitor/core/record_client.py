@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import time
-from pathlib import Path
 from typing import Any
 from urllib import error, request
 
@@ -13,10 +12,8 @@ from urllib import error, request
 class RecordPlaybackClient:
     """Call the record_playback plugin over HTTP JSON-RPC style endpoints."""
 
-    def __init__(self, base_url: str | None = None, output_dir: str | None = None) -> None:
+    def __init__(self, base_url: str | None = None) -> None:
         self._base_url = (base_url or os.environ.get("AIMRT_RECORD_RPC_URL") or "http://127.0.0.1:50080").rstrip("/")
-        self._output_dir = Path(output_dir or os.environ.get("AIMRT_RECORD_OUTPUT_DIR") or "./recordings").resolve()
-        self._output_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def base_url(self) -> str:
@@ -24,10 +21,6 @@ class RecordPlaybackClient:
 
     def set_base_url(self, base_url: str) -> None:
         self._base_url = base_url.rstrip("/")
-
-    @property
-    def default_output_dir(self) -> str:
-        return str(self._output_dir)
 
     def _build_url(self, method_name: str) -> str:
         service_path = "aimrt.protocols.record_playback_plugin.RecordPlaybackService"

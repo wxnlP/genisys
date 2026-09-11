@@ -306,11 +306,11 @@ class DataModel(QtCore.QObject):
                             preparation_duration_s=self._preparation_duration_s,
                             record_duration_s=self._record_duration_s,
                         )
-                        output_dir = rsp.get("filefolder") or self._client.default_output_dir
+                        output_dir = rsp.get("filefolder") or ""
                         self.done.emit(output_dir)
                     elif self._mode == "stop":
-                        self._client.stop_record(self._action_name)
-                        self.done.emit(self._client.default_output_dir)
+                        rsp = self._client.stop_record(self._action_name)
+                        self.done.emit(rsp.get("filefolder") or "")
                     else:
                         raise ValueError(f"unknown record mode: {self._mode}")
                 except Exception as exc:  # pragma: no cover - defensive path
