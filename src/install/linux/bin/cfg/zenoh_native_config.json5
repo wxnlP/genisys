@@ -1,0 +1,25 @@
+// 控制器侧 zenoh 配置（真机）。
+//
+// 只覆盖需要修改的项，其余沿用当前 zenoh 版本（随 AIMRT 1.7.0 链接的
+// 1.0.0-rc.1）的内置默认值。
+//
+// 注意：不要直接使用 zenoh 仓库的 DEFAULT_CONFIG.json5。那份文件面向更新版本的
+// zenoh，包含本版本不认识的配置段（gateway、region_name、open 等），会导致
+// "Unable to load configuration file"，进而使控制器启动即崩溃。
+{
+  mode: "peer",
+
+  // 固定监听端口。monitor 端在 config.yaml 里用
+  //   aimrt.connect_endpoints: ["tcp/<本机IP>:7447"]
+  // 连接这里。修改端口时两处要同步。
+  listen: {
+    endpoints: {
+      peer: ["tcp/0.0.0.0:7447"]
+    }
+  },
+
+  // 保留组播，同一网段仍可零配置自动发现。
+  scouting: {
+    multicast: { enabled: true }
+  }
+}

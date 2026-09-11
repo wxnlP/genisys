@@ -1,0 +1,22 @@
+// 控制器侧 zenoh 配置（仿真）。
+//
+// 与 zenoh_native_config.json5 内容相同，仅监听端口不同，这样真机与仿真实例
+// 可以同时运行。注意 net_plugin 的 RPC 端口（50080）在两者之间仍然冲突，
+// 同时启动时需要另外区分。
+{
+  mode: "peer",
+
+  // 固定监听端口。monitor 端在 config.yaml 里用
+  //   aimrt.connect_endpoints: ["tcp/<本机IP>:7448"]
+  // 连接这里。
+  listen: {
+    endpoints: {
+      peer: ["tcp/0.0.0.0:7448"]
+    }
+  },
+
+  // 保留组播，同一网段仍可零配置自动发现。
+  scouting: {
+    multicast: { enabled: true }
+  }
+}
