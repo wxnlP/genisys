@@ -1,30 +1,18 @@
 """
 AIMRT runtime worker — runs the AIMRT session in a separate process.
 
-Why a subprocess
-----------------
-``aimrt_py`` 1.7.0 segfaults inside ``Core.Shutdown()`` as soon as any
-channel subscriber with a Python callback has been declared (reproducible
-with a minimal 1-topic subscriber; a core without subscribers shuts down
-cleanly). Keeping the runtime in a child process lets the GUI:
-
-* tear the session down by simply terminating the child (no native
-  teardown, no crash);
-* rebuild it from scratch on every "Connect";
-* survive a bad zenoh configuration — the worker dies, the GUI reports the
-  captured stderr instead of taking the whole application down.
-
-Protocol
---------
-Decoded messages travel over a dedicated pipe fd (``--data-fd``) as
-length-prefixed pickles so AIMRT's own console logging, which shares
-stdout/stderr, cannot corrupt the stream::
+Launched by ``monitor.core.aimrt_client``. Decoded messages are streamed to
+the parent over the fd given by ``--data-fd``::
 
     record := uint32_be length | pickle((kind, payload))
 
-    ("ready", {"topics": [...]})   subscription established
+    ("ready", {"topics": [...]})   subscriptions established
     ("data",  {…message dict…})    one decoded message
-    ("error", "message")           fatal problem, worker exits next
+    ("error", "message")           fatal problem, worker exits
+
+The worker is always killed, never asked to shut down: aimrt_py 1.7.0 crashes
+in ``Core.Shutdown()`` as soon as a channel subscriber with a Python callback
+has been declared, and that path cannot be avoided from Python.
 """
 
 from __future__ import annotations
@@ -50,8 +38,8 @@ logger = logging.getLogger("monitor.aimrt_worker")
 
 _ZENOH_PLUGIN_NAME = "libaimrt_zenoh_plugin.so"
 
-# Drop the pending buffer once it exceeds this, so a stalled GUI can never
-# block the AIMRT dispatch thread.
+# Flush the pending buffer past this size so a stalled reader cannot block the
+# AIMRT dispatch thread.
 _MAX_PENDING_BYTES = 4 << 20
 
 
@@ -77,8 +65,7 @@ class PipeWriter:
         record = struct.pack(">I", len(blob)) + blob
         with self._lock:
             if len(self._buf) + len(record) > _MAX_PENDING_BYTES:
-                # Reader is far behind — a monitor only needs fresh data, and
-                # clearing at a record boundary keeps framing valid.
+                # Reader is behind; drop at a record boundary to keep framing valid.
                 self._buf.clear()
                 self.dropped += 1
             self._buf += record
@@ -116,11 +103,10 @@ def _assert_port_free(host: str, port: int, endpoint: str) -> None:
 
 
 def preflight() -> None:
-    """Fail with a readable message *before* touching the AIMRT runtime.
+    """Validate the configuration before the AIMRT runtime is started.
 
-    The zenoh plugin only logs when the session fails to open and then keeps
-    using the invalid session; the next declaration crashes. Validate what we
-    can up front so a typo does not look like a mysterious crash.
+    The zenoh plugin only logs when a session fails to open and then keeps
+    using the invalid session, which crashes on the next declaration.
     """
     native = config.aimrt_native_cfg_path
     if native:
@@ -141,9 +127,9 @@ def preflight() -> None:
 
 
 def write_native_zenoh_cfg(run_dir: str) -> Optional[str]:
-    """Generate a zenoh native json5 from config.yaml.
+    """Build a zenoh native json5 from config.yaml.
 
-    Returns ``None`` when everything stays at zenoh's defaults — the
+    Returns ``None`` when the settings are all zenoh defaults, which is the
     same-LAN zero-config case (peer mode + multicast scouting).
     """
     connect = config.aimrt_connect_endpoints
@@ -295,8 +281,8 @@ def run(data_fd: int) -> int:
     writer.send("ready", {"topics": subscribed})
     print(f"aimrt worker: subscribed {', '.join(subscribed)}", file=sys.stderr, flush=True)
 
-    # Blocks until the parent terminates this process. We deliberately never
-    # call Core.Shutdown() — see the module docstring.
+    # Blocks until the parent terminates this process; Core.Shutdown() is never
+    # called (see the module docstring).
     core.Start()
     return 0
 

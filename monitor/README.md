@@ -96,15 +96,11 @@ aimrt:
 
 ## 实现说明
 
-- 数据源是 **AIMRT python 运行时 + zenoh 后端**，与机器人使用同一套
-  AIMRT / zenoh 版本；不再使用 zenoh-python 直接订阅。
-- 只订阅 `config.yaml` 中列出的话题（旧实现用 `**` 全量订阅），无关流量不会
-  进入 Python；组帧、上下文元数据解析和 protobuf 解码都在 C++ 侧完成。
-- AIMRT 运行时跑在**独立子进程**（`monitor/core/aimrt_worker.py`）中，通过管道
-  把解码后的消息送回 GUI。这不是为了好看：`aimrt_py` 1.7.0 在声明过带 Python
-  回调的 channel 订阅者之后，`Core.Shutdown()` 必定段错误（最小 1 话题复现），
-  进程内无法安全地拆除并重建会话。用子进程可以彻底绕开这个析构路径，也让
-  zenoh 配置错误只杀死 worker、不会带崩 GUI。
-- `monitor/core/zenoh_client.py` 是旧的 zenoh-python 实现，已不再被默认使用，
-  保留仅作回退参考（如需使用请自行安装 `eclipse-zenoh`）。
+- 数据源是 AIMRT python 运行时 + zenoh 后端，与机器人使用同一套 AIMRT / zenoh
+  版本。只订阅 `config.yaml` 列出的话题，组帧与 protobuf 解码在 C++ 侧完成。
+- AIMRT 运行时运行在独立子进程（`monitor/core/aimrt_worker.py`），通过管道把
+  解码后的消息送回 GUI。这样每个会话都能干净地重建，zenoh 配置错误也只终止
+  worker 而不会影响 GUI。
+- `monitor/core/zenoh_client.py` 是旧的 zenoh-python 实现，默认不使用，保留作
+  回退参考（需要自行安装 `eclipse-zenoh`）。
 

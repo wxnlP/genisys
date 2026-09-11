@@ -1,21 +1,17 @@
 """
-AIMRT channel subscriber — the monitor's data source.
+AIMRT channel subscriber — supplies decoded robot data to the UI.
 
-The AIMRT runtime lives in a **child process** (``monitor.core.aimrt_worker``)
-and streams decoded messages back over a pipe. That isolation is not
-cosmetic: ``aimrt_py`` 1.7.0 segfaults inside ``Core.Shutdown()`` whenever a
-channel subscriber with a Python callback has been declared, so an in-process
-session cannot be torn down or rebuilt. Terminating the child avoids the
-broken teardown entirely, allows a clean "Connect" for every session, and
-keeps a bad zenoh configuration from taking the GUI down with it.
+The AIMRT runtime runs in a child process (``monitor.core.aimrt_worker``) and
+streams decoded messages back over a pipe, so a session can always be torn
+down and rebuilt, and a failed zenoh configuration only terminates the worker
+instead of the whole application.
 
-Public interface is identical to the legacy ``ZenohSubscriber`` so the UI does
-not care which backend is active::
+Interface::
 
     signals: data_received(dict), connection_changed(bool),
              error_occurred(str), raw_data_received(str, int)
     methods: start() -> bool, stop()
-    props:   is_active, message_count
+    props:   is_active, is_ready, message_count
 """
 
 from __future__ import annotations
@@ -34,8 +30,7 @@ from PyQt5 import QtCore
 
 logger = logging.getLogger(__name__)
 
-# Warn when the session is up but silent — 'connected' and 'receiving' are
-# independent states in AIMRT/zenoh.
+# Warn when the session is up but no data has arrived.
 _NO_DATA_WARN_MS = 5000
 
 # Sanity cap on a single framed record.
@@ -170,8 +165,8 @@ class AimrtSubscriber(QtCore.QObject):
         proc = self._proc
         self._proc = None
         if proc is not None:
-            # SIGTERM is enough: the worker installs no handler, so it dies
-            # without running the crashing native teardown.
+            # The worker is never shut down gracefully: aimrt_py 1.7.0 crashes
+            # in Core.Shutdown() once a subscriber with a Python callback exists.
             try:
                 proc.terminate()
             except ProcessLookupError:
@@ -280,10 +275,7 @@ class AimrtSubscriber(QtCore.QObject):
             return
 
     def _drain_child_output(self, proc: subprocess.Popen) -> None:
-        """Keep the child's merged stdout/stderr drained and keep the tail.
-
-        Draining matters: if the pipe fills, the worker blocks on write.
-        """
+        """Drain the worker's stdout/stderr, keeping the last lines for errors."""
         stream = proc.stdout
         if stream is None:
             return

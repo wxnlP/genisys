@@ -88,8 +88,7 @@ class ZenohSubscriber(QtCore.QObject):
                 zenoh_cfg = zenoh.Config()
                 zenoh_cfg.insert_json5("mode", "'peer'")
                 zenoh_cfg.insert_json5("scouting/multicast/enabled", "true")
-                # Explicit remote endpoints from config.yaml (cross-machine / WiFi)
-                endpoints = config.zenoh_connect_endpoints
+                endpoints = config.aimrt_connect_endpoints
                 if endpoints:
                     zenoh_cfg.insert_json5(
                         "connect/endpoints",

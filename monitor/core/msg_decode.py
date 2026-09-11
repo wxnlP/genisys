@@ -1,22 +1,21 @@
 """
-Message → dict conversion shared by every transport backend.
+Message → dict conversion shared by the transport backends.
 
-All backends decode into the same plain-dict shape so ``DataModel`` and the
+Every backend decodes into the same plain-dict shape so ``DataModel`` and the
 UI stay transport-agnostic::
 
     {"time_stamp": int, "frame_id": str, "sequence": int, "joints": [...]}
     {"time_stamp": int, ..., "position_x": float, "roll": float, ...}
 
-Message types (must match what the robot publishes)::
+Topic and message type (must match what the robot publishes)::
 
     /geniarm/joint_state    pb:aimrt.protocols.sensor.JointStateArray
     /geniarm/joint_cmd      pb:aimrt.protocols.sensor.JointCommandArray
     /geniarm/pose_current   pb:robotic_arm.protocols.PoseStamped
     /geniarm/pose_expected  pb:robotic_arm.protocols.PoseStamped
 
-Note: the robot's ``ControlModule`` publishes through the alias
-``using Pose = robotic_arm::protocols::PoseStamped`` — the wire type really
-is ``PoseStamped``, not ``Pose``.
+The robot publishes ``PoseStamped`` (aliased to ``Pose`` in ControlModule),
+not ``Pose``.
 """
 
 from __future__ import annotations
