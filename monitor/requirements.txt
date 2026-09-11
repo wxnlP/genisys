@@ -12,11 +12,11 @@ numpy>=1.21
 # -----------------------------------------------------------------------------
 # AIMRT python 运行时（monitor 的默认数据源）
 # -----------------------------------------------------------------------------
-# 需与机器人的 AIMRT 版本一致（当前 1.7.0，对应 zenoh 1.0.0-rc.1）。
-# 官方 wheel 绑定平台与 CPython 版本，例如：
-#   aimrt_py-1.7.0-cp310-cp310-linux_x86_64.whl
-# 即锁定 Python 3.10 + Linux x86_64；换平台或 Python 版本需要对应的 wheel。
+# 需与机器人的 AIMRT 版本一致，下载链接如下：
+# https://github.com/AimRT/AimRT/releases/download/v1.7.0/aimrt_py-1.7.0-cp310-cp310-linux_x86_64.whl
+# https://github.com/AimRT/AimRT/releases/download/v1.7.0/aimrt_py-1.7.0-cp310-cp310-linux_aarch64.whl
+# https://github.com/AimRT/AimRT/releases/download/v1.7.0/aimrt_py-1.7.0-cp311-cp311-win_amd64.whl
 #
-# 安装：pip install /path/to/aimrt_py-1.7.0-cp310-cp310-linux_x86_64.whl
+# 安装：pip install /path/to/aimrt_py-1.7.0-cp310-cp310-*.whl
 #
 # aimrt_py==1.7.0
