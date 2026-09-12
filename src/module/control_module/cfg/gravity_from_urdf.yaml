@@ -1,6 +1,6 @@
 dynamics:
   gravity: [0.0, 0.0, -9.81]
-  # 来源: Geniarm-v1.1.4_dynamics_final.urdf (~/RoboModels/Geniarm-v1.1.4/urdf/)
+  # 来源: ~/RoboModels/urdf/Geniarm-v1.1.4/Geniarm-v1.1.4.urdf (替换动力学参数后的定版)
   # 用途: 仅保留重力补偿所需参数 —— 重力补偿只依赖 mass 与 com，
   #       惯性张量与关节摩擦均已置 0（惯性项/摩擦项不参与重力补偿计算）
   # 所有坐标在对应连杆坐标系 {i} 中表达（与 MDH 一致）
@@ -23,7 +23,7 @@ dynamics:
 
     - name: "upper_arm_link"
       mass: 1.111
-      com: [0.13, -0.000045, 0.0]
+      com: [0.13, -4.5e-05, 0.0]
       inertia:
         ixx: 0.0
         iyy: 0.0
@@ -66,8 +66,8 @@ dynamics:
         iyz: 0.0
 
     - name: "wrist3_link"
-      mass: 0.009
-      com: [-0.000502, 0.00022, -0.002897]
+      mass: 0.0087849
+      com: [-0.000629, 0.0, -0.003103]
       inertia:
         ixx: 0.0
         iyy: 0.0
@@ -75,6 +75,19 @@ dynamics:
         ixy: 0.0
         ixz: 0.0
         iyz: 0.0
+
+  # ---- 可选末端工具 ----
+  tool:
+    attach_to: wrist3_link
+    mass: 0.514
+    com: [-0.000416, 0.001827, 0.039798]
+    inertia:
+      ixx: 0.0
+      iyy: 0.0
+      izz: 0.0
+      ixy: 0.0
+      ixz: 0.0
+      iyz: 0.0
 
   # ---- 关节摩擦参数（重力补偿不需要，置 0）----
   # coulomb : 库仑摩擦系数 (N·m)

@@ -1,6 +1,6 @@
 dynamics:
   gravity: [0.0, 0.0, -9.81]
-  # 来源: Geniarm-v1.1.4_dynamics_final.urdf (~/RoboModels/Geniarm-v1.1.4/urdf/)
+  # 来源: ~/RoboModels/urdf/Geniarm-v1.1.4/Geniarm-v1.1.4.urdf (替换动力学参数后的定版)
   # 所有坐标在对应连杆坐标系 {i} 中表达（与 MDH 一致）
   # mass : 连杆质量 (kg)
   # com  : 质心在连杆坐标系 {i} 中的位置 (m)
@@ -21,14 +21,14 @@ dynamics:
 
     - name: "upper_arm_link"
       mass: 1.111
-      com: [0.13, -0.000045, 0.0]
+      com: [0.13, -4.5e-05, 0.0]
       inertia:
         ixx: 0.00058895
         iyy: 0.01612706
         izz: 0.01598478
-        ixy: 0.0
+        ixy: 0.00000000
         ixz: -0.00020503
-        iyz: 0.0
+        iyz: 0.00000000
 
     - name: "elbow_link"
       mass: 0.682
@@ -64,18 +64,31 @@ dynamics:
         iyz: 0.00000251
 
     - name: "wrist3_link"
-      mass: 0.009
-      com: [-0.000502, 0.00022, -0.002897]
+      mass: 0.0087849
+      com: [-0.000629, 0.0, -0.003103]
       inertia:
-        ixx: 0.00000067
-        iyy: 0.00000074
+        ixx: 0.00000078
+        iyy: 0.00000064
         izz: 0.00000136
-        ixy: -0.00000006
-        ixz: 0.0
-        iyz: 0.0
+        ixy: 0.00000000
+        ixz: 0.00000000
+        iyz: 0.00000000
+
+  # ---- 可选末端工具 ----
+  tool:
+    attach_to: wrist3_link
+    mass: 0.514
+    com: [-0.000416, 0.001827, 0.039798]
+    inertia:
+      ixx: 0.000549343
+      iyy: 0.000648733
+      izz: 0.000372664
+      ixy: -0.000000852
+      ixz: -0.000000793
+      iyz: -0.000008216
 
   # ---- 关节摩擦参数 ----
-  # coulomb : 库仑摩擦系数 (N·m)，取自 geniarm_v1.1.4.xml 中各关节的 frictionloss
+  # coulomb : 库仑摩擦系数 (N·m)
   # viscous : 粘性摩擦系数 (N·m·s/rad)
   friction:
     joint1: {coulomb: 0.8, viscous: 0.0}
