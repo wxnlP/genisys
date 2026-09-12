@@ -1,0 +1,99 @@
+dynamics:
+  gravity: [0.0, 0.0, -9.81]
+  # 来源: ~/RoboModels/urdf/Geniarm-v1.1.4/Geniarm-v1.1.4.urdf (替换动力学参数后的定版)
+  # 所有坐标在对应连杆坐标系 {i} 中表达（与 MDH 一致）
+  # mass : 连杆质量 (kg)
+  # com  : 质心在连杆坐标系 {i} 中的位置 (m)
+  # inertia : 绕质心的惯性张量 (kg·m²)，对称矩阵只需 6 个独立分量
+  # 对应关系: link1=shoulder_link, link2=upper_arm_link, link3=elbow_link,
+  #           link4=wrist1_link,  link5=wrist2_link,    link6=wrist3_link
+  links:
+    - name: "shoulder_link"
+      mass: 0.215
+      com: [0.00461, 0.000543, -0.029142]
+      inertia:
+        ixx: 0.00030957
+        iyy: 0.00020740
+        izz: 0.00028536
+        ixy: -0.00000179
+        ixz: -0.00004071
+        iyz: -0.00000340
+
+    - name: "upper_arm_link"
+      mass: 1.111
+      com: [0.13, -4.5e-05, 0.0]
+      inertia:
+        ixx: 0.00058895
+        iyy: 0.01612706
+        izz: 0.01598478
+        ixy: 0.00000000
+        ixz: -0.00020503
+        iyz: 0.00000000
+
+    - name: "elbow_link"
+      mass: 0.682
+      com: [0.17121, -0.012609, 0.000759]
+      inertia:
+        ixx: 0.00062101
+        iyy: 0.00615984
+        izz: 0.00618878
+        ixy: -0.00077041
+        ixz: -0.00006785
+        iyz: -0.00000610
+
+    - name: "wrist1_link"
+      mass: 0.427
+      com: [0.061483, -0.05823, -0.000658]
+      inertia:
+        ixx: 0.00043530
+        iyy: 0.00052406
+        izz: 0.00065882
+        ixy: 0.00024915
+        ixz: -0.00000552
+        iyz: 0.00000479
+
+    - name: "wrist2_link"
+      mass: 0.362
+      com: [0.000374, -0.000611, -0.003599]
+      inertia:
+        ixx: 0.00019793
+        iyy: 0.00020475
+        izz: 0.00014485
+        ixy: 0.00000001
+        ixz: -0.00000008
+        iyz: 0.00000251
+
+    - name: "wrist3_link"
+      mass: 0.0087849
+      com: [-0.000629, 0.0, -0.003103]
+      inertia:
+        ixx: 0.00000078
+        iyy: 0.00000064
+        izz: 0.00000136
+        ixy: 0.00000000
+        ixz: 0.00000000
+        iyz: 0.00000000
+
+  # ---- 可选末端工具 ----
+  # tool:
+  #   attach_to: wrist3_link
+  #   mass: 0.514
+  #   com: [-0.000416, 0.001827, 0.039798]
+  #   inertia:
+  #     ixx: 0.000549343
+  #     iyy: 0.000648733
+  #     izz: 0.000372664
+  #     ixy: -0.000000852
+  #     ixz: -0.000000793
+  #     iyz: -0.000008216
+
+  # ---- 关节摩擦参数 ----
+  # coulomb : 库仑摩擦系数 (N·m)
+  # viscous : 粘性摩擦系数 (N·m·s/rad)
+  friction:
+    joint1: {coulomb: 0.8, viscous: 0.0}
+    joint2: {coulomb: 1.0, viscous: 0.0}
+    joint3: {coulomb: 0.8, viscous: 0.0}
+    joint4: {coulomb: 0.3, viscous: 0.0}
+    joint5: {coulomb: 0.3, viscous: 0.0}
+    joint6: {coulomb: 0.2, viscous: 0.0}

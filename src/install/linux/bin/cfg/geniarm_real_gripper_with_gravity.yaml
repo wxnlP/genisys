@@ -1,0 +1,148 @@
+aimrt:
+  log:
+    core_lvl: INFO # Trace/Debug/Info/Warn/Error/Fatal/Off
+    backends:
+      - type: console
+      - type: rotate_file # 文件
+        options:
+          path: ./log
+          filename: geniarm_real.log
+          max_file_size_m: 4
+          max_file_num: 10
+  module:
+    pkgs:
+      - path: ./libarm_control_pkg.so
+        disable_modules: []
+    modules:
+      - name: ActuatorModule
+        log_lvl: INFO
+      - name: ControlModule
+        log_lvl: INFO
+  executor:
+    executors:
+      - name: actuator_pub_executor
+        type: asio_thread
+      - name: control_executor
+        type: asio_thread
+        options:
+          thread_bind_cpu: [0]  # 绑定 RK3588 A55 小核
+          thread_sched_policy: SCHED_FIFO:80
+      - name: write_cmd_thread
+        type: asio_thread
+      - name: storage_executor
+        type: asio_thread
+        options:
+          thread_num: 2
+      - name: record_thread
+        type: asio_thread
+  plugin:
+    plugins:
+      # - name: ros2_plugin
+      #   path: ./libaimrt_ros2_plugin.so
+      #   options:
+      #     node_name: pid_sim_demo
+      #     executor_type: MultiThreaded
+      #     executor_thread_num: 4
+      # - name: echo_plugin
+      #   path: ./libaimrt_echo_plugin.so
+      #   options:
+      #     type_support_pkgs:
+      #       - path: ./libhardware_type_supprot_pkg.so        
+      #     topic_meta_list:
+      #       - topic_name: /inverted_pendulum/joint_state
+      #         msg_type: ros2:aimrt_msgs/msg/JointStateArray
+      #         echo_type: json
+      - name: net_plugin
+        path: ./libaimrt_net_plugin.so
+        options:
+          thread_num: 2
+          http_options:
+            listen_ip: 127.0.0.1
+            listen_port: 50080
+      - name: zenoh_plugin
+        path: ./libaimrt_zenoh_plugin.so
+        options:
+          native_cfg_path: ./cfg/zenoh_native_config.json5
+      - name: record_playback_plugin
+        path: ./libaimrt_record_playback_plugin.so
+        options:
+          timer_executor: storage_executor
+          type_support_pkgs:
+            - path: ./libsensor_pb_ts.so
+          record_actions:
+            - name: record_joint_state
+              options:
+                bag_path: ./bag
+                mode: signal
+                max_preparation_duration_s: 10
+                executor: record_thread
+                storage_policy:
+                  max_bag_size_m: 2048            # MB
+                  msg_write_interval: 1000        # message count period
+                  msg_write_interval_time: 1000   # ms
+                  compression_mode: zstd          # comression mode
+                  compression_level: default      # comression level
+                extra_attributes:
+                  platform: x86_64
+                  os: ubuntu-22.04
+                topic_meta_list:
+                  - topic_name: /geniarm/joint_state
+                    msg_type: pb:aimrt.protocols.sensor.JointStateArray
+                    serialization_type: pb 
+                    record_enabled: true
+                    sample_freq: 0
+  channel:
+    backends:
+      - type: local # 官方支持local后端
+      - type: zenoh
+        options:
+          pub_topics_options:
+            - topic_name: "(.*)"
+              shm_enabled: false
+    pub_topics_options:
+      - topic_name: "(.*)" # 正则表达式
+        enable_backends: [local, zenoh]
+        enable_filters: []
+    sub_topics_options:
+      - topic_name: "/geniarm/servoj_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/servoj_pose_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/servol_cmd" 
+        enable_backends: [zenoh]
+      - topic_name: "/geniarm/joint_cmd" 
+        enable_backends: [local]
+      - topic_name: "/geniarm/joint_state" 
+        enable_backends: [local]
+  rpc:
+    backends:
+      - type: http
+    clients_options:
+      - func_name: "(.*)"
+        enable_backends: []
+        enable_filters: []
+    servers_options:
+      - func_name: "(.*)"
+        enable_backends: [http]
+        enable_filters: []
+
+# Module custom configuration
+ActuatorModule:
+  config_file: actuator_module/geniarm_actuator_gripper_cfg.yaml
+  topic_sub_joint_cmd: /geniarm/joint_cmd
+  topic_pub_joint_state: /geniarm/joint_state
+  pub_executor_name: actuator_pub_executor
+  pub_frequency: 500 
+  write_executor_name: write_cmd_thread
+ControlModule:
+  config_file: control_module/geniarm_body_gripper_gravity_cfg.yaml
+  topic_pub_joint_cmd: /geniarm/joint_cmd
+  topic_sub_joint_state: /geniarm/joint_state
+  topic_pub_cart_expected: /geniarm/pose_expected
+  topic_pub_cart_current: /geniarm/pose_current
+  topic_sub_servoj_cmd: /geniarm/servoj_cmd
+  topic_sub_servoj_pose_cmd: /geniarm/servoj_pose_cmd
+  topic_sub_servol_cmd: /geniarm/servol_cmd
+  control_executor_name: control_executor
+  control_frequency: 500
+  publish_frequency: 500

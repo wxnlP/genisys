@@ -89,7 +89,7 @@ aimrt:
                   max_bag_size_m: 2048            # MB
                   msg_write_interval: 1000        # message count period
                   msg_write_interval_time: 1000   # ms
-                  compression_mode: none          # comression mode
+                  compression_mode: zstd          # comression mode
                   compression_level: default      # comression level
                 extra_attributes:
                   platform: aarch64

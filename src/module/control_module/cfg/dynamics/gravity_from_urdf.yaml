@@ -1,0 +1,101 @@
+dynamics:
+  gravity: [0.0, 0.0, -9.81]
+  # 来源: ~/RoboModels/urdf/Geniarm-v1.1.4/Geniarm-v1.1.4.urdf (替换动力学参数后的定版)
+  # 用途: 仅保留重力补偿所需参数 —— 重力补偿只依赖 mass 与 com，
+  #       惯性张量与关节摩擦均已置 0（惯性项/摩擦项不参与重力补偿计算）
+  # 所有坐标在对应连杆坐标系 {i} 中表达（与 MDH 一致）
+  # mass : 连杆质量 (kg)
+  # com  : 质心在连杆坐标系 {i} 中的位置 (m)
+  # inertia : 绕质心的惯性张量 (kg·m²)，此处全部为 0
+  # 对应关系: link1=shoulder_link, link2=upper_arm_link, link3=elbow_link,
+  #           link4=wrist1_link,  link5=wrist2_link,    link6=wrist3_link
+  links:
+    - name: "shoulder_link"
+      mass: 0.215
+      com: [0.00461, 0.000543, -0.029142]
+      inertia:
+        ixx: 0.0
+        iyy: 0.0
+        izz: 0.0
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "upper_arm_link"
+      mass: 1.111
+      com: [0.13, -4.5e-05, 0.0]
+      inertia:
+        ixx: 0.0
+        iyy: 0.0
+        izz: 0.0
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "elbow_link"
+      mass: 0.682
+      com: [0.17121, -0.012609, 0.000759]
+      inertia:
+        ixx: 0.0
+        iyy: 0.0
+        izz: 0.0
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "wrist1_link"
+      mass: 0.427
+      com: [0.061483, -0.05823, -0.000658]
+      inertia:
+        ixx: 0.0
+        iyy: 0.0
+        izz: 0.0
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "wrist2_link"
+      mass: 0.362
+      com: [0.000374, -0.000611, -0.003599]
+      inertia:
+        ixx: 0.0
+        iyy: 0.0
+        izz: 0.0
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+    - name: "wrist3_link"
+      mass: 0.0087849
+      com: [-0.000629, 0.0, -0.003103]
+      inertia:
+        ixx: 0.0
+        iyy: 0.0
+        izz: 0.0
+        ixy: 0.0
+        ixz: 0.0
+        iyz: 0.0
+
+  # ---- 可选末端工具 ----
+  # tool:
+  #   attach_to: wrist3_link
+  #   mass: 0.514
+  #   com: [-0.000416, 0.001827, 0.039798]
+  #   inertia:
+  #     ixx: 0.0
+  #     iyy: 0.0
+  #     izz: 0.0
+  #     ixy: 0.0
+  #     ixz: 0.0
+  #     iyz: 0.0
+
+  # ---- 关节摩擦参数（重力补偿不需要，置 0）----
+  # coulomb : 库仑摩擦系数 (N·m)
+  # viscous : 粘性摩擦系数 (N·m·s/rad)
+  friction:
+    joint1: {coulomb: 0.0, viscous: 0.0}
+    joint2: {coulomb: 0.0, viscous: 0.0}
+    joint3: {coulomb: 0.0, viscous: 0.0}
+    joint4: {coulomb: 0.0, viscous: 0.0}
+    joint5: {coulomb: 0.0, viscous: 0.0}
+    joint6: {coulomb: 0.0, viscous: 0.0}

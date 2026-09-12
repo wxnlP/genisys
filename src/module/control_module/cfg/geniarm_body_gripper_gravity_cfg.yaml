@@ -1,0 +1,50 @@
+robot:
+  name: "geniarm"
+  sample_frequency: 500.0  # Hz，轨迹规划离散频率
+  joint_limits:
+    lower: [-150, 0, -212, -90, -90, -90]
+    upper: [150, 212, 0, 90, 90, 90]
+  trajectory_mode: "quintic"
+  kinematics:
+    ik_mode: "UR" # or Piper
+    MDH:
+      alpha: [0.0, -90.0, 0.0, 0.0, -90.0, 90.0]
+      a: [0.0, 0.02, 0.26, 0.24668, 0.075, 0.0]
+      d: [0.1459, 0.0, 0.0, 0.0, 0.0, 0.031]
+      offset: [0.0, -180.0, 166.64, 13.36, 90.0, 0.0]
+  dynamics: "control_module/dynamics/gravity_from_urdf_gripper.yaml"  # 动力学参数文件名，位于 cfg 目录下
+  joints:
+    - name: "shoulder_joint"
+      MIT:
+        stiffness: 120.0
+        damping: 5.0
+    - name: "upper_arm_joint"
+      MIT:
+        stiffness: 120.0
+        damping: 5.0
+    - name: "elbow_joint"
+      MIT:
+        stiffness: 120.0
+        damping: 5.0
+    - name: "wrist1_joint"
+      MIT:
+        stiffness: 18.0
+        damping: 2.0
+    - name: "wrist2_joint"
+      MIT:
+        stiffness: 18.0
+        damping: 2.0
+    - name: "wrist3_joint"
+      MIT:
+        stiffness: 18.0
+        damping: 2.0
+  tool:
+    frame: "tcp"
+    xyz: [0, 0, 0.14]
+    rpy: [0, 0, 0] # ZYX 欧拉角
+  gripper:
+    name: "geniarm_gripper"
+    max_range: 1.95
+    MIT:
+      stiffness: 8.0
+      damping: 1.0
