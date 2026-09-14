@@ -217,6 +217,25 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       return aimrt::rpc::Status();
     });
 
+    // Gripper 服务处理
+    server_handle->Gripper.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                              const ::robotic_arm::protocols::GripperRequest& req,
+                                              ::robotic_arm::protocols::MoveResponse& rsp) {
+      AIMRT_INFO("\n---\n收到Gripper请求\n---");
+      bool ret = gripper_controller_->PosControl(
+          req.position(), req.velocity(), req.acceleration(), req.effort());
+      if (ret) {
+        gripper_controller_->WaitForCompletion();
+        rsp.mutable_error()->set_code(0);
+        rsp.mutable_error()->set_msg("Gripper succeeded");
+      } else {
+        rsp.mutable_error()->set_code(-1);
+        rsp.mutable_error()->set_msg("Gripper failed");
+      }
+
+      return aimrt::rpc::Status();
+    });
+
   } catch (const std::exception& e) {
     AIMRT_ERROR("Init failed, {}", e.what());
     return false;
