@@ -1,6 +1,6 @@
 # ArmMonitor
 
-实时机械臂状态监控工具。通过 AIMRT（zenoh 后端）订阅机器人数据，以表格和曲线图实时展示关节位置/速度/力矩及末端位姿等数据。
+实时机械臂状态监控工具。通过 AIMRT 订阅机器人数据，以表格和曲线图实时展示关节位置/速度/力矩及末端位姿等数据。
 
 ## 快速开始
 
@@ -46,39 +46,30 @@ python -m monitor.main
 
 | 文件 | 内容 |
 |------|------|
-| `aimrt_cfg.yaml` | AIMRT 运行时配置 + 本程序参数（见下） |
-| `zenoh_native_config.json5` | zenoh 连接配置（对端端点、组播开关） |
+| `aimrt_cfg.yaml` | AIMRT 运行时配置 |
+| `zenoh_native_config.json5` | zenoh 连接配置 |
 
-`aimrt_cfg.yaml` 上半部分是 AIMRT 运行时配置（插件、日志级别、执行器、channel
-后端），下半部分的 `MonitorSubscriberPyModule` 段是本程序自己的参数。AIMRT 会把
-这一段单独交给 worker 模块读取。
+`aimrt_cfg.yaml` 的一些自定义参数如下，支持用户修改：
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
-| `topics.*` | `/geniarm/...` | 订阅话题，键名决定消息类型（见下） |
+| `topics.*` | `/geniarm/...` | 订阅话题 |
 | `refresh_interval_ms` | `2` | 绘图刷新间隔（ms），实际下限为 10 |
 | `initial_x_window_s` | `10.0` | 初始 X 轴宽度（秒） |
 | `y_range_min` | `0.001` | Y 轴最小范围 |
 | `ui_scale` | `1.0` | 界面缩放因子 |
 
-`topics` 的**键名**必须属于以下四种之一，它同时也决定了 protobuf 消息类型：
+`topics` 的**话题**必须属于以下四种之一：
 
-| 键名 | 消息类型 |
+| 话题 | 消息类型 |
 |------|----------|
 | `joint_state` | `aimrt.protocols.sensor.JointStateArray` |
 | `joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` |
 | `pose_current` | `robotic_arm.protocols.PoseStamped` |
 | `pose_expected` | `robotic_arm.protocols.PoseStamped` |
 
-机器人端 `ControlModule` 用 `using Pose = robotic_arm::protocols::PoseStamped`，
-所以线上类型是 `PoseStamped`，不是 `Pose`。
-
-插件的 `path` 填文件名即可（如 `libaimrt_zenoh_plugin.so`），程序会把 aimrt_py
+Zenoh 插件的 `path` 填文件名即可（如 `libaimrt_zenoh_plugin.so`），程序会把 aimrt_py
 所在目录加入 `LD_LIBRARY_PATH`，不必写绝对路径。
-
-> `aimrt.configurator.temp_cfg_path` 是 AIMRT 存放模块配置临时副本的目录。默认值
-> `./cfg/tmp` 会让 monitor 的工作目录里凭空多出一个 `cfg/` 目录，所以这里改到了
-> 系统临时目录。
 
 ## 远程连接
 
@@ -101,11 +92,4 @@ monitor 与控制器之间的 zenoh 连接由 `zenoh_native_config.json5` 描述
 > `/geniarm/servoj_cmd` 等话题并直接驱动机器人运动，且没有鉴权。把 zenoh
 > 端口暴露到不可信网络前，请先确认网络边界，或配置 zenoh 的 `access_control`。
 
-## 实现说明
-
-- 数据源是 AIMRT python 运行时 + zenoh 后端，与机器人使用同一套 AIMRT / zenoh
-  版本。只订阅 `aimrt_cfg.yaml` 列出的话题，组帧与 protobuf 解码在 C++ 侧完成。
-- AIMRT 运行时运行在独立子进程（`monitor/core/aimrt_worker.py`），通过管道把
-  解码后的消息送回 GUI。这样每个会话都能干净地重建，zenoh 配置错误也只终止
-  worker 而不会影响 GUI。
 

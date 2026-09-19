@@ -1,15 +1,15 @@
 // ArmMonitor 的 zenoh 连接配置。
-// 修改后重启 monitor 生效。
 {
   mode: "peer",
 
-  // 控制器端点。控制器需在该端口固定监听。
+  // 控制器端点，控制器可以在该端口固定监听。
+  // 如 "tcp/10.200.63.14:7447"
   connect: {
-    endpoints: ["tcp/10.200.63.14:7447"]
+    endpoints: []
   },
 
   // true = 保留同网段组播自动发现。
   scouting: {
-    multicast: { enabled: false }
+    multicast: { enabled: true }
   }
 }
