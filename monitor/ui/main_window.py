@@ -249,7 +249,7 @@ class MainWindow(QtWidgets.QMainWindow):
         }
 
         # Explicit initial paused state (signals are now wired)
-        self._plot_panel.set_paused(paused=True, readonly=False)
+        self._plot_panel.set_paused(paused=True)
         self._model.pause()
 
     # ------------------------------------------------------------------
@@ -429,7 +429,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Determine the latest timestamp for this series so the curve
         # only shows data collected *after* it was added to the plot.
         series = self._model.get_series(key)
-        start_time = series.times[-1] if (series and series.times) else None
+        start_time = series.last_time if series else None
 
         added = self._plot_panel.add_curve(key, label, start_time=start_time)
         if not added:
@@ -445,7 +445,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._model.reset_and_pause()
         else:
             self._model.reset_and_resume()
-        self._plot_panel.set_paused(paused=paused, readonly=False)
+        self._plot_panel.set_paused(paused=paused)
         # Force render so curves visually clear immediately (even when paused)
         self._plot_panel.update_curves(self._model, force=True)
         self._sync_plotted_keys()
@@ -454,7 +454,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Clear Curves: remove all curves & data, back to normal mode."""
         self._plot_panel.clear_all()
         self._model.reset_and_pause()
-        self._plot_panel.set_paused(paused=True, readonly=False)
+        self._plot_panel.set_paused(paused=True)
         self._sync_plotted_keys()
 
     def _on_pause_toggled(self, paused: bool) -> None:

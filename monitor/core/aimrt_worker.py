@@ -53,7 +53,6 @@ class PipeWriter:
         self._fd = fd
         self._buf = bytearray()
         self._lock = threading.Lock()
-        self.dropped = 0
         try:
             os.set_blocking(fd, False)
         except OSError:
@@ -64,9 +63,10 @@ class PipeWriter:
         record = struct.pack(">I", len(blob)) + blob
         with self._lock:
             if len(self._buf) + len(record) > _MAX_PENDING_BYTES:
-                # Reader is behind; drop at a record boundary to keep framing valid.
+                # The reader is behind. Drop what is buffered — a monitor only
+                # needs current data — and keep the framing valid by discarding
+                # at a record boundary.
                 self._buf.clear()
-                self.dropped += 1
             self._buf += record
             self._flush_locked()
 

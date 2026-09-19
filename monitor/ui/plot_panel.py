@@ -25,9 +25,9 @@ Auto-follow
 
 from __future__ import annotations
 
-import bisect
 from typing import Dict, Optional
 
+import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtCore, QtGui, QtWidgets
 
@@ -51,6 +51,38 @@ CURVE_COLORS = [
 
 HIGHLIGHT_WIDTH = 4.0
 NORMAL_WIDTH = 1.5
+
+# 单条曲线交给 pyqtgraph 的点数上限。超出就按桶取 min/max 抽稀，
+# 这样即使缩放到全部历史，单帧成本也只与像素宽相关。
+_MAX_PLOT_POINTS = 2000
+
+
+def _minmax_decimate(times: np.ndarray, values: np.ndarray,
+                     buckets: int) -> tuple[np.ndarray, np.ndarray]:
+    """按桶取最小/最大值，保留尖峰。返回约 2*buckets 个点。
+
+    以**最新样本**为基准分桶，避免丢掉实时端的数据。
+    """
+    n = len(times)
+    step = max(1, n // buckets)
+    m = step * buckets
+    if m < 2:
+        return times, values
+    off = n - m                      # 丢掉最旧的部分，保留最新的
+    tt = times[off:].reshape(buckets, step)
+    vv = values[off:].reshape(buckets, step)
+    imin = np.argmin(vv, axis=1)
+    imax = np.argmax(vv, axis=1)
+    first = np.minimum(imin, imax)
+    second = np.maximum(imin, imax)
+    rows = np.arange(buckets)
+    t_out = np.empty(buckets * 2, dtype=times.dtype)
+    v_out = np.empty(buckets * 2, dtype=values.dtype)
+    t_out[0::2] = tt[rows, first]
+    v_out[0::2] = vv[rows, first]
+    t_out[1::2] = tt[rows, second]
+    v_out[1::2] = vv[rows, second]
+    return t_out, v_out
 
 # Axis visual constants
 AXIS_PEN_NORMAL = pg.mkPen(color="#64748b", width=1)
@@ -210,8 +242,8 @@ class PlotPanel(QtWidgets.QWidget):
         self._highlighted: Optional[str] = None   # key of highlighted curve
         self._selected_axis: str | None = None     # 'x', 'y', or None
         self._paused = False                       # pause auto-follow
-        self._readonly = False                     # read-only mode (trajectory import)
         self._auto_y_enabled = True                # Y auto-range on; user scroll = off
+        self._latest_t = 0.0                       # 最新样本时间，用于 X 自动跟随
         self._curve_start_time: Dict[str, float] = {}  # t ≥ this → visible
         self._recording = False                    # recording state for toggle button icon/text
 
@@ -280,6 +312,12 @@ class PlotPanel(QtWidgets.QWidget):
         self._plot_widget.setLabel("bottom", "Time", units="s")
         self._plot_widget.getPlotItem().setMenuEnabled(False)
         self._plot_widget.getPlotItem().vb.setMenuEnabled(False)
+
+        # 初始 X 窗口宽度。_auto_range_x 会保留当前宽度跟随最新数据，
+        # 而 pyqtgraph 的默认宽度是 1.0，所以必须在这里按配置设一次，
+        # 否则 initial_x_window_s 形同虚设。
+        _w0 = max(float(config.initial_x_window_s), 0.1)
+        self._plot_widget.setXRange(-_w0 / 2.0, _w0 / 2.0, padding=0)
 
         # Wire axis click → selection
         self._x_axis.sigSelected.connect(self._on_axis_clicked)
@@ -398,29 +436,13 @@ class PlotPanel(QtWidgets.QWidget):
 
             # Determine start_time from existing model data
             series = model.get_series(key)
-            start_time = series.times[-1] if (series and series.times) else None
+            start_time = series.last_time if series else None
             self.add_curve(key, label, start_time=start_time)
             self.set_curve_visible(key, visible)
 
     # ------------------------------------------------------------------
     # Trajectory import — add curves for externally loaded data
     # ------------------------------------------------------------------
-
-    def add_trajectory_curves(self, curves: dict,
-                               labels: dict[str, str]) -> None:
-        """Add curves for imported trajectory data.
-
-        Each curve is added without a *start_time* filter so all historical
-        data is immediately visible.
-
-        Args:
-            curves: ``{key: (times, values)}``.
-            labels: ``{key: display_label}``.
-        """
-        for key in curves:
-            label = labels.get(key, key)
-            if key not in self._curves:
-                self.add_curve(key, label, start_time=None)
 
     def set_curve_visible(self, key: str, visible: bool) -> None:
         if key not in self._curves:
@@ -439,6 +461,29 @@ class PlotPanel(QtWidgets.QWidget):
     def curve_count(self) -> int:
         return len(self._curves)
 
+    def _visible_samples(self, series, key: str, x0: float, x1: float):
+        """取可见窗口内的样本，超过像素宽就抽稀。
+
+        只把窗口内的点交给 pyqtgraph，所以单帧成本与已积累的历史长度无关。
+        """
+        n_total = len(series)
+        t_first = series.first_time
+        t_last = series.last_time
+        # 用序列自身的首尾时间估算采样率，据此把时间窗口换算成样本数
+        rate = n_total / max(t_last - t_first, 1e-9)
+        n = int((x1 - x0) * rate * 1.5) + 32      # 留 50% 余量
+        times, values = series.tail(n)
+
+        start_t = self._curve_start_time.get(key, float("-inf"))
+        lo = x0 if start_t == float("-inf") else max(x0, start_t)
+        i = int(np.searchsorted(times, lo, side="left"))
+        j = int(np.searchsorted(times, x1, side="right"))
+        times, values = times[i:j], values[i:j]
+
+        if len(times) > _MAX_PLOT_POINTS:
+            times, values = _minmax_decimate(times, values, _MAX_PLOT_POINTS)
+        return times, values
+
     def update_curves(self, model, force: bool = False) -> None:
         """Push latest data from model into all curves.
 
@@ -452,18 +497,23 @@ class PlotPanel(QtWidgets.QWidget):
         of *force*, so the user's current viewport is preserved.
         """
         if not self._paused or force:
+            x0, x1 = self._plot_widget.getViewBox().viewRange()[0]
+            latest = 0.0
             for key, curve in self._curves.items():
                 series = model.get_series(key)
-                if series is None:
+                if series is None or len(series) == 0:
                     curve.setData([], [])  # clear visual when data gone
                     continue
-                times, values = series.times, series.values
-                start_t = self._curve_start_time.get(key, float("-inf"))
-                if start_t > float("-inf") and times:
-                    i = bisect.bisect_left(times, start_t)
-                    if i > 0:
-                        times, values = times[i:], values[i:]
+                if self._visible.get(key, True):
+                    lt = series.last_time
+                    if lt is not None and lt > latest:
+                        latest = lt
+                times, values = self._visible_samples(series, key, x0, x1)
                 curve.setData(times, values)
+            if latest > 0:
+                # X 自动跟随以模型的最新时间为准，而不是已推送窗口的右缘，
+                # 否则视图会被锁在窗口边上。
+                self._latest_t = latest
 
         if not self._paused:
             self._auto_range_x()
@@ -655,36 +705,24 @@ class PlotPanel(QtWidgets.QWidget):
     # Pause / resume
     # ------------------------------------------------------------------
 
-    def set_paused(self, paused: bool, readonly: bool = False) -> None:
+    def set_paused(self, paused: bool) -> None:
         """Unified state transition.
 
         Args:
             paused: ``True`` = freeze sampling & rendering.
-            readonly: ``True`` = trajectory-import read-only mode.
-                      Only ``🗑 清除曲线`` and ``⚙ 操作`` stay enabled.
         """
         self._paused = paused
-        self._readonly = readonly
 
         # ── Pause button ──────────────────────────────────────────
         self._pause_btn.blockSignals(True)
         self._pause_btn.setChecked(paused)
-        self._pause_btn.setEnabled(not readonly)
-        if readonly:
-            self._pause_btn.setText("📖  只读")
-            self._pause_btn.setToolTip("Read-only — click 清除曲线 to exit")
-        elif paused:
+        if paused:
             self._pause_btn.setText("▶  继续")
             self._pause_btn.setToolTip("Resume data sampling & auto-follow")
         else:
             self._pause_btn.setText("⏸  暂停")
             self._pause_btn.setToolTip("Pause data sampling & auto-follow")
         self._pause_btn.blockSignals(False)
-
-        # ── Toolbar buttons in readonly mode ─────────────────────
-        # Only 🗑 清除曲线 and ⚙ 操作 remain clickable.
-        self._reset_data_btn.setEnabled(not readonly)
-        self._record_toggle_btn.setEnabled(not readonly)
 
         # ── Sync model ───────────────────────────────────────────
         self.pause_toggled.emit(paused)
@@ -711,7 +749,7 @@ class PlotPanel(QtWidgets.QWidget):
 
     def _on_pause_toggled(self, checked: bool) -> None:
         """Signal handler — user clicked the pause button."""
-        self.set_paused(checked, readonly=False)
+        self.set_paused(checked)
 
     # ------------------------------------------------------------------
     # Auto-follow (pausable)
@@ -723,16 +761,9 @@ class PlotPanel(QtWidgets.QWidget):
         Preserves the current zoom level (range-width) so the user's
         scroll-wheel zoom on X is not overwritten.
         """
-        # Find the max time across all visible curves
-        t_max = 0.0
-        for key, curve in self._curves.items():
-            if not self._visible.get(key, True):
-                continue
-            data = curve.getData()
-            if data is None or data[0] is None or len(data[0]) == 0:
-                continue
-            t_max = max(t_max, data[0][-1])
-
+        # 最新时间取自模型（update_curves 里记录），不能用已推送的数据：
+        # 现在只推可见窗口，用它会把视图一步步锁在窗口右缘。
+        t_max = self._latest_t
         if t_max <= 0:
             return
 
@@ -761,8 +792,12 @@ class PlotPanel(QtWidgets.QWidget):
             if data is None or data[0] is None or len(data[0]) == 0:
                 continue
             vals = data[1]
-            y_min = min(y_min, min(vals))
-            y_max = max(y_max, max(vals))
+            if len(vals) == 0:
+                continue
+            # 用 np.min/np.max 并显式转成 Python float —— 直接把 numpy 标量
+            # 交给 pyqtgraph 会在其内部比较时触发 "overflow encountered in cast"。
+            y_min = min(y_min, float(np.min(vals)))
+            y_max = max(y_max, float(np.max(vals)))
         if y_min < y_max:
             # Enforce minimum Y range so tiny deviations remain visible
             data_range = y_max - y_min

@@ -10,47 +10,84 @@ from __future__ import annotations
 
 import time as _time
 from collections import deque
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 from PyQt5 import QtCore
 
 from monitor.core.record_client import RecordPlaybackClient
 
-_MAX_SAMPLES_UNLIMITED = None  # deque maxlen=None → no cap
-_MAX_SAMPLES_PER_SERIES = 200000  # safety cap to avoid unbounded memory growth
+# 每个序列的样本上限。超出后覆盖最旧的样本。
+_MAX_SAMPLES_PER_SERIES = 200000
 
 
 class JointStateSeries:
-    """Per-series ring buffer."""
+    """定长环形缓冲：时间为 float64、数值为 float32。
 
-    __slots__ = ("_times", "_values")
+    时间必须是 float64 —— float32 在 10^4 秒量级只剩毫秒分辨率，撑不住 500 Hz。
+    数值用 float32 足够（关节量有效位远不到 7 位），内存减半。
 
-    def __init__(self) -> None:
-        # Per-series safety cap to avoid unbounded growth when topics are noisy.
-        self._times: deque[float] = deque(maxlen=_MAX_SAMPLES_PER_SERIES)
-        self._values: deque[float] = deque(maxlen=_MAX_SAMPLES_PER_SERIES)
+    取值一律返回 numpy 数组，不再有 Python 逐元素的 list 拷贝。
+    """
 
+    __slots__ = ("_times", "_values", "_count", "_head", "cap")
+
+    def __init__(self, cap: int = _MAX_SAMPLES_PER_SERIES) -> None:
+        self.cap = int(cap)
+        self._times = np.empty(self.cap, dtype=np.float64)
+        self._values = np.empty(self.cap, dtype=np.float32)
+        self._count = 0   # 有效样本数，<= cap
+        self._head = 0    # 下一个写入位置
+
+    # -- 写入 --------------------------------------------------------------
     def append(self, t: float, v: float) -> None:
-        self._times.append(t)
-        self._values.append(v)
+        self._times[self._head] = t
+        self._values[self._head] = v
+        self._head += 1
+        if self._head == self.cap:
+            self._head = 0
+        if self._count < self.cap:
+            self._count += 1
 
-    def trim_older_than(self, t_min: float) -> None:
-        """Discard samples with time < *t_min*."""
-        while self._times and self._times[0] < t_min:
-            self._times.popleft()
-            self._values.popleft()
+    # -- 读取 --------------------------------------------------------------
+    def __len__(self) -> int:
+        return self._count
+
+    def tail(self, n: int) -> Tuple[np.ndarray, np.ndarray]:
+        """最后 *n* 个样本，按时间顺序。未回绕时是零拷贝视图。"""
+        n = min(int(n), self._count)
+        if n <= 0:
+            return self._times[:0], self._values[:0]
+        start = self._head - n
+        if start >= 0:
+            return self._times[start:self._head], self._values[start:self._head]
+        # 已回绕：跨过缓冲区末尾，分两段
+        return (
+            np.concatenate((self._times[start:], self._times[:self._head])),
+            np.concatenate((self._values[start:], self._values[:self._head])),
+        )
+
+    def ordered(self) -> Tuple[np.ndarray, np.ndarray]:
+        """全部样本，按时间顺序。"""
+        return self.tail(self._count)
 
     @property
-    def times(self) -> List[float]:
-        return list(self._times)
+    def last_time(self) -> Optional[float]:
+        if not self._count:
+            return None
+        return float(self._times[self._head - 1])
 
     @property
-    def values(self) -> List[float]:
-        return list(self._values)
+    def first_time(self) -> Optional[float]:
+        if not self._count:
+            return None
+        return float(self._times[(self._head - self._count) % self.cap])
 
     @property
     def latest(self) -> Optional[float]:
-        return self._values[-1] if self._values else None
+        if not self._count:
+            return None
+        return float(self._values[self._head - 1])
 
 
 class DataModel(QtCore.QObject):
@@ -357,47 +394,6 @@ class DataModel(QtCore.QObject):
         self._source_time_origin_ns = None
         self._arrival_time_origin_ns = None
         self._last_series_t = 0.0
-
-    def load_external_data(self, curves: dict) -> float:
-        """Load externally recorded trajectory data (e.g. from NPZ import).
-
-        This bypasses the normal ``ingest()`` pipeline
-        and writes directly into the time series.
-
-        Args:
-            curves: ``{key: (times_list, values_list)}``  where both lists
-                    contain ``float`` values.
-
-        Returns:
-            The maximum timestamp found across all imported curves (so the
-            caller can set the plot view accordingly).
-        """
-        max_t = 0.0
-        for key, (times, values) in curves.items():
-            if key not in self._series:
-                self._series[key] = JointStateSeries()
-            for t, v in zip(times, values):
-                self._series[key].append(t, v)
-                if t > max_t:
-                    max_t = t
-
-            # Also write the latest value into the buffer so the data tables
-            # show something immediately.
-            if values:
-                self._latest_buffer[key] = values[-1]
-
-        # Keep realtime append monotonic after imported data.
-        if max_t > self._last_series_t:
-            self._last_series_t = max_t
-        if self._start_time is None:
-            import time as _time
-            self._start_time = _time.time()
-
-        self.data_updated.emit(
-            {"new_keys": list(curves.keys()),
-             "latest": dict(self._latest_buffer)}
-        )
-        return max_t
 
     @property
     def latest_values(self) -> Dict[str, float]:
