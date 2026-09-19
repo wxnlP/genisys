@@ -18,14 +18,14 @@ python -m monitor.main
 
 | 操作 | 说明 |
 |------|------|
-| 🟢 **Connect** / 🔴 **Disconnect** | 连接/断开 zenoh连接 |
-| ▶ **继续** / ⏸ **暂停** | 开始/停止数据采样 |
+| 🟢 **Connect** / 🔴 **Disconnect** | 连接/断开 AIMRT 会话 |
+| ▶ **继续** / ⏸ **暂停** | 开始/停止采样与绘图 |
 | 🗑 **清除曲线** | 移除所有曲线，回到初始状态 |
 | 🔄 **重置数据** | 清空历史数据，曲线重新开始绘制 |
-| 💾 **保存CSV** | 将当前曲线数据导出为 CSV |
-| 📏 **选区** → 💾 **导出选区** | 选择时间范围后导出该区间数据 |
-| ⚙ **操作** | 显示/隐藏全部曲线；**导出/加载标签配置**（`.plottag`）；**导出/导入轨迹**（`.npz`） |
+| ▶️ **开始录制** / ⏹ **停止录制** | 通过机器人的 record_playback 插件落盘；🛠 **录制配置** 可改参数与 RPC 地址 |
+| ⚙ **操作** | 显示/隐藏全部曲线；**导出/加载标签配置**（`.plottag`） |
 | **右击表格** | 添加/移除曲线到绘图区 |
+| **右击图例** | 隐藏/显示/删除该曲线 |
 
 ### 数据面板
 
@@ -42,18 +42,24 @@ python -m monitor.main
 
 ## 配置
 
-编辑 `config.yaml` 后重启生效。主要参数：
+改完重启 monitor 生效。配置文件两个：
+
+| 文件 | 内容 |
+|------|------|
+| `aimrt_cfg.yaml` | AIMRT 运行时配置 + 本程序参数（见下） |
+| `zenoh_native_config.json5` | zenoh 连接配置（对端端点、组播开关） |
+
+`aimrt_cfg.yaml` 上半部分是 AIMRT 运行时配置（插件、日志级别、执行器、channel
+后端），下半部分的 `MonitorSubscriberPyModule` 段是本程序自己的参数。AIMRT 会把
+这一段单独交给 worker 模块读取。
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
 | `topics.*` | `/geniarm/...` | 订阅话题，键名决定消息类型（见下） |
-| `aimrt.multicast_scouting` | `true` | 同网段靠组播零配置发现 robot |
-| `aimrt.connect_endpoints` | `[]` | 主动连到对端，如 `["tcp/192.168.1.100:7447"]` |
-| `aimrt.listen_endpoints` | `[]` | 被对端连入时填写固定端口 |
-| `aimrt.native_cfg_path` | `""` | 高级：使用自己的 zenoh json5 |
-| `aimrt.log_level` | `warn` | AIMRT 运行时日志级别 |
-| `refresh_interval_ms` | `10` | 绘图刷新间隔（ms） |
+| `refresh_interval_ms` | `2` | 绘图刷新间隔（ms），实际下限为 10 |
 | `initial_x_window_s` | `10.0` | 初始 X 轴宽度（秒） |
+| `y_range_min` | `0.001` | Y 轴最小范围 |
+| `ui_scale` | `1.0` | 界面缩放因子 |
 
 `topics` 的**键名**必须属于以下四种之一，它同时也决定了 protobuf 消息类型：
 
@@ -67,28 +73,29 @@ python -m monitor.main
 机器人端 `ControlModule` 用 `using Pose = robotic_arm::protocols::PoseStamped`，
 所以线上类型是 `PoseStamped`，不是 `Pose`。
 
+插件的 `path` 填文件名即可（如 `libaimrt_zenoh_plugin.so`），程序会把 aimrt_py
+所在目录加入 `LD_LIBRARY_PATH`，不必写绝对路径。
+
+> `aimrt.configurator.temp_cfg_path` 是 AIMRT 存放模块配置临时副本的目录。默认值
+> `./cfg/tmp` 会让 monitor 的工作目录里凭空多出一个 `cfg/` 目录，所以这里改到了
+> 系统临时目录。
+
 ## 远程连接
 
-同一台机器或本地子网组播能通时，**无需任何配置**。
+monitor 与控制器之间的 zenoh 连接由 `zenoh_native_config.json5` 描述：
 
-跨机器 / 跨网段时，先确认 robot 端有一个固定监听端口——AIMRT 的 zenoh 插件
-默认用 zenoh 默认配置，peer 模式监听的是**随机临时端口**，直接填 7447 通常连不通。
-需要在 robot 端提供 `native_cfg_path` 指定一个 json5，例如：
+- **同网段**：`scouting.multicast.enabled` 设为 `true`，不必填写端点。
+- **跨网段**：设为 `false`，并在 `connect.endpoints` 填入控制器的固定监听地址，
+  例如 `["tcp/10.200.63.14:7447"]`。
 
-```json5
-{
-  mode: "peer",
-  listen: { endpoints: { peer: ["tcp/0.0.0.0:7447"] } },
-}
-```
+控制器端必须有固定监听端口：AIMRT 的 zenoh 插件默认走 zenoh 默认配置，peer
+模式监听**随机临时端口**，没有固定端口就无从连接。仓库已提供两份配置，并由
+`geniarm_*.yaml` 的 `native_cfg_path` 引用：
 
-并在 `src/install/linux/bin/cfg/*.yaml` 的 `zenoh_plugin` 下取消注释
-`native_cfg_path` 指向它。之后 monitor 端填：
-
-```yaml
-aimrt:
-  connect_endpoints: ["tcp/<robot_ip>:7447"]
-```
+| 文件 | 端口 |
+|------|------|
+| `src/install/linux/bin/cfg/zenoh_native_config.json5` | 真机 7447 |
+| `src/install/linux/bin/cfg/zenoh_native_config_sim.json5` | 仿真 7448 |
 
 > 安全提示：这套系统里 zenoh 不只是"读"通道——robot 通过 zenoh 订阅
 > `/geniarm/servoj_cmd` 等话题并直接驱动机器人运动，且没有鉴权。把 zenoh
@@ -97,7 +104,7 @@ aimrt:
 ## 实现说明
 
 - 数据源是 AIMRT python 运行时 + zenoh 后端，与机器人使用同一套 AIMRT / zenoh
-  版本。只订阅 `config.yaml` 列出的话题，组帧与 protobuf 解码在 C++ 侧完成。
+  版本。只订阅 `aimrt_cfg.yaml` 列出的话题，组帧与 protobuf 解码在 C++ 侧完成。
 - AIMRT 运行时运行在独立子进程（`monitor/core/aimrt_worker.py`），通过管道把
   解码后的消息送回 GUI。这样每个会话都能干净地重建，zenoh 配置错误也只终止
   worker 而不会影响 GUI。

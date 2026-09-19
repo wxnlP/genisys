@@ -18,25 +18,24 @@ has been declared, and that path cannot be avoided from Python.
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import pickle
-import socket
 import struct
 import sys
-import tempfile
 import threading
 from typing import Optional
 
 import yaml
 
-from monitor.core.config import config
 from monitor.core.msg_decode import MSGTYPE_BY_SOURCE, message_to_dict
 
 logger = logging.getLogger("monitor.aimrt_worker")
 
-_ZENOH_PLUGIN_NAME = "libaimrt_zenoh_plugin.so"
+# Must match the module name declared in aimrt.module.modules and the section
+# holding this program's settings in the AIMRT config.
+_MODULE_NAME = "MonitorSubscriberPyModule"
+
 
 # Flush the pending buffer past this size so a stalled reader cannot block the
 # AIMRT dispatch thread.
@@ -84,132 +83,6 @@ class PipeWriter:
 
 
 # ---------------------------------------------------------------------------
-# Preflight / runtime config
-# ---------------------------------------------------------------------------
-
-def _assert_port_free(host: str, port: int, endpoint: str) -> None:
-    family = socket.AF_INET6 if ":" in host else socket.AF_INET
-    probe = socket.socket(family, socket.SOCK_STREAM)
-    try:
-        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        probe.bind((host, port))
-    except OSError as exc:
-        raise OSError(
-            f"listen endpoint {endpoint} is unavailable: {exc}. Another process "
-            "(or an editor port-forward / stale instance) may be holding it."
-        ) from exc
-    finally:
-        probe.close()
-
-
-def preflight() -> None:
-    """Validate the configuration before the AIMRT runtime is started.
-
-    The zenoh plugin only logs when a session fails to open and then keeps
-    using the invalid session, which crashes on the next declaration.
-    """
-    native = config.aimrt_native_cfg_path
-    if native:
-        if not os.path.isfile(native):
-            raise FileNotFoundError(f"native_cfg_path not found: {native}")
-        return
-
-    for ep in config.aimrt_listen_endpoints:
-        proto, _, addr = ep.partition("/")
-        if proto != "tcp":
-            continue
-        host, _, port_s = addr.partition(":")
-        try:
-            port = int(port_s)
-        except ValueError:
-            raise ValueError(f"bad listen endpoint (no port): {ep}")
-        _assert_port_free(host, port, ep)
-
-
-def write_native_zenoh_cfg(run_dir: str) -> Optional[str]:
-    """Build a zenoh native json5 from config.yaml.
-
-    Returns ``None`` when the settings are all zenoh defaults, which is the
-    same-LAN zero-config case (peer mode + multicast scouting).
-    """
-    connect = config.aimrt_connect_endpoints
-    listen = config.aimrt_listen_endpoints
-    multicast = config.aimrt_multicast_scouting
-
-    if not connect and not listen and multicast:
-        return None
-
-    native: dict = {"mode": "peer"}
-    if connect:
-        native["connect"] = {"endpoints": list(connect)}
-    if listen:
-        native["listen"] = {"endpoints": {"peer": list(listen)}}
-    native["scouting"] = {"multicast": {"enabled": bool(multicast)}}
-
-    path = os.path.join(run_dir, "zenoh_native.json5")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(native, f, indent=2)
-    logger.info("zenoh native config: %s", native)
-    return path
-
-
-def write_runtime_config(run_dir: str) -> str:
-    import aimrt_py
-
-    pkg_dir = os.path.dirname(os.path.abspath(aimrt_py.__file__))
-    plugin_path = os.path.join(pkg_dir, _ZENOH_PLUGIN_NAME)
-    if not os.path.isfile(plugin_path):
-        raise FileNotFoundError(
-            f"AIMRT zenoh plugin not found at {plugin_path} — the aimrt_py "
-            "package seems incomplete"
-        )
-
-    plugin_options: dict = {}
-    native_path = config.aimrt_native_cfg_path
-    if native_path:
-        plugin_options["native_cfg_path"] = os.path.abspath(native_path)
-    else:
-        generated = write_native_zenoh_cfg(run_dir)
-        if generated:
-            plugin_options["native_cfg_path"] = generated
-
-    cfg = {
-        "aimrt": {
-            "plugin": {
-                "plugins": [{
-                    "name": "zenoh_plugin",
-                    "path": plugin_path,
-                    "options": plugin_options,
-                }]
-            },
-            "log": {
-                "core_lvl": config.aimrt_log_level,
-                "backends": [{"type": "console"}],
-            },
-            "executor": {
-                "executors": [{
-                    "name": "monitor_executor",
-                    "type": "asio_thread",
-                    "options": {"thread_num": 2},
-                }]
-            },
-            "channel": {
-                "backends": [{"type": "zenoh"}],
-                "sub_topics_options": [{
-                    "topic_name": "(.*)",
-                    "enable_backends": ["zenoh"],
-                }],
-            },
-        }
-    }
-
-    cfg_path = os.path.join(run_dir, "aimrt_cfg.yaml")
-    with open(cfg_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True)
-    return cfg_path
-
-
-# ---------------------------------------------------------------------------
 # Worker main
 # ---------------------------------------------------------------------------
 
@@ -230,16 +103,35 @@ def _make_callback(source: str, writer: PipeWriter):
     return _callback
 
 
-def run(data_fd: int) -> int:
-    writer = PipeWriter(data_fd)
+def _read_module_topics(module) -> dict:
+    """Read this module's ``topics`` from the AIMRT config.
 
+    AIMRT writes the module's own config section to a file and exposes the path
+    through the configurator, so the worker needs no knowledge of the main
+    config file beyond what it was started with.
+    """
     try:
-        preflight()
-        run_dir = tempfile.mkdtemp(prefix="armmonitor_aimrt_")
-        cfg_path = write_runtime_config(run_dir)
+        path = module.GetConfigurator().GetConfigFilePath()
     except Exception as exc:
-        print(f"config error: {exc}", file=sys.stderr, flush=True)
-        writer.send("error", f"config error: {exc}")
+        print(f"cannot read module config: {exc}", file=sys.stderr, flush=True)
+        return {}
+    if not path or not os.path.isfile(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    raw = data.get("topics")
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): str(v) for k, v in raw.items()}
+
+
+def run(data_fd: int, cfg_path: str) -> int:
+    writer = PipeWriter(data_fd)
+    cfg_path = os.path.abspath(cfg_path)
+    if not os.path.isfile(cfg_path):
+        message = f"AIMRT config not found: {cfg_path}"
+        print(message, file=sys.stderr, flush=True)
+        writer.send("error", message)
         return 2
 
     print(f"aimrt worker: cfg={cfg_path}", file=sys.stderr, flush=True)
@@ -256,11 +148,12 @@ def run(data_fd: int) -> int:
         writer.send("error", f"aimrt init failed: {exc}")
         return 3
 
-    module = core.CreateModule("MonitorSubscriberPyModule")
+    module = core.CreateModule(_MODULE_NAME)
     channel = module.GetChannelHandle()
+    topics = _read_module_topics(module)
 
     subscribed: list[str] = []
-    for source, topic in config.topics.items():
+    for source, topic in topics.items():
         msg_type = MSGTYPE_BY_SOURCE.get(source)
         if msg_type is None:
             print(f"no protobuf type mapped for {topic} ({source}) — skipped",
@@ -275,7 +168,9 @@ def run(data_fd: int) -> int:
         subscribed.append(f"{source} ({topic})")
 
     if not subscribed:
-        writer.send("error", "no AIMRT topic could be subscribed — check config.yaml")
+        writer.send("error",
+                    f"no AIMRT topic could be subscribed — check the "
+                    f"'{_MODULE_NAME}: topics:' section of the AIMRT config")
         return 4
 
     writer.send("ready", {"topics": subscribed})
@@ -291,6 +186,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="AIMRT channel worker for ArmMonitor")
     parser.add_argument("--data-fd", type=int, required=True,
                         help="inherited fd used to stream decoded messages")
+    parser.add_argument("--config", required=True,
+                        help="path to the AIMRT runtime YAML")
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -298,7 +195,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         stream=sys.stderr,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-    return run(args.data_fd)
+    return run(args.data_fd, args.config)
 
 
 if __name__ == "__main__":

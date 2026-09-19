@@ -355,7 +355,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._transport.data_received.connect(self._on_data_received)
         self._transport.connection_changed.connect(self._on_connection_changed)
         self._transport.error_occurred.connect(self._on_error)
-        self._transport.raw_data_received.connect(self._on_raw_data)
         self._data_panel.add_to_plot_requested.connect(self._on_add_to_plot)
         self._plot_panel.clear_data_requested.connect(self._on_reset_data)
         self._plot_panel.clear_curves_requested.connect(self._on_clear_curves)
@@ -403,10 +402,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # meter and status feel responsive even when batches are processed
         # at the UI tick.
         self._last_update = QtCore.QTime.currentTime()
-
-    def _on_raw_data(self, key: str, size: int) -> None:
-        """Log raw data for debugging — shows in status bar briefly."""
-        logger.info("Raw data: key=%s  size=%d", key, size)
 
     def _on_connection_changed(self, connected: bool) -> None:
         self._btn_connect.setEnabled(not connected)

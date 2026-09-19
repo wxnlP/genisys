@@ -8,8 +8,7 @@ instead of the whole application.
 
 Interface::
 
-    signals: data_received(dict), connection_changed(bool),
-             error_occurred(str), raw_data_received(str, int)
+    signals: data_received(dict), connection_changed(bool), error_occurred(str)
     methods: start() -> bool, stop()
     props:   is_active, is_ready, message_count
 """
@@ -63,7 +62,6 @@ class AimrtSubscriber(QtCore.QObject):
     """Supervises an AIMRT worker process and emits Qt signals."""
 
     data_received = QtCore.pyqtSignal(dict)
-    raw_data_received = QtCore.pyqtSignal(str, int)  # kept for interface parity
     connection_changed = QtCore.pyqtSignal(bool)
     error_occurred = QtCore.pyqtSignal(str)
 
@@ -90,7 +88,7 @@ class AimrtSubscriber(QtCore.QObject):
             return True
 
         try:
-            import aimrt_py  # noqa: F401  (fail fast with a clear message)
+            import aimrt_py
         except Exception as exc:
             msg = ("aimrt_py is not importable — install the AIMRT python wheel "
                    f"matching your robot's AIMRT version ({exc})")
@@ -100,6 +98,10 @@ class AimrtSubscriber(QtCore.QObject):
 
         python = sys.executable or "python3"
         root = _workspace_root()
+        cfg_path = os.path.join(root, "monitor", "aimrt_cfg.yaml")
+        if not os.path.isfile(cfg_path):
+            self.error_occurred.emit(f"AIMRT config not found: {cfg_path}")
+            return False
 
         try:
             read_fd, write_fd = os.pipe()
@@ -109,8 +111,12 @@ class AimrtSubscriber(QtCore.QObject):
 
         env = dict(os.environ)
         env["PYTHONPATH"] = root + os.pathsep + env.get("PYTHONPATH", "")
+        aimrt_dir = os.path.dirname(os.path.abspath(aimrt_py.__file__))
+        env["LD_LIBRARY_PATH"] = (
+            aimrt_dir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+        ).rstrip(os.pathsep)
         cmd = [python, "-u", "-m", "monitor.core.aimrt_worker",
-               "--data-fd", str(write_fd)]
+               "--data-fd", str(write_fd), "--config", cfg_path]
 
         try:
             proc = subprocess.Popen(
@@ -329,6 +335,7 @@ class AimrtSubscriber(QtCore.QObject):
         if self._msg_count == 0 and self._active:
             logger.warning(
                 "AIMRT session is up but no data received in %d ms — check that "
-                "the robot is publishing and that topics match config.yaml",
+                "the robot is publishing and that the topics in the AIMRT config "
+                "module section match it",
                 _NO_DATA_WARN_MS,
             )

@@ -39,7 +39,7 @@ POSE_SCALAR_FIELDS = (
     "roll", "pitch", "yaw",
 )
 
-# source name (config.yaml topics key) → protobuf message class.
+# source name (AIMRT config topics key) → protobuf message class.
 # ``robotic_arm.protocols.PoseStamped`` lives in monitor/proto/pose_pb2.py.
 MSGTYPE_BY_SOURCE = {
     "joint_state": JointStateArray,

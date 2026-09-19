@@ -1,0 +1,64 @@
+# ArmMonitor 配置。
+# 修改后重启 monitor 生效。
+#
+# 上半部分是 AIMRT 运行时配置，下半部分 MonitorSubscriberPyModule 是本程序
+# 自己的参数。AIMRT 会把下半部分单独交给 worker 模块读取。
+
+aimrt:
+  configurator:
+    # AIMRT 会把模块配置的临时副本写到这个目录。默认值 ./cfg/tmp 会在 monitor
+    # 的工作目录里凭空多出一个 cfg/ 目录，这里改到系统临时目录。
+    temp_cfg_path: /tmp/armmonitor_aimrt
+
+  plugin:
+    plugins:
+      - name: zenoh_plugin
+        # 只写文件名即可，程序会把 aimrt_py 所在目录加入 LD_LIBRARY_PATH。
+        path: libaimrt_zenoh_plugin.so
+        options:
+          native_cfg_path: ./monitor/zenoh_native_config.json5
+
+  log:
+    # Trace / Debug / Info / Warn / Error / Fatal / Off
+    core_lvl: Warn
+    backends:
+      - type: console
+
+  executor:
+    executors:
+      - name: monitor_executor
+        type: asio_thread
+        options:
+          thread_num: 2
+
+  channel:
+    backends:
+      - type: zenoh
+    sub_topics_options:
+      - topic_name: "(.*)"
+        enable_backends: [zenoh]
+
+  module:
+    modules:
+      - name: MonitorSubscriberPyModule
+        log_lvl: Warn
+
+
+# ---------------------------------------------------------------------------
+# MonitorSubscriberPyModule — 本程序的参数
+# ---------------------------------------------------------------------------
+MonitorSubscriberPyModule:
+  # 订阅话题。键名必须是以下四个之一，它同时决定 protobuf 消息类型：
+  #   joint_state / joint_cmd        → aimrt.protocols.sensor.JointStateArray / JointCommandArray
+  #   pose_current / pose_expected   → robotic_arm.protocols.PoseStamped
+  topics:
+    joint_state: "/geniarm/joint_state"
+    joint_cmd: "/geniarm/joint_cmd"
+    pose_current: "/geniarm/pose_current"
+    pose_expected: "/geniarm/pose_expected"
+
+  # 界面
+  refresh_interval_ms: 2      # 绘图刷新间隔（毫秒），实际下限为 10
+  initial_x_window_s: 10.0    # 初始 X 轴宽度（秒）
+  y_range_min: 0.001          # Y 轴最小范围
+  ui_scale: 1.0               # >1 放大，<1 缩小，1.0 跟随系统 DPI

@@ -11,3 +11,6 @@ __pycache__/
 test/
 .agents/
 .dsh*
+# AIMRT 默认会把模块配置临时副本写到工作目录下的 cfg/tmp；
+# aimrt_cfg.yaml 里已把它改到系统临时目录，这里仅作兜底。
+/cfg/
