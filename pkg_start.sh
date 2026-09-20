@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source ./setup.sh
+
 PROJECT_PATH="$(pwd)"
 CFG_DIR="${PROJECT_PATH}/build/cfg"
 
