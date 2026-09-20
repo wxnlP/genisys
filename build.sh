@@ -35,7 +35,7 @@ cmake -B build \
     -Dzstd_DOWNLOAD_URL=https://gitee.com/mirrors/facebook-zstd/repository/archive/v1.5.7.zip \
     -Dzlib_DOWNLOAD_URL=https://gitee.com/mirrors/zlib/repository/archive/v1.3.1.zip \
     -DCMAKE_INSTALL_PREFIX=./build/install \
-    -DAIMRT_BUILD_WITH_ROS2=OFF \
+    -DAIMRT_BUILD_WITH_ROS2=ON \
     -DAIMRT_BUILD_WITH_PROTOBUF=ON \
     -DAIMRT_BUILD_ROS2_PLUGIN=OFF \
     -DAIMRT_BUILD_PROTOCOLS=ON \

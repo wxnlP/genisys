@@ -1,0 +1,5 @@
+Joint position
+float64 v
+float64 a
+---
+MoveResponse error

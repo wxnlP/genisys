@@ -1,0 +1,6 @@
+Joint[] position
+float64 r
+float64 v
+float64 a
+---
+MoveResponse error

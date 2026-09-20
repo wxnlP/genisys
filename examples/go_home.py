@@ -12,7 +12,7 @@ Go Home Demo — 回原点
 import requests
 import json
 
-URL = "http://127.0.0.1:50080/rpc/robotic_arm.protocols.MoveControlService/MoveJ"
+URL = "http://127.0.0.1:50080/rpc/ros2_proto/srv/MoveJ"
 
 # 原点：所有关节角度归零
 payload = {

@@ -63,174 +63,177 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     sub_servol_cmd_ = ctx_ptr_->CreateSubscriber<ServoLCommand>(
         topic_sub_servol_cmd_, std::bind(&ControlModule::ServoLCommandCallback, this, std::placeholders::_1));
 
-    // 创建 RPC 服务，传入控制器指针
-    auto server_handle = ctx_ptr_->CreateServer<robotic_arm::protocols::MoveControlServiceCoServer>();
+    // 创建 RPC 服务
+    auto movej_handle = ctx_ptr_->CreateServer<rpc_srv::MoveJCoServer>();
+    auto movej_pose_handle = ctx_ptr_->CreateServer<rpc_srv::MoveJPoseCoServer>();
+    auto movej_multi_handle = ctx_ptr_->CreateServer<rpc_srv::MoveJMultiCoServer>();
+    auto movej_pose_multi_handle = ctx_ptr_->CreateServer<rpc_srv::MoveJPoseMultiCoServer>();
+    auto movel_handle = ctx_ptr_->CreateServer<rpc_srv::MoveLCoServer>();
+    auto movel_multi_handle = ctx_ptr_->CreateServer<rpc_srv::MoveLMultiCoServer>();
+    auto gripper_handle = ctx_ptr_->CreateServer<rpc_srv::GripperCoServer>();
 
     // MoveJ 服务处理
-    server_handle->MoveJ.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                            const ::robotic_arm::protocols::MoveJRequest& req,
-                                            ::robotic_arm::protocols::MoveResponse& rsp) {
+    movej_handle->MoveJ.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                           const rpc_srv::MoveJ_Request& req,
+                                           rpc_srv::MoveJ_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJ请求\n---");
       ArmMotion::Joint6Dof target_joint;
-      for (int i = 0; i < 6 && i < req.position().position_size(); ++i) {
-        target_joint[i] = req.position().position(i);
+      for (int i = 0; i < 6; ++i) {
+        target_joint[i] = req.position.position[i];
       }
 
-      int ret = arm_controller_->MoveJ(target_joint, req.v(), req.a());
+      int ret = arm_controller_->MoveJ(target_joint, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
-        rsp.mutable_error()->set_code(0);
-        rsp.mutable_error()->set_msg("MoveJ succeeded");
+        rsp.error.code = 0;
+        rsp.error.msg = "MoveJ succeeded";
       } else {
-        rsp.mutable_error()->set_code(ret);
-        rsp.mutable_error()->set_msg("MoveJ failed");
+        rsp.error.code = ret;
+        rsp.error.msg = "MoveJ failed";
       }
 
       return aimrt::rpc::Status();
     });
 
     // MoveJPose 服务处理（MoveJ 的位姿输入重载）
-    server_handle->MoveJPose.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                const ::robotic_arm::protocols::MoveJPoseRequest& req,
-                                                ::robotic_arm::protocols::MoveResponse& rsp) {
+    movej_pose_handle->MoveJPose.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                    const rpc_srv::MoveJPose_Request& req,
+                                                    rpc_srv::MoveJPose_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJPose请求\n---");
       ArmMotion::Pose6Dof target_pose(
-          req.pose().position().x(), req.pose().position().y(), req.pose().position().z(),
-          req.pose().orientation().w(), req.pose().orientation().x(),
-          req.pose().orientation().y(), req.pose().orientation().z());
+          req.pose.position.x, req.pose.position.y, req.pose.position.z,
+          req.pose.orientation.w, req.pose.orientation.x,
+          req.pose.orientation.y, req.pose.orientation.z);
 
-      int ret = arm_controller_->MoveJ(target_pose, req.v(), req.a());
+      int ret = arm_controller_->MoveJ(target_pose, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
-        rsp.mutable_error()->set_code(0);
-        rsp.mutable_error()->set_msg("MoveJPose succeeded");
+        rsp.error.code = 0;
+        rsp.error.msg = "MoveJPose succeeded";
       } else {
-        rsp.mutable_error()->set_code(ret);
-        rsp.mutable_error()->set_msg("MoveJPose failed");
+        rsp.error.code = ret;
+        rsp.error.msg = "MoveJPose failed";
       }
 
       return aimrt::rpc::Status();
     });
 
     // MoveJMulti 服务处理
-    server_handle->MoveJMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                 const ::robotic_arm::protocols::MoveJMultiRequest& req,
-                                                 ::robotic_arm::protocols::MoveResponse& rsp) {
+    movej_multi_handle->MoveJMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                      const rpc_srv::MoveJMulti_Request& req,
+                                                      rpc_srv::MoveJMulti_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJMuti请求\n---");
       std::vector<ArmMotion::Joint6Dof> points;
-      points.reserve(req.position_size());
-      for (int i = 0; i < req.position_size(); ++i) {
-        const auto& j = req.position(i);
-        points.emplace_back(j.position(0), j.position(1), j.position(2),
-                            j.position(3), j.position(4), j.position(5));
+      points.reserve(req.position.size());
+      for (const auto& j : req.position) {
+        points.emplace_back(j.position[0], j.position[1], j.position[2],
+                            j.position[3], j.position[4], j.position[5]);
       }
 
-      int ret = arm_controller_->MoveJMulti(points, req.r(), req.v(), req.a());
+      int ret = arm_controller_->MoveJMulti(points, req.r, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
-        rsp.mutable_error()->set_code(0);
-        rsp.mutable_error()->set_msg("MoveJMuti succeeded");
+        rsp.error.code = 0;
+        rsp.error.msg = "MoveJMuti succeeded";
       } else {
-        rsp.mutable_error()->set_code(ret);
-        rsp.mutable_error()->set_msg("MoveJMuti failed");
+        rsp.error.code = ret;
+        rsp.error.msg = "MoveJMuti failed";
       }
 
       return aimrt::rpc::Status();
     });
 
     // MoveJPoseMulti 服务处理（MoveJMulti 的位姿输入重载）
-    server_handle->MoveJPoseMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                     const ::robotic_arm::protocols::MoveJPoseMultiRequest& req,
-                                                     ::robotic_arm::protocols::MoveResponse& rsp) {
+    movej_pose_multi_handle->MoveJPoseMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                               const rpc_srv::MoveJPoseMulti_Request& req,
+                                                               rpc_srv::MoveJPoseMulti_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJPoseMulti请求\n---");
       std::vector<ArmMotion::Pose6Dof> points;
-      points.reserve(req.pose_size());
-      for (int i = 0; i < req.pose_size(); ++i) {
-        const auto& p = req.pose(i);
+      points.reserve(req.pose.size());
+      for (const auto& p : req.pose) {
         points.emplace_back(
-            p.position().x(), p.position().y(), p.position().z(),
-            p.orientation().w(), p.orientation().x(),
-            p.orientation().y(), p.orientation().z());
+            p.position.x, p.position.y, p.position.z,
+            p.orientation.w, p.orientation.x,
+            p.orientation.y, p.orientation.z);
       }
 
-      int ret = arm_controller_->MoveJMulti(points, req.r(), req.v(), req.a());
+      int ret = arm_controller_->MoveJMulti(points, req.r, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
-        rsp.mutable_error()->set_code(0);
-        rsp.mutable_error()->set_msg("MoveJPoseMulti succeeded");
+        rsp.error.code = 0;
+        rsp.error.msg = "MoveJPoseMulti succeeded";
       } else {
-        rsp.mutable_error()->set_code(ret);
-        rsp.mutable_error()->set_msg("MoveJPoseMulti failed");
+        rsp.error.code = ret;
+        rsp.error.msg = "MoveJPoseMulti failed";
       }
 
       return aimrt::rpc::Status();
     });
 
     // MoveL 服务处理
-    server_handle->MoveL.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                            const ::robotic_arm::protocols::MoveLRequest& req,
-                                            ::robotic_arm::protocols::MoveResponse& rsp) {
+    movel_handle->MoveL.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                           const rpc_srv::MoveL_Request& req,
+                                           rpc_srv::MoveL_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveL请求\n---");
       ArmMotion::Pose6Dof target_pose(
-          req.pose().position().x(), req.pose().position().y(), req.pose().position().z(),
-          req.pose().orientation().w(), req.pose().orientation().x(),
-          req.pose().orientation().y(), req.pose().orientation().z());
+          req.pose.position.x, req.pose.position.y, req.pose.position.z,
+          req.pose.orientation.w, req.pose.orientation.x,
+          req.pose.orientation.y, req.pose.orientation.z);
 
-      int ret = arm_controller_->MoveL(target_pose, req.v(), req.a());
+      int ret = arm_controller_->MoveL(target_pose, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
-        rsp.mutable_error()->set_code(0);
-        rsp.mutable_error()->set_msg("MoveL succeeded");
+        rsp.error.code = 0;
+        rsp.error.msg = "MoveL succeeded";
       } else {
-        rsp.mutable_error()->set_code(ret);
-        rsp.mutable_error()->set_msg("MoveL failed");
+        rsp.error.code = ret;
+        rsp.error.msg = "MoveL failed";
       }
 
       return aimrt::rpc::Status();
     });
 
     // MoveLMulti 服务处理
-    server_handle->MoveLMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                 const ::robotic_arm::protocols::MoveLMultiRequest& req,
-                                                 ::robotic_arm::protocols::MoveResponse& rsp) {
+    movel_multi_handle->MoveLMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                      const rpc_srv::MoveLMulti_Request& req,
+                                                      rpc_srv::MoveLMulti_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveLMulti请求\n---");
       std::vector<ArmMotion::Pose6Dof> points;
-      points.reserve(req.pose_size());
-      for (int i = 0; i < req.pose_size(); ++i) {
-        const auto& p = req.pose(i);
+      points.reserve(req.pose.size());
+      for (const auto& p : req.pose) {
         points.emplace_back(
-            p.position().x(), p.position().y(), p.position().z(),
-            p.orientation().w(), p.orientation().x(),
-            p.orientation().y(), p.orientation().z());
+            p.position.x, p.position.y, p.position.z,
+            p.orientation.w, p.orientation.x,
+            p.orientation.y, p.orientation.z);
       }
 
-      int ret = arm_controller_->MoveLMulti(points, req.r(), req.v(), req.a());
+      int ret = arm_controller_->MoveLMulti(points, req.r, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
-        rsp.mutable_error()->set_code(0);
-        rsp.mutable_error()->set_msg("MoveLMuti succeeded");
+        rsp.error.code = 0;
+        rsp.error.msg = "MoveLMuti succeeded";
       } else {
-        rsp.mutable_error()->set_code(ret);
-        rsp.mutable_error()->set_msg("MoveLMuti failed");
+        rsp.error.code = ret;
+        rsp.error.msg = "MoveLMuti failed";
       }
 
       return aimrt::rpc::Status();
     });
 
     // Gripper 服务处理
-    server_handle->Gripper.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                              const ::robotic_arm::protocols::GripperRequest& req,
-                                              ::robotic_arm::protocols::MoveResponse& rsp) {
+    gripper_handle->Gripper.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                               const rpc_srv::Gripper_Request& req,
+                                               rpc_srv::Gripper_Response& rsp) {
       AIMRT_INFO("\n---\n收到Gripper请求\n---");
       bool ret = gripper_controller_->PosControl(
-          req.position(), req.velocity(), req.acceleration(), req.effort());
+          req.position, req.velocity, req.acceleration, req.effort);
       if (ret) {
         gripper_controller_->WaitForCompletion();
-        rsp.mutable_error()->set_code(0);
-        rsp.mutable_error()->set_msg("Gripper succeeded");
+        rsp.error.code = 0;
+        rsp.error.msg = "Gripper succeeded";
       } else {
-        rsp.mutable_error()->set_code(-1);
-        rsp.mutable_error()->set_msg("Gripper failed");
+        rsp.error.code = -1;
+        rsp.error.msg = "Gripper failed";
       }
 
       return aimrt::rpc::Status();

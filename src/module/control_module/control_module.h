@@ -12,7 +12,13 @@
 #include "arm_manager.h"
 #include "joint_command.pb.h"
 #include "joint_state.pb.h"
-#include "move_control.aimrt_rpc.pb.h"
+#include "Gripper.aimrt_rpc.srv.h"
+#include "MoveJ.aimrt_rpc.srv.h"
+#include "MoveJPose.aimrt_rpc.srv.h"
+#include "MoveJPoseMulti.aimrt_rpc.srv.h"
+#include "MoveJMulti.aimrt_rpc.srv.h"
+#include "MoveL.aimrt_rpc.srv.h"
+#include "MoveLMulti.aimrt_rpc.srv.h"
 #include "servo.pb.h"
 
 using JointStateArray = aimrt::protocols::sensor::JointStateArray;
@@ -21,6 +27,8 @@ using Pose = robotic_arm::protocols::PoseStamped;
 using ServoJCommand = robotic_arm::protocols::ServoJCommand;
 using ServoJPoseCommand = robotic_arm::protocols::ServoJPoseCommand;
 using ServoLCommand = robotic_arm::protocols::ServoLCommand;
+
+namespace rpc_srv = ros2_proto::srv;
 
 namespace robotic_arm::control_module {
 

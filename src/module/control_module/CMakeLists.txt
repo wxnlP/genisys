@@ -33,9 +33,11 @@ target_link_libraries(
   PRIVATE yaml-cpp::yaml-cpp
   PUBLIC aimrt::interface::aimrt_module_cpp_interface
          aimrt::interface::aimrt_module_protobuf_interface
+         aimrt::interface::aimrt_module_ros2_interface
          aimrt::protocols::actuator_pb_gencode
          aimrt::protocols::sensor_pb_gencode
-         robotic_arm::protocols::pb_proto_move_rpc_gencode
+         robotic_arm::protocols::pb_proto_pb_gencode
+         robotic_arm::protocols::ros2_proto_rpc_gencode
          arm_controller  
 )
 
