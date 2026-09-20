@@ -1,4 +1,6 @@
-# 基于 AimRT 的六轴机械臂控制系统
+# Genisys —— 基于 AimRT 的六轴机械臂控制系统
+
+> **命名由来**：Genisys = genimind + geniarm + genesis。genimind 是作者的第一台轮式机器人（最初的想法），geniarm 是第一台机械臂（想法落地），genisys 则是两者沉淀下来的一套通用机械臂控制框架（创世）。
 
 ## 项目简介
 
@@ -13,12 +15,12 @@
 | **类 UR 构型** | UR 解析解 | 参考 [reBot-DevArm](https://github.com/Seeed-Projects/reBot-DevArm) 、[Panthera-HT](https://github.com/HighTorque-Robotics/Panthera-HT_Main)，系统提供 GeniArm 适配。 |
 | **Piper 构型** | Piper 解析解 | 参考 [Dummy-Robot](https://github.com/peng-zhihui/Dummy-Robot)，系统提供 S6h4d 适配。 |
 
-两套构型共用同一套控制栈（ControlModule + ActuatorModule），仅需替换 yaml 配置文件即可切换。此外，得益于 [robotic_arm_sdk](https://github.com/wxnlP/robotic_arm_sdk) 的解藕设计，开发者可以拓展适配自己的机械臂，无论你是 UART 、CAN、Ethernet，只需按照 actuator 模块的接口做适配，即可丝滑对接 control 模块。
+两套构型共用同一套控制栈（ControlModule + ActuatorModule），仅需替换 yaml 配置文件即可切换。此外，得益于 [genisys-core](https://github.com/wxnlP/genisys-core) 的解藕设计，开发者可以拓展适配自己的机械臂，无论你是 UART 、CAN、Ethernet，只需按照 actuator 模块的接口做适配，即可丝滑对接 control 模块。
 
 ### 目录
 
 ```
-robotic_arm_aimrt
+genisys
 ├── build.sh                   # 构建脚本
 ├── compile.sh                 # 增量编译
 ├── setup.sh                   # ROS环境变量设置
@@ -32,7 +34,7 @@ robotic_arm_aimrt
     ├── module/
     │   ├── actuator_module    # 执行器模块
     │   ├── control_module     # 控制模块 
-    │   └── robotic_arm_sdk    # 底层驱动 SDK       
+    │   └── genisys-core    # 底层驱动 SDK       
     │		├── actuator       # 电机驱动
     │       └── arm_control    # 运动控制
     └── protocols/             # 自定义协议
@@ -129,7 +131,7 @@ source $HOME/.cargo/env
 | `PlotPanel` | 右侧 pyqtgraph 曲线面板，支持轴独立缩放、曲线高亮、暂停浏览 |
 
 ```bash
-cd robotic_arm_aimrt
+cd genisys
 pip install -r monitor/requirements.txt
 python -m monitor.main
 ```
@@ -177,8 +179,8 @@ python -m monitor.main
 |:---|:---|:---|:---|:---|
 | `/geniarm/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` | ControlModule → Actuator/SimModule | 500 Hz | 关节控制指令 (位置/速度/刚度/阻尼) |
 | `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` | Actuator/SimModule → ControlModule | 500 Hz | 关节状态反馈 |
-| `/geniarm/pose_expected` | `robotic_arm.protocols.PoseStamped` | ControlModule → (echo/monitor) | 1000 Hz | **期望笛卡尔位姿** (由当前关节指令正解算出) |
-| `/geniarm/pose_current` | `robotic_arm.protocols.PoseStamped` | ControlModule → (echo/monitor) | 1000 Hz | **当前实际笛卡尔位姿** (由关节反馈正解算出) |
+| `/geniarm/pose_expected` | `genisys.protocols.PoseStamped` | ControlModule → (echo/monitor) | 1000 Hz | **期望笛卡尔位姿** (由当前关节指令正解算出) |
+| `/geniarm/pose_current` | `genisys.protocols.PoseStamped` | ControlModule → (echo/monitor) | 1000 Hz | **当前实际笛卡尔位姿** (由关节反馈正解算出) |
 
 ### RPC 接口
 

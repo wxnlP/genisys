@@ -23,14 +23,14 @@
 
 using JointStateArray = aimrt::protocols::sensor::JointStateArray;
 using JointCommandArray = aimrt::protocols::sensor::JointCommandArray;
-using Pose = robotic_arm::protocols::PoseStamped;
-using ServoJCommand = robotic_arm::protocols::ServoJCommand;
-using ServoJPoseCommand = robotic_arm::protocols::ServoJPoseCommand;
-using ServoLCommand = robotic_arm::protocols::ServoLCommand;
+using Pose = genisys::protocols::PoseStamped;
+using ServoJCommand = genisys::protocols::ServoJCommand;
+using ServoJPoseCommand = genisys::protocols::ServoJPoseCommand;
+using ServoLCommand = genisys::protocols::ServoLCommand;
 
 namespace rpc_srv = ros2_proto::srv;
 
-namespace robotic_arm::control_module {
+namespace genisys::control_module {
 
 class ControlModule : public aimrt::ModuleBase {
  public:
@@ -96,4 +96,4 @@ class ControlModule : public aimrt::ModuleBase {
   std::optional<GripperController::GripperCommand> last_gripper_cmd_;
 };
 
-}  // namespace robotic_arm::control_module
+}  // namespace genisys::control_module

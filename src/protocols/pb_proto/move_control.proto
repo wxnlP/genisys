@@ -3,7 +3,7 @@ syntax = "proto3";
 import "error.proto";
 import "pose.proto";
 
-package robotic_arm.protocols;
+package genisys.protocols;
 
 message Joint {
   repeated double position = 1;

@@ -1,4 +1,4 @@
-[submodule "src/module/robotic_arm_sdk"]
-	path = src/module/robotic_arm_sdk
-	url = git@github.com:wxnlP/robotic_arm_sdk.git
+[submodule "src/module/genisys-core"]
+	path = src/module/genisys-core
+	url = git@github.com:wxnlP/genisys-core.git
 	branch = framework_feat

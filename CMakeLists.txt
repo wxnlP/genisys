@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(robotic_arm LANGUAGES C CXX)
+project(genisys LANGUAGES C CXX)
 
 # Set cmake path
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -26,7 +26,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   set(BUILD_SHARED_LIBS OFF)
 
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    if(ROBOTIC_ARM_BUILD_TESTS)
+    if(GENISYS_BUILD_TESTS)
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
     endif()
@@ -47,13 +47,13 @@ if(WIN32)
   add_compile_definitions(NOMINMAX)
 endif()
 
-option(ROBOTIC_ARM_BUILD_MUJOCO_SIM "Build AimRT Mujoco Sim" OFF)
-option(ROBOTIC_ARM_BUILD_SDK_EXAMPLES "Build robotic arm sdk examples" OFF)
+option(GENISYS_BUILD_MUJOCO_SIM "Build AimRT Mujoco Sim" OFF)
+option(GENISYS_BUILD_SDK_EXAMPLES "Build genisys-core examples" OFF)
 
 # Include cmake module
 include(NamespaceTool)
 
-if(ROBOTIC_ARM_BUILD_TESTS)
+if(GENISYS_BUILD_TESTS)
   include(GetGTest)
   enable_testing()
 endif()
@@ -61,7 +61,7 @@ endif()
 set(YAML_CPP_INSTALL ON)
 include(GetAimRT)
 
-if(ROBOTIC_ARM_BUILD_MUJOCO_SIM)
+if(GENISYS_BUILD_MUJOCO_SIM)
   include(GetMujocoSim)
 endif()
 

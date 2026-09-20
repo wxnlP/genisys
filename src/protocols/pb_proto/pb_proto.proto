@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package robotic_arm.pb_proto;
+package genisys.pb_proto;
 
 // define your messages here
 message change_me {

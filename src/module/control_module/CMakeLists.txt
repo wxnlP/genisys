@@ -36,13 +36,13 @@ target_link_libraries(
          aimrt::interface::aimrt_module_ros2_interface
          aimrt::protocols::actuator_pb_gencode
          aimrt::protocols::sensor_pb_gencode
-         robotic_arm::protocols::pb_proto_pb_gencode
-         robotic_arm::protocols::ros2_proto_rpc_gencode
+         genisys::protocols::pb_proto_pb_gencode
+         genisys::protocols::ros2_proto_rpc_gencode
          arm_controller  
 )
 
 # Set test of target
-if(ROBOTIC_ARM_BUILD_TESTS AND test_files)
+if(GENISYS_BUILD_TESTS AND test_files)
   add_gtest_target(TEST_TARGET ${CUR_TARGET_NAME} TEST_SRC ${test_files})
 endif()
 

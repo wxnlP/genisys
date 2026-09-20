@@ -65,8 +65,8 @@ python -m monitor.main
 |------|----------|
 | `joint_state` | `aimrt.protocols.sensor.JointStateArray` |
 | `joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` |
-| `pose_current` | `robotic_arm.protocols.PoseStamped` |
-| `pose_expected` | `robotic_arm.protocols.PoseStamped` |
+| `pose_current` | `genisys.protocols.PoseStamped` |
+| `pose_expected` | `genisys.protocols.PoseStamped` |
 
 Zenoh 插件的 `path` 填文件名即可（如 `libaimrt_zenoh_plugin.so`），程序会把 aimrt_py
 所在目录加入 `LD_LIBRARY_PATH`，不必写绝对路径。

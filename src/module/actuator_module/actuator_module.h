@@ -13,7 +13,7 @@
 using JointStateArray = aimrt::protocols::sensor::JointStateArray;
 using JointCommandArray = aimrt::protocols::sensor::JointCommandArray;
 
-namespace robotic_arm::actuator_module {
+namespace genisys::actuator_module {
 
 class ActuatorModule : public aimrt::ModuleBase {
  public:
@@ -65,4 +65,4 @@ class ActuatorModule : public aimrt::ModuleBase {
   GripperCtrlBase::GripperCommand cached_gripper_cmd_;
 };
 
-}  // namespace robotic_arm::actuator_module
+}  // namespace genisys::actuator_module

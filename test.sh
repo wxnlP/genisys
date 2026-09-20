@@ -7,7 +7,7 @@ set -ex
 cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=./build/install \
-    -DROBOTIC_ARM_BUILD_TESTS=ON \
+    -DGENISYS_BUILD_TESTS=ON \
     $@
 
 if [ -d ./build/install ]; then

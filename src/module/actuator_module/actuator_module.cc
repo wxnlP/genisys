@@ -4,7 +4,7 @@
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "yaml-cpp/yaml.h"
 
-namespace robotic_arm::actuator_module {
+namespace genisys::actuator_module {
 
 // 状态读取失败的告警节流：每 N 次失败打一条，避免 500Hz 循环刷屏
 constexpr uint32_t kWarnInterval = 500;
@@ -246,4 +246,4 @@ void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandAr
   write_sem_.release();
 }
 
-}  // namespace robotic_arm::actuator_module
+}  // namespace genisys::actuator_module

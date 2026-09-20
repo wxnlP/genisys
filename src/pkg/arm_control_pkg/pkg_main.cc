@@ -8,11 +8,11 @@ static std::tuple<std::string_view, std::function<aimrt::ModuleBase*()>>
     aimrt_module_register_array[]{
         {"ControlModule",
          []() -> aimrt::ModuleBase* {
-           return new robotic_arm::control_module::ControlModule();
+           return new genisys::control_module::ControlModule();
          }},
         {"ActuatorModule",
          []() -> aimrt::ModuleBase* {
-           return new robotic_arm::actuator_module::ActuatorModule();
+           return new genisys::actuator_module::ActuatorModule();
          }},
     };
 

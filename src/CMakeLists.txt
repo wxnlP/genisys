@@ -1,5 +1,5 @@
 # Set namespace
-set_root_namespace("robotic_arm")
+set_root_namespace("genisys")
 
 
 # protocols
@@ -8,11 +8,11 @@ add_subdirectory(protocols)
 # module
 add_subdirectory(module/control_module)
 add_subdirectory(module/actuator_module)
-add_subdirectory(module/robotic_arm_sdk/actuator)
-add_subdirectory(module/robotic_arm_sdk/arm_control)
+add_subdirectory(module/genisys-core/actuator)
+add_subdirectory(module/genisys-core/arm_control)
 
-if(ROBOTIC_ARM_BUILD_SDK_EXAMPLES)
-  add_subdirectory(module/robotic_arm_sdk/example)
+if(GENISYS_BUILD_SDK_EXAMPLES)
+  add_subdirectory(module/genisys-core/example)
 endif()
 
 # pkg
@@ -34,9 +34,9 @@ install(
 
 # build all
 add_custom_target(
-  robotic_arm_build_all ALL
+  genisys_build_all ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CUR_INSTALL_SOURCE_DIR}/bin ${CMAKE_BINARY_DIR}
   DEPENDS aimrt::runtime::main
-          robotic_arm::arm_control_pkg)
+          genisys::arm_control_pkg)
 
 

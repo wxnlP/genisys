@@ -24,7 +24,7 @@ from monitor.proto import quaternion_pb2 as quaternion__pb2
 from monitor.proto import vector3_pb2 as vector3__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\npose.proto\x12\x15robotic_arm.protocols\x1a\x0cheader.proto\x1a\x10quaternion.proto\x1a\rvector3.proto\"\x8d\x01\n\x04Pose\x12\x46\n\x0borientation\x18\x01 \x01(\x0b\x32$.aimrt.protocols.geometry.QuaternionR\x0borientation\x12=\n\x08position\x18\x02 \x01(\x0b\x32!.aimrt.protocols.geometry.Vector3R\x08position\"v\n\x0bPoseStamped\x12\x36\n\x06header\x18\x01 \x01(\x0b\x32\x1e.aimrt.protocols.common.HeaderR\x06header\x12/\n\x04pose\x18\x02 \x01(\x0b\x32\x1b.robotic_arm.protocols.PoseR\x04poseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\x0a\x0apose.proto\x12\x11genisys.protocols\x1a\x0cheader.proto\x1a\x10quaternion.proto\x1a\x0dvector3.proto"\x8d\x01\x0a\x04Pose\x12F\x0a\x0borientation\x18\x01 \x01(\x0b2$.aimrt.protocols.geometry.QuaternionR\x0borientation\x12=\x0a\x08position\x18\x02 \x01(\x0b2!.aimrt.protocols.geometry.Vector3R\x08position"r\x0a\x0bPoseStamped\x126\x0a\x06header\x18\x01 \x01(\x0b2\x1e.aimrt.protocols.common.HeaderR\x06header\x12+\x0a\x04pose\x18\x02 \x01(\x0b2\x17.genisys.protocols.PoseR\x04poseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)

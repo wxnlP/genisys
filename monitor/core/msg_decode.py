@@ -11,8 +11,8 @@ Topic and message type (must match what the robot publishes)::
 
     /geniarm/joint_state    pb:aimrt.protocols.sensor.JointStateArray
     /geniarm/joint_cmd      pb:aimrt.protocols.sensor.JointCommandArray
-    /geniarm/pose_current   pb:robotic_arm.protocols.PoseStamped
-    /geniarm/pose_expected  pb:robotic_arm.protocols.PoseStamped
+    /geniarm/pose_current   pb:genisys.protocols.PoseStamped
+    /geniarm/pose_expected  pb:genisys.protocols.PoseStamped
 
 The robot publishes ``PoseStamped`` (aliased to ``Pose`` in ControlModule),
 not ``Pose``.
@@ -40,7 +40,7 @@ POSE_SCALAR_FIELDS = (
 )
 
 # source name (AIMRT config topics key) → protobuf message class.
-# ``robotic_arm.protocols.PoseStamped`` lives in monitor/proto/pose_pb2.py.
+# ``genisys.protocols.PoseStamped`` lives in monitor/proto/pose_pb2.py.
 MSGTYPE_BY_SOURCE = {
     "joint_state": JointStateArray,
     "joint_cmd": JointCommandArray,

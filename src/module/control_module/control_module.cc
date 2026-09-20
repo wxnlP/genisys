@@ -6,7 +6,7 @@
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "yaml-cpp/yaml.h"
 
-namespace robotic_arm::control_module {
+namespace genisys::control_module {
 
 // 状态读取失败的告警节流：每 N 次失败打一条，避免 500Hz 循环刷屏
 constexpr uint32_t kWarnInterval = 500;
@@ -604,4 +604,4 @@ void ControlModule::ServoLCommandCallback(const std::shared_ptr<const ServoLComm
   }
 }
 
-}  // namespace robotic_arm::control_module
+}  // namespace genisys::control_module

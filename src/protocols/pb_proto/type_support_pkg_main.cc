@@ -5,8 +5,8 @@
 #include "pose.pb.h"
 
 static const aimrt_type_support_base_t* type_support_array[]{
-    aimrt::GetProtobufMessageTypeSupport<robotic_arm::protocols::Pose>(),
-    aimrt::GetProtobufMessageTypeSupport<robotic_arm::protocols::PoseStamped>(),
+    aimrt::GetProtobufMessageTypeSupport<genisys::protocols::Pose>(),
+    aimrt::GetProtobufMessageTypeSupport<genisys::protocols::PoseStamped>(),
 };
 
 extern "C" {

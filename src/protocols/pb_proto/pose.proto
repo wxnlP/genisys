@@ -4,7 +4,7 @@ import "header.proto";
 import "quaternion.proto";
 import "vector3.proto";
 
-package robotic_arm.protocols;
+package genisys.protocols;
 
 message Pose {
   aimrt.protocols.geometry.Quaternion orientation = 1;
