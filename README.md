@@ -1,10 +1,8 @@
 # Genisys —— 基于 AimRT 的六轴机械臂控制系统
 
-> **命名由来**：Genisys = genimind + geniarm + genesis。genimind 是作者的第一台轮式机器人（最初的想法），geniarm 是第一台机械臂（想法落地），genisys 则是两者沉淀下来的一套通用机械臂控制框架（创世）。
-
 ## 项目简介
 
-本项目是一套基于 **AimRT** 框架的六自由度协作机械臂实时控制系统，支持本体 + 夹爪一体式控制。系统 **HTTP RPC** 轨迹规划接口，支持真机运行与 MuJoCo 仿真两种模式，配套基于 **Zenoh** 的数据监控与采集工具。
+本项目是一套基于 **AimRT** 框架的六自由度协作机械臂实时控制系统，支持本体 + 夹爪一体式控制。系统提供基础的通信和算法能力，配合 **ArmMonitor** 可视化工具做轨迹调试和录制。
 
 ### 支持的机械臂构型
 
@@ -110,14 +108,8 @@ source $HOME/.cargo/env
 
 ### SimModule
 
-基于 **MuJoCo** 物理引擎的仿真环境，可在无硬件条件下离线验证控制算法。当前提供 GeniArm 仿真配置（`geniarm_sim_cfg.yaml`），替换 yaml 配置即可仿真其他构型。
+基于 **MuJoCo** 物理引擎的仿真环境，可在无硬件条件下离线验证控制算法。当前提供 GeniArm 仿真配置，替换 yaml 配置即可仿真其他构型。
 
-仿真支持两种执行器模式：
-
-| 模式 | XML 执行器类型 | 控制律位置 | stiffness/damping 含义 |
-|:---|:---|:---|:---|
-| **position** (v1.1.3.xml) | `<position>` | MuJoCo 内置 PD | 物理单位 (N·m/rad, N·m·s/rad) |
-| **motor+MIT** (v1.1.3_mit.xml) | `<motor>` | 软件 `MujocoSimModule` | 物理单位 (N·m/rad, N·m·s/rad) |
 
 ### Monitor
 
@@ -202,10 +194,10 @@ python -m monitor.main
 |:---|:---|:---|
 | MoveJ | [`examples/movej_demo.py`](examples/movej_demo.py) | 关节空间点到点运动 |
 | MoveL | [`examples/movel_demo.py`](examples/movel_demo.py) | 笛卡尔空间直线运动 |
-| MoveJMuti | [`examples/movej_muti_demo.py`](examples/movej_muti_demo.py) | 多路径点关节运动 (圆弧过渡) |
-| MoveLMuti | [`examples/movel_muti_demo.py`](examples/movel_muti_demo.py) | 多路径点笛卡尔运动 (圆弧过渡) |
+| MoveJMuti | [`examples/movej_muti_demo.py`](examples/movej_muti_demo.py) | 多路径点关节运动 |
+| MoveLMuti | [`examples/movel_muti_demo.py`](examples/movel_muti_demo.py) | 多路径点笛卡尔运动 |
 | Go Home | [`examples/go_home.py`](examples/go_home.py) | 一键回原点 (MoveJ) |
-| Gripper | [`examples/gripper_demo.py`](examples/gripper_demo.py) | 夹爪往复开合测试 |
+| Gripper | [`examples/gripper_demo.py`](examples/gripper_demo.py) | 夹爪开合测试 |
 
 依赖: `pip install requests`
 
