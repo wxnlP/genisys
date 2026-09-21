@@ -77,20 +77,19 @@
                   <inertial pos="-0.00062904 0 -0.0031029" mass="0.0087849" fullinertia="7.8e-07 6.4e-07 1.36e-06 0 0 0"/>
                   <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist3_link_mat" type="mesh" mesh="wrist3_link" />
                   <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist3_link" />
-                  <!-- 夹爪：刚性安装于法兰（link6）。pos/quat 相对 link6 坐标系；质量已按真机 0.514 kg / 质心 z=39.8mm 修正 -->
-                  <body name="gripper_base_link" pos="0 0 -0.0065" quat="0.7071055 0 0 0.7071081">
-                    <inertial pos="0.0045217 0.0000328 0.0417824" mass="0.474698" fullinertia="0.000350235 0.000118278 0.000410045 -6.65762e-08 -2.35738e-06 1.04884e-07"/>
+                  <body name="gripper_base_link" pos="0 0 0" quat="1 0 0 0">
+                    <inertial pos="-6.76659717e-04 1.51399868e-02 3.76120917e-02" mass="0.570360" fullinertia="1.11553768e-03 5.84710677e-04 1.08673776e-03 -6.08990202e-06 5.82960646e-06 -9.05571007e-05"/>
                     <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_base_link_mat" type="mesh" mesh="gripper_base_link" />
                     <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_base_link" />
-                    <body name="gripper_right_link" pos="0.019 0.009 0.0805">
+                    <body name="gripper_right_link" pos="0.009 -0.019 0.074" quat="0.70710678 0 0 0.70710678">
                       <joint name="gripper_right_joint" type="slide" axis="0 -1 0" limited="true" range="0 0.045" frictionloss="0.05" armature="0.001"/>
-                      <inertial pos="-0.019584 -0.023437 0.020014" mass="0.0218317" fullinertia="6.44011e-06 7.13989e-06 3.20446e-06 -1.3275e-08 -6.0848e-08 -5.27497e-07"/>
+                      <inertial pos="1.84160000e-02 -5.43660000e-03 2.00140000e-02" mass="0.044239" fullinertia="1.30500000e-05 1.44680000e-05 6.49340000e-06 -2.69420000e-08 -1.23290000e-07 -1.06890000e-06"/>
                       <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_right_link_mat" type="mesh" mesh="gripper_right_link" />
                       <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_right_link" />
                     </body>
-                    <body name="gripper_left_link" pos="-0.019 -0.009 0.0805">
+                    <body name="gripper_left_link" pos="-0.009 0.019 0.074" quat="0.70710678 0 0 0.70710678">
                       <joint name="gripper_left_joint" type="slide" axis="0 1 0" limited="true" range="0 0.045" frictionloss="0.05" armature="0.001"/>
-                      <inertial pos="0.01973 0.023171 0.025419" mass="0.0174702" fullinertia="6.33154e-06 6.9341e-06 2.93314e-06 -1.3275e-08 6.0848e-08 5.27497e-07"/>
+                      <inertial pos="-1.82700000e-02 5.17110000e-03 2.54190000e-02" mass="0.035401" fullinertia="1.28300000e-05 1.40510000e-05 5.94360000e-06 -2.69420000e-08 1.23290000e-07 1.06890000e-06"/>
                       <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_left_link_mat" type="mesh" mesh="gripper_left_link" />
                       <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_left_link" />
                     </body>
