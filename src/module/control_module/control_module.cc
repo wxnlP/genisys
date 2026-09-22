@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
+#include "aimrt_module_ros2_interface/channel/ros2_channel.h"
 #include "yaml-cpp/yaml.h"
 
 namespace genisys::control_module {
@@ -534,16 +535,16 @@ void ControlModule::ServoJCommandCallback(const std::shared_ptr<const ServoJComm
     return;
   }
 
-  if (msg->target_size() < 6) {
-    AIMRT_ERROR("[ServoJ] invalid target size: {}", msg->target_size());
+  if (msg->target.size() < 6) {
+    AIMRT_ERROR("[ServoJ] invalid target size: {}", msg->target.size());
     return;
   }
 
-  const double dt = msg->dt();
+  const double dt = msg->dt;
 
   ArmMotion::Joint6Dof target_joint;
   for (int i = 0; i < 6; ++i) {
-    target_joint[i] = msg->target(i);
+    target_joint[i] = msg->target[i];
   }
 
   if (arm_controller_->ServoJ(target_joint, dt) != 0) {
@@ -551,7 +552,7 @@ void ControlModule::ServoJCommandCallback(const std::shared_ptr<const ServoJComm
     return;
   }
   // 最后一条指令显式停止
-  if (msg->stop()) {
+  if (msg->stop) {
     arm_controller_->ServoStop();
   }
 }
@@ -561,13 +562,13 @@ void ControlModule::ServoJPoseCommandCallback(const std::shared_ptr<const ServoJ
     return;
   }
 
-  const double dt = msg->dt();
+  const double dt = msg->dt;
 
-  const auto& p = msg->target();
+  const auto& p = msg->target;
   ArmMotion::Pose6Dof target_pose(
-      p.position().x(), p.position().y(), p.position().z(),
-      p.orientation().w(), p.orientation().x(),
-      p.orientation().y(), p.orientation().z());
+      p.position.x, p.position.y, p.position.z,
+      p.orientation.w, p.orientation.x,
+      p.orientation.y, p.orientation.z);
 
   if (arm_controller_->ServoJ(target_pose, dt) != 0) {
     AIMRT_ERROR("[ServoJPose] ServoJ(pose) failed");
@@ -575,7 +576,7 @@ void ControlModule::ServoJPoseCommandCallback(const std::shared_ptr<const ServoJ
   }
 
   // 最后一条指令显式停止
-  if (msg->stop()) {
+  if (msg->stop) {
     arm_controller_->ServoStop();
   }
 }
@@ -585,13 +586,13 @@ void ControlModule::ServoLCommandCallback(const std::shared_ptr<const ServoLComm
     return;
   }
 
-  const double dt = msg->dt();
+  const double dt = msg->dt;
 
-  const auto& p = msg->target();
+  const auto& p = msg->target;
   ArmMotion::Pose6Dof target_pose(
-      p.position().x(), p.position().y(), p.position().z(),
-      p.orientation().w(), p.orientation().x(),
-      p.orientation().y(), p.orientation().z());
+      p.position.x, p.position.y, p.position.z,
+      p.orientation.w, p.orientation.x,
+      p.orientation.y, p.orientation.z);
 
   if (arm_controller_->ServoL(target_pose, dt) != 0) {
     AIMRT_ERROR("[ServoL] ServoL failed");
@@ -599,7 +600,7 @@ void ControlModule::ServoLCommandCallback(const std::shared_ptr<const ServoLComm
   }
 
   // 最后一条指令显式停止
-  if (msg->stop()) {
+  if (msg->stop) {
     arm_controller_->ServoStop();
   }
 }
