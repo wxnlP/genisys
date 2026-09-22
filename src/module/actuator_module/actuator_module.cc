@@ -2,6 +2,7 @@
 #include <fmt/ranges.h>
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
+#include "util/time_util.h"
 #include "yaml-cpp/yaml.h"
 
 namespace genisys::actuator_module {
@@ -151,9 +152,8 @@ void ActuatorModule::PublishLoop() {
         gripper_warn_count = 0;
       }
 
-      auto now = std::chrono::steady_clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
-      auto time_ns = duration.count();
+      // header 时间戳统一为 system_clock
+      auto time_ns = aimrt::common::util::GetCurTimestampNs();
 
       auto* header = joint_state_msg.mutable_header();
       header->set_time_stamp(time_ns);

@@ -5,6 +5,7 @@
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "aimrt_module_ros2_interface/channel/ros2_channel.h"
+#include "util/time_util.h"
 #include "yaml-cpp/yaml.h"
 
 namespace genisys::control_module {
@@ -225,6 +226,12 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     gripper_handle->Gripper.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
                                                const genisys_msgs::srv::Gripper_Request& req,
                                                genisys_msgs::srv::Gripper_Response& rsp) {
+      if (!gripper_controller_) {
+        AIMRT_ERROR("收到 Gripper 请求，但当前配置未启用夹爪");
+        rsp.error.code = -1;
+        rsp.error.msg = "Gripper is not configured in body cfg";
+        return aimrt::rpc::Status();
+      }
       AIMRT_INFO("\n---\n收到Gripper请求\n---");
       bool ret = gripper_controller_->PosControl(
           req.position, req.velocity, req.acceleration, req.effort);
@@ -310,9 +317,8 @@ void ControlModule::ControlLoop() {
       auto t_start = std::chrono::steady_clock::now();
 
       joint_cmd_msg.Clear();
-      auto now = std::chrono::steady_clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
-      auto time_ns = duration.count();
+      // header 时间戳统一为 system_clock
+      auto time_ns = aimrt::common::util::GetCurTimestampNs();
 
       auto* header = joint_cmd_msg.mutable_header();
       header->set_time_stamp(time_ns);
@@ -403,7 +409,7 @@ void ControlModule::ControlLoop() {
       }
 
       next_loop_time += period;
-      now = std::chrono::steady_clock::now();
+      auto now = std::chrono::steady_clock::now();
       if (next_loop_time < now - period) {  // 落后超过 1 个周期
         if (lag_warn_count++ % kWarnInterval == 0) {
           AIMRT_WARN("Control loop is lagging behind, skip to next cycle.");
@@ -482,9 +488,8 @@ void ControlModule::PublishLoop() {
       expected_pose_msg.Clear();
       current_pose_msg.Clear();
 
-      auto now = std::chrono::steady_clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch());
-      auto time_ns = duration.count();
+      // header 时间戳统一为 system_clock
+      auto time_ns = aimrt::common::util::GetCurTimestampNs();
 
       fill_pose_msg(expected_pose_msg, expected_pose, seq_count, time_ns);
       fill_pose_msg(current_pose_msg, current_pose, seq_count, time_ns);
