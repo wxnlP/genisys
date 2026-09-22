@@ -20,21 +20,17 @@
 #include "MoveJMulti.aimrt_rpc.srv.h"
 #include "MoveL.aimrt_rpc.srv.h"
 #include "MoveLMulti.aimrt_rpc.srv.h"
-#include "ros2_proto/msg/servo_j_command.hpp"
-#include "ros2_proto/msg/servo_j_pose_command.hpp"
-#include "ros2_proto/msg/servo_l_command.hpp"
+#include "genisys_msgs/msg/servo_j_command.hpp"
+#include "genisys_msgs/msg/servo_j_pose_command.hpp"
+#include "genisys_msgs/msg/servo_l_command.hpp"
 
 using JointStateArray = aimrt::protocols::sensor::JointStateArray;
 using JointCommandArray = aimrt::protocols::sensor::JointCommandArray;
 using Pose = genisys::protocols::PoseStamped;
 
-namespace rpc_srv = ros2_proto::srv;
-namespace rpc_msg = ros2_proto::msg;
-
-// 伺服指令通道消息类型（ROS2 Message）
-using ServoJCommand = rpc_msg::ServoJCommand;
-using ServoJPoseCommand = rpc_msg::ServoJPoseCommand;
-using ServoLCommand = rpc_msg::ServoLCommand;
+using ServoJCommand = genisys_msgs::msg::ServoJCommand;
+using ServoJPoseCommand = genisys_msgs::msg::ServoJPoseCommand;
+using ServoLCommand = genisys_msgs::msg::ServoLCommand;
 
 namespace genisys::control_module {
 

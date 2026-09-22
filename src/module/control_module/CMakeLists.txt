@@ -36,8 +36,8 @@ target_link_libraries(
          aimrt::interface::aimrt_module_ros2_interface
          aimrt::protocols::actuator_pb_gencode
          aimrt::protocols::sensor_pb_gencode
-         genisys::protocols::pb_proto_pb_gencode
-         genisys::protocols::ros2_proto_rpc_gencode
+         genisys::protocols::genisys_pb_gencode
+         genisys::protocols::genisys_msgs_rpc_gencode
          arm_controller  
 )
 

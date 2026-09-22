@@ -65,18 +65,18 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
         topic_sub_servol_cmd_, std::bind(&ControlModule::ServoLCommandCallback, this, std::placeholders::_1));
 
     // 创建 RPC 服务
-    auto movej_handle = ctx_ptr_->CreateServer<rpc_srv::MoveJCoServer>();
-    auto movej_pose_handle = ctx_ptr_->CreateServer<rpc_srv::MoveJPoseCoServer>();
-    auto movej_multi_handle = ctx_ptr_->CreateServer<rpc_srv::MoveJMultiCoServer>();
-    auto movej_pose_multi_handle = ctx_ptr_->CreateServer<rpc_srv::MoveJPoseMultiCoServer>();
-    auto movel_handle = ctx_ptr_->CreateServer<rpc_srv::MoveLCoServer>();
-    auto movel_multi_handle = ctx_ptr_->CreateServer<rpc_srv::MoveLMultiCoServer>();
-    auto gripper_handle = ctx_ptr_->CreateServer<rpc_srv::GripperCoServer>();
+    auto movej_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveJCoServer>();
+    auto movej_pose_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveJPoseCoServer>();
+    auto movej_multi_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveJMultiCoServer>();
+    auto movej_pose_multi_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveJPoseMultiCoServer>();
+    auto movel_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveLCoServer>();
+    auto movel_multi_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveLMultiCoServer>();
+    auto gripper_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::GripperCoServer>();
 
     // MoveJ 服务处理
     movej_handle->MoveJ.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                           const rpc_srv::MoveJ_Request& req,
-                                           rpc_srv::MoveJ_Response& rsp) {
+                                           const genisys_msgs::srv::MoveJ_Request& req,
+                                           genisys_msgs::srv::MoveJ_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJ请求\n---");
       ArmMotion::Joint6Dof target_joint;
       for (int i = 0; i < 6; ++i) {
@@ -98,8 +98,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     // MoveJPose 服务处理（MoveJ 的位姿输入重载）
     movej_pose_handle->MoveJPose.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                    const rpc_srv::MoveJPose_Request& req,
-                                                    rpc_srv::MoveJPose_Response& rsp) {
+                                                    const genisys_msgs::srv::MoveJPose_Request& req,
+                                                    genisys_msgs::srv::MoveJPose_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJPose请求\n---");
       ArmMotion::Pose6Dof target_pose(
           req.pose.position.x, req.pose.position.y, req.pose.position.z,
@@ -121,8 +121,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     // MoveJMulti 服务处理
     movej_multi_handle->MoveJMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                      const rpc_srv::MoveJMulti_Request& req,
-                                                      rpc_srv::MoveJMulti_Response& rsp) {
+                                                      const genisys_msgs::srv::MoveJMulti_Request& req,
+                                                      genisys_msgs::srv::MoveJMulti_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJMuti请求\n---");
       std::vector<ArmMotion::Joint6Dof> points;
       points.reserve(req.position.size());
@@ -146,8 +146,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     // MoveJPoseMulti 服务处理（MoveJMulti 的位姿输入重载）
     movej_pose_multi_handle->MoveJPoseMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                               const rpc_srv::MoveJPoseMulti_Request& req,
-                                                               rpc_srv::MoveJPoseMulti_Response& rsp) {
+                                                               const genisys_msgs::srv::MoveJPoseMulti_Request& req,
+                                                               genisys_msgs::srv::MoveJPoseMulti_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJPoseMulti请求\n---");
       std::vector<ArmMotion::Pose6Dof> points;
       points.reserve(req.pose.size());
@@ -173,8 +173,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     // MoveL 服务处理
     movel_handle->MoveL.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                           const rpc_srv::MoveL_Request& req,
-                                           rpc_srv::MoveL_Response& rsp) {
+                                           const genisys_msgs::srv::MoveL_Request& req,
+                                           genisys_msgs::srv::MoveL_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveL请求\n---");
       ArmMotion::Pose6Dof target_pose(
           req.pose.position.x, req.pose.position.y, req.pose.position.z,
@@ -196,8 +196,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     // MoveLMulti 服务处理
     movel_multi_handle->MoveLMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                                      const rpc_srv::MoveLMulti_Request& req,
-                                                      rpc_srv::MoveLMulti_Response& rsp) {
+                                                      const genisys_msgs::srv::MoveLMulti_Request& req,
+                                                      genisys_msgs::srv::MoveLMulti_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveLMulti请求\n---");
       std::vector<ArmMotion::Pose6Dof> points;
       points.reserve(req.pose.size());
@@ -223,8 +223,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     // Gripper 服务处理
     gripper_handle->Gripper.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                               const rpc_srv::Gripper_Request& req,
-                                               rpc_srv::Gripper_Response& rsp) {
+                                               const genisys_msgs::srv::Gripper_Request& req,
+                                               genisys_msgs::srv::Gripper_Response& rsp) {
       AIMRT_INFO("\n---\n收到Gripper请求\n---");
       bool ret = gripper_controller_->PosControl(
           req.position, req.velocity, req.acceleration, req.effort);
