@@ -36,8 +36,8 @@ import requests
 # ---------------------------------------------------------------------------
 # RPC endpoint
 # ---------------------------------------------------------------------------
-URL_MOVEJ = "http://127.0.0.1:50080/rpc/ros2_proto/srv/MoveJ"
-URL_MOVEL = "http://127.0.0.1:50080/rpc/ros2_proto/srv/MoveL"
+URL_MOVEJ = "http://127.0.0.1:50080/rpc/genisys_msgs/srv/MoveJ"
+URL_MOVEL = "http://127.0.0.1:50080/rpc/genisys_msgs/srv/MoveL"
 TIMEOUT = 30.0
 
 # ---------------------------------------------------------------------------
