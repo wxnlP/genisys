@@ -169,10 +169,17 @@ python -m monitor.main
 
 | Topic | 消息类型 | 方向 | 频率 | 说明 |
 |:---|:---|:---|:---|:---|
-| `/geniarm/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` | ControlModule → Actuator/SimModule | 500 Hz | 关节控制指令 (位置/速度/刚度/阻尼) |
-| `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` | Actuator/SimModule → ControlModule | 500 Hz | 关节状态反馈 |
-| `/geniarm/pose_expected` | `genisys.protocols.PoseStamped` | ControlModule → (echo/monitor) | 1000 Hz | **期望笛卡尔位姿** (由当前关节指令正解算出) |
-| `/geniarm/pose_current` | `genisys.protocols.PoseStamped` | ControlModule → (echo/monitor) | 1000 Hz | **当前实际笛卡尔位姿** (由关节反馈正解算出) |
+| `/geniarm/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` (protobuf) | ControlModule → Actuator/SimModule | 500 Hz | 关节控制指令 (位置/速度/刚度/阻尼) |
+| `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` (protobuf) | Actuator/SimModule → ControlModule | 500 Hz | 关节状态反馈 |
+| `/geniarm/pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **期望笛卡尔位姿** (由当前关节指令正解算出) |
+| `/geniarm/pose_current` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **当前实际笛卡尔位姿** (由关节反馈正解算出) |
+| `/geniarm/servoj_cmd` | `ros2_proto/msg/ServoJCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 关节空间伺服指令 (目标关节角 + dt + stop) |
+| `/geniarm/servoj_pose_cmd` | `ros2_proto/msg/ServoJPoseCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔位姿伺服指令 (位姿 → IK → ServoJ) |
+| `/geniarm/servol_cmd` | `ros2_proto/msg/ServoLCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔直线伺服指令 |
+
+> 伺服通道 (`/geniarm/servo*`) 使用 **ROS2 Message** 定义 (`.msg`)，序列化类型为 `ros2`，
+> 订阅后端为 `zenoh`；其余通道仍为 protobuf。外部发布方需使用消息类型
+> `ros2:ros2_proto/msg/ServoJCommand` 等并以 `ros2` 序列化发布。
 
 ### RPC 接口
 
