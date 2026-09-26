@@ -2,8 +2,8 @@ robot:
   name: "geniarm"
   sample_frequency: 500.0  # Hz，轨迹规划离散频率
   joint_limits:
-    lower: [-150, 0, -212, -90, -90, -90]
-    upper: [150, 212, 0, 90, 90, 90]
+    lower: [-150, 0, -212, -90, -90, -180]
+    upper: [150, 212, 0, 90, 90, 180]
   trajectory_mode: "quintic"
   kinematics:
     ik_mode: "UR" # or Piper
