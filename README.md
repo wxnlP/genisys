@@ -41,24 +41,54 @@ genisys
 
 ## 快速开始
 
-### 环境要求
+### 环境配置
 
-- **OS**: Ubuntu 22.04+
-- **编译器**: GCC 11+ / Clang 14+ (C++20)，Rust编译器
+环境要求：
+
+- **OS**: Ubuntu 22.04/Ubuntu 24.04
+- **编译器**: GCC 11+，Rust编译器（Zenoh）
 - **构建工具**: CMake 3.24+,
-- **硬件 (真机模式)**: SocketCAN 接口, DM4340P / DM4310 电机
+- **通信硬件**: SocketCAN 
 
-由于本系统主要使用 AimRT 的 zenoh 后端处理外部订阅，所以需要在编译前安装Rust编译器：
+环境配置：
+
+- 安装rust编译器
+
 ```bash
-# 安装rust编译器
 sudo apt update
 sudo apt install build-essential cmake pkg-config libssl-dev
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 ```
 
+- Ubuntu 22.04需要更新CMake版本
+
+> 注意根据自己的系统选择后缀，如 x86_64、aarch64。 
+
+```bash
+# 拉取安装脚本
+wget https://cmake.org/files/v3.28/cmake-3.28.6-linux-aarch64.sh
+
+# 添加可执行权限
+chmod +x cmake-3.28.6-linux-aarch64.sh
+sudo sh cmake-3.28.6-linux-aarch64.sh --prefix=/opt/cmake
+
+# 安装
+cd /opt/cmake 
+sudo mv ./cmake-3.28.6-linux-aarch64/* ./
+sudo rm -rf ./cmake-3.28.6-linux-aarch64
+
+# 添加环境变量
+echo 'export PATH=/opt/cmake/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
 ### 构建
 
+```bash
+# 首次使用需配置当前用户的调度策略权限
+echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-realtime.conf
+```
 
 ```bash
 # 首次构建，需要下载依赖可能较慢，建议内存8G以上或申请8G的虚拟内存，防止编译崩溃
@@ -115,13 +145,6 @@ source $HOME/.cargo/env
 
 基于 **PyQt5 + pyqtgraph** 的桌面监控应用，位于 `monitor/` 目录：
 
-| 组件 | 功能 |
-|:---|:---|
-| `AimrtSubscriber` | 经 AIMRT（zenoh 后端）精确订阅话题并解码 protobuf，运行时隔离在子进程 |
-| `DataModel` | 支持采样快照与 CSV 导出 |
-| `DataPanel` | 左侧表格面板，实时显示各关节状态，右键添加绘图曲线 |
-| `PlotPanel` | 右侧 pyqtgraph 曲线面板，支持轴独立缩放、曲线高亮、暂停浏览 |
-
 ```bash
 cd genisys
 pip install -r monitor/requirements.txt
@@ -173,13 +196,9 @@ python -m monitor.main
 | `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` (protobuf) | Actuator/SimModule → ControlModule | 500 Hz | 关节状态反馈 |
 | `/geniarm/pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **期望笛卡尔位姿** (由当前关节指令正解算出) |
 | `/geniarm/pose_current` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **当前实际笛卡尔位姿** (由关节反馈正解算出) |
-| `/geniarm/servoj_cmd` | `ros2_proto/msg/ServoJCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 关节空间伺服指令 (目标关节角 + dt + stop) |
-| `/geniarm/servoj_pose_cmd` | `ros2_proto/msg/ServoJPoseCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔位姿伺服指令 (位姿 → IK → ServoJ) |
-| `/geniarm/servol_cmd` | `ros2_proto/msg/ServoLCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔直线伺服指令 |
-
-> 伺服通道 (`/geniarm/servo*`) 使用 **ROS2 Message** 定义 (`.msg`)，序列化类型为 `ros2`，
-> 订阅后端为 `zenoh`；其余通道仍为 protobuf。外部发布方需使用消息类型
-> `ros2:ros2_proto/msg/ServoJCommand` 等并以 `ros2` 序列化发布。
+| `/geniarm/servoj_cmd` | `genisys_msgs/msg/ServoJCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 关节空间伺服指令 (目标关节角 + dt + stop) |
+| `/geniarm/servoj_pose_cmd` | `genisys_msgs/msg/ServoJPoseCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔位姿伺服指令 (位姿 → IK → ServoJ) |
+| `/geniarm/servol_cmd` | `genisys_msgs/msg/ServoLCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔直线伺服指令 |
 
 ### RPC 接口
 
