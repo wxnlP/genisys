@@ -3,9 +3,9 @@ include(FetchContent)
 message(STATUS "get aimrt ...")
 
 FetchContent_Declare(
-  aimrt #
-  GIT_REPOSITORY https://github.com/AimRT/AimRT.git
-  GIT_TAG main)
+  aimrt
+  GIT_REPOSITORY "https://gh-proxy.org/https://github.com/wxnlP/AimRT.git"
+  GIT_TAG "v1.7.1-rc1")
 
 FetchContent_GetProperties(aimrt)
 if(NOT aimrt_POPULATED)

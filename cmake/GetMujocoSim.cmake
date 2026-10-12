@@ -7,7 +7,7 @@ if(aimrt_mujoco_sim_LOCAL_SOURCE)
 else()
   FetchContent_Declare(
     aimrt_mujoco_sim 
-    GIT_REPOSITORY "https://github.com/AimRT/aimrt_mujoco_sim.git" 
+    GIT_REPOSITORY "https://gh-proxy.org/https://github.com/AimRT/aimrt_mujoco_sim.git" 
     GIT_TAG "v1.0.1"
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     OVERRIDE_FIND_PACKAGE)

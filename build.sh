@@ -8,8 +8,9 @@ if [ -d ./build/install ]; then
 fi
 
 cmake -B build \
-    -Dbackward_DOWNLOAD_URL=https://ghfast.top/https://github.com/bombela/backward-cpp/archive/refs/tags/v1.6.tar.gz \
-    -Dmujoco_DOWNLOAD_URL=https://ghfast.top/https://github.com/deepmind/mujoco/archive/3.1.6.tar.gz \
+    -Dbackward_DOWNLOAD_URL=https://gh-proxy.org/https://github.com/bombela/backward-cpp/archive/refs/tags/v1.6.tar.gz \
+    -Dmujoco_DOWNLOAD_URL=https://gh-proxy.org/https://github.com/deepmind/mujoco/archive/3.1.6.tar.gz \
+    -Devents_executor_GIT_URL=https://gh-proxy.org/https://github.com/irobot-ros/events-executor/archive/b2ef94e1ecee3aa3369c680343df46035998ddc0.tar.gz \
     -Dboost_DOWNLOAD_URL=https://gitee.com/AimRT/boost/releases/download/1.82.0/boost-1.82.0.tar.xz \
     -Dasio_DOWNLOAD_URL=https://gitee.com/AimRT/asio/repository/archive/asio-1-30-2.zip \
     -Dfmt_DOWNLOAD_URL=https://gitee.com/AimRT/fmt/repository/archive/10.2.1.zip \
