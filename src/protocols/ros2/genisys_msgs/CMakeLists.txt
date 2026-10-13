@@ -36,7 +36,8 @@ rosidl_generate_interfaces(${CUR_TARGET_NAME}
   "srv/MoveJPoseMulti.srv"
   "srv/MoveL.srv"
   "srv/MoveLMulti.srv"
-  "srv/Gripper.srv"
+  "srv/GripperPos.srv"
+  "srv/GripperForce.srv"
   DEPENDENCIES std_msgs geometry_msgs)
 # cmake-format: on
 set(BUILD_SHARED_LIBS ${CUR_BUILD_SHARED_LIBS})
@@ -126,16 +127,28 @@ add_ros2_aimrt_rpc_gencode_target_for_one_file(
 add_library(${CUR_TARGET_ALIAS_NAME}_move_lmulti_rpc_gencode ALIAS ${CUR_TARGET_NAME}_move_lmulti_rpc_gencode)
 
 add_ros2_aimrt_rpc_gencode_target_for_one_file(
-  TARGET_NAME ${CUR_TARGET_NAME}_gripper_rpc_gencode
+  TARGET_NAME ${CUR_TARGET_NAME}_gripper_pos_rpc_gencode
   PACKAGE_NAME ${CUR_TARGET_NAME}
-  PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/srv/Gripper.srv
+  PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/srv/GripperPos.srv
   GENCODE_PATH ${CMAKE_CURRENT_BINARY_DIR}
   DEP_PROTO_TARGETS
     ${CUR_TARGET_NAME}::${CUR_TARGET_NAME}__rosidl_generator_cpp
     ${CUR_TARGET_NAME}::${CUR_TARGET_NAME}__rosidl_typesupport_cpp
     ${CUR_TARGET_NAME}::${CUR_TARGET_NAME}__rosidl_typesupport_fastrtps_cpp
     ${CUR_TARGET_NAME}::${CUR_TARGET_NAME}__rosidl_typesupport_introspection_cpp)
-add_library(${CUR_TARGET_ALIAS_NAME}_gripper_rpc_gencode ALIAS ${CUR_TARGET_NAME}_gripper_rpc_gencode)
+add_library(${CUR_TARGET_ALIAS_NAME}_gripper_pos_rpc_gencode ALIAS ${CUR_TARGET_NAME}_gripper_pos_rpc_gencode)
+
+add_ros2_aimrt_rpc_gencode_target_for_one_file(
+  TARGET_NAME ${CUR_TARGET_NAME}_gripper_force_rpc_gencode
+  PACKAGE_NAME ${CUR_TARGET_NAME}
+  PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/srv/GripperForce.srv
+  GENCODE_PATH ${CMAKE_CURRENT_BINARY_DIR}
+  DEP_PROTO_TARGETS
+    ${CUR_TARGET_NAME}::${CUR_TARGET_NAME}__rosidl_generator_cpp
+    ${CUR_TARGET_NAME}::${CUR_TARGET_NAME}__rosidl_typesupport_cpp
+    ${CUR_TARGET_NAME}::${CUR_TARGET_NAME}__rosidl_typesupport_fastrtps_cpp
+    ${CUR_TARGET_NAME}::${CUR_TARGET_NAME}__rosidl_typesupport_introspection_cpp)
+add_library(${CUR_TARGET_ALIAS_NAME}_gripper_force_rpc_gencode ALIAS ${CUR_TARGET_NAME}_gripper_force_rpc_gencode)
 
 add_library(${CUR_TARGET_NAME}_rpc_gencode INTERFACE)
 target_link_libraries(
@@ -147,5 +160,6 @@ target_link_libraries(
     ${CUR_TARGET_NAME}_move_jposemulti_rpc_gencode
     ${CUR_TARGET_NAME}_move_l_rpc_gencode
     ${CUR_TARGET_NAME}_move_lmulti_rpc_gencode
-    ${CUR_TARGET_NAME}_gripper_rpc_gencode)
+    ${CUR_TARGET_NAME}_gripper_pos_rpc_gencode
+    ${CUR_TARGET_NAME}_gripper_force_rpc_gencode)
 add_library(${CUR_TARGET_ALIAS_NAME}_rpc_gencode ALIAS ${CUR_TARGET_NAME}_rpc_gencode)

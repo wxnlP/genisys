@@ -72,7 +72,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     auto movej_pose_multi_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveJPoseMultiCoServer>();
     auto movel_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveLCoServer>();
     auto movel_multi_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::MoveLMultiCoServer>();
-    auto gripper_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::GripperCoServer>();
+    auto gripper_pos_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::GripperPosCoServer>();
+    auto gripper_force_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::GripperForceCoServer>();
 
     // MoveJ 服务处理
     movej_handle->MoveJ.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
@@ -222,30 +223,62 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       return aimrt::rpc::Status();
     });
 
-    // Gripper 服务处理
-    gripper_handle->Gripper.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
-                                               const genisys_msgs::srv::Gripper_Request& req,
-                                               genisys_msgs::srv::Gripper_Response& rsp) {
+    // GripperPos 服务处理：位置控制
+    gripper_pos_handle->GripperPos.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
+                                                      const genisys_msgs::srv::GripperPos_Request& req,
+                                                      genisys_msgs::srv::GripperPos_Response& rsp) {
       if (!gripper_controller_) {
-        AIMRT_ERROR("收到 Gripper 请求，但当前配置未启用夹爪");
+        AIMRT_ERROR("收到 GripperPos 请求，但当前配置未启用夹爪");
         rsp.error.code = -1;
         rsp.error.msg = "Gripper is not configured in body cfg";
         return aimrt::rpc::Status();
       }
-      AIMRT_INFO("\n---\n收到Gripper请求\n---");
+      AIMRT_INFO("\n---\n收到GripperPos请求\n---");
       bool ret = gripper_controller_->PosControl(
           req.position, req.velocity, req.acceleration, req.effort);
       if (ret) {
         gripper_controller_->WaitForCompletion();
         rsp.error.code = 0;
-        rsp.error.msg = "Gripper succeeded";
+        rsp.error.msg = "GripperPos succeeded";
       } else {
         rsp.error.code = -1;
-        rsp.error.msg = "Gripper failed";
+        rsp.error.msg = "GripperPos failed";
       }
 
       return aimrt::rpc::Status();
     });
+
+    // GripperForce 服务处理：力控抓取（接近 -> 力矩保持，力到位后返回，力矩指令继续保持）
+    gripper_force_handle->GripperForce.ServeInline(
+        [this](aimrt::rpc::ContextRef ctx_ref,
+               const genisys_msgs::srv::GripperForce_Request& req,
+               genisys_msgs::srv::GripperForce_Response& rsp) {
+          if (!gripper_controller_) {
+            AIMRT_ERROR("收到 GripperForce 请求，但当前配置未启用夹爪");
+            rsp.error.code = -1;
+            rsp.error.msg = "Gripper is not configured in body cfg";
+            return aimrt::rpc::Status();
+          }
+          AIMRT_INFO("\n---\n收到GripperForce请求\n---");
+
+          GripperController::ForceControlParams params;
+          params.approach_velocity = req.approach_velocity;
+          params.approach_accel = req.approach_accel;
+          params.switch_torque = req.switch_torque;
+          params.target_torque = req.target_torque;
+          params.closed_release = req.closed_release;
+
+          bool ret = gripper_controller_->ForceControl(params);
+          if (ret) {
+            rsp.error.code = 0;
+            rsp.error.msg = "GripperForce succeeded";
+          } else {
+            rsp.error.code = -1;
+            rsp.error.msg = "GripperForce failed";
+          }
+
+          return aimrt::rpc::Status();
+        });
 
   } catch (const std::exception& e) {
     AIMRT_ERROR("Init failed, {}", e.what());

@@ -118,7 +118,7 @@ echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-re
 
 | 组件 | 功能 |
 |:---|:---|
-| `MoveControlServiceImpl` | HTTP RPC 服务，提供 MoveJ / MoveL / MoveJMuti / MoveLMuti / Gripper 五种运动原语 |
+| `MoveControlServiceImpl` | HTTP RPC 服务，提供 MoveJ / MoveL / MoveJMuti / MoveLMuti 以及夹爪 GripperPos / GripperForce 原语 |
 | `ArmController` | 轨迹规划（quintic/cubic/lspb）、逆运动学 (Piper/UR)|
 | `GripperController` | 夹爪运动规划 |
 | `ControlLoop` | 500Hz 控制循环，轮询轨迹插值点并下发 `/geniarm/joint_cmd` |
@@ -210,7 +210,8 @@ python -m monitor.main
 | `MoveL` | 末端位姿(xyz+wxyz) + 速度 + 加速度 | 笛卡尔空间直线运动 |
 | `MoveJMuti` | 多组关节角度 + 过渡半径 + v + a | 多路径点关节运动 |
 | `MoveLMuti` | 多组末端位姿 + 过渡半径 + v + a | 多路径点笛卡尔运动 |
-| `Gripper` | 位置[0~1] + 速度 + 加速度 + 力矩 | 夹爪开合控制 |
+| `GripperPos` | 位置[0~1] + 速度 + 加速度 + 力矩 | 夹爪位置控制（开合） |
+| `GripperForce` | 目标力矩 + 切换阈值 + 接近速度 + 接近加速度 + 闭合释放 | 力控抓取（碰到后按力矩夹住） |
 
 ## Python RPC 调用示例
 
@@ -223,7 +224,7 @@ python -m monitor.main
 | MoveJMuti | [`examples/movej_muti_demo.py`](examples/movej_muti_demo.py) | 多路径点关节运动 |
 | MoveLMuti | [`examples/movel_muti_demo.py`](examples/movel_muti_demo.py) | 多路径点笛卡尔运动 |
 | Go Home | [`examples/go_home.py`](examples/go_home.py) | 一键回原点 (MoveJ) |
-| Gripper | [`examples/gripper_demo.py`](examples/gripper_demo.py) | 夹爪开合测试 |
+| GripperPos / GripperForce | [`examples/gripper_demo.py`](examples/gripper_demo.py) | 夹爪测试：`--pos pos v a e` 位置控制，`--force target switch v a release` 力控抓取 |
 
 依赖: `pip install requests`
 
