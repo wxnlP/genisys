@@ -14,9 +14,9 @@ Gripper Demo — 夹爪位置控制 / 力控
              默认:     1.0       1.0         2.0       0.5
              说明:     0.0=夹紧, 1.0=全开
 
-    --force  target_torque  switch_torque  approach_velocity  approach_accel  closed_release
-             力矩控制值      切换阈值        接近速度            接近加速度       闭合时释放力矩
-             默认:  0.3 N·m        0.05 N·m       1.0 rad/s          1.0 rad/s^2     true
+    --force  target_torque  switch_velocity  approach_velocity  approach_accel  closed_release
+             力矩控制值      速度亏欠阈值      接近速度            接近加速度       闭合时释放力矩
+             默认:  1.0 N·m        0.2 rad/s       1.0 rad/s           1.0 rad/s^2     true
 
 用法:
     python3 gripper_demo.py                                  # 位置控制，全默认（全开）
@@ -50,7 +50,7 @@ TIMEOUT = 30.0
 # 参数定义: 协议字段名 / 默认值 / 帮助文本，顺序即命令行顺序
 # ---------------------------------------------------------------------------
 POS_FIELDS = ("position", "velocity", "acceleration", "effort")
-POS_DEFAULTS = (1.0, 1.0, 2.0, 0.5)
+POS_DEFAULTS = (1.0, 1.0, 2.0, 0)
 POS_HELP = (
     "目标位置 (0.0=夹紧, 1.0=全开)",
     "运动速度",
@@ -60,15 +60,15 @@ POS_HELP = (
 
 FORCE_FIELDS = (
     "target_torque",
-    "switch_torque",
+    "switch_velocity",
     "approach_velocity",
     "approach_accel",
     "closed_release",
 )
-FORCE_DEFAULTS = (0.3, 0.05, 1.0, 1.0, True)
+FORCE_DEFAULTS = (0.5, 0.2, 1.0, 1.0, True)
 FORCE_HELP = (
     "力矩控制值 N·m (夹持力矩)",
-    "力矩模式切换阈值 N·m (碰到物体的判定)",
+    "速度亏欠阈值 rad/s (实际速度落后规划速度这么多算碰到)",
     "接近速度 rad/s",
     "接近加速度 rad/s^2",
     "位置接近闭合时释放力矩 (true/false)",
@@ -218,7 +218,7 @@ def main():
         print("=" * 60)
         if mode == "force":
             print(f"力矩控制值: {payload['target_torque']} N·m  "
-                  f"切换阈值: {payload['switch_torque']} N·m")
+                  f"速度亏欠阈值: {payload['switch_velocity']} rad/s")
             print(f"接近速度: {payload['approach_velocity']} rad/s  "
                   f"接近加速度: {payload['approach_accel']} rad/s^2  "
                   f"闭合释放: {'开' if payload['closed_release'] else '关'}")

@@ -49,8 +49,8 @@ robot:
       stiffness: 8.0
       damping: 1.0
     force_control:
-      contact_ticks: 3               # 接触确认帧数，防单帧电流尖峰
+      contact_ticks: 10               # 接触确认帧数，防单帧电流尖峰
       hold_damping: 0.5              # 保持段阻尼
       ramp_rate: 2.0                 # 力矩爬升率 N·m/s
-      min_position_ratio: 0.05       # 「位置接近闭合」阈值 = 比例 × max_range
+      min_position_ratio: 0.02       # 「位置接近闭合」阈值 = 比例 × max_range
       max_target_torque: 3.0         # 力矩控制值上限 N·m

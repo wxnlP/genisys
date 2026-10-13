@@ -264,7 +264,7 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
           GripperController::ForceControlParams params;
           params.approach_velocity = req.approach_velocity;
           params.approach_accel = req.approach_accel;
-          params.switch_torque = req.switch_torque;
+          params.switch_velocity = req.switch_velocity;
           params.target_torque = req.target_torque;
           params.closed_release = req.closed_release;
 
