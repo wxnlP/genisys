@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-MoveJMuti Demo — 多路径点关节空间运动
+MoveJMulti Demo — 多路径点关节空间运动
 
-向 GeniArm 发送 MoveJMuti RPC 请求，控制机械臂依次经过
+向 GeniArm 发送 MoveJMulti RPC 请求，控制机械臂依次经过
 多个关节角度路径点，路径点之间以圆弧过渡。
 
 用法:
-    python3 movej_muti_demo.py
+    python3 movej_multi_demo.py
 """
 
 import requests
@@ -28,7 +28,7 @@ payload = {
 }
 
 print("=" * 60)
-print("MoveJMuti Demo — 多路径点关节运动")
+print("MoveJMulti Demo — 多路径点关节运动")
 print("=" * 60)
 print("Waypoints:")
 for i, wp in enumerate(payload["position"]):
@@ -45,9 +45,9 @@ try:
 
     code = result.get("error", {}).get("code", -1)
     if int(code) == 0:
-        print("\n✅ MoveJMuti succeeded!")
+        print("\n✅ MoveJMulti succeeded!")
     else:
-        print(f"\n❌ MoveJMuti failed (code={code}): {result.get('error', {}).get('msg', 'unknown')}")
+        print(f"\n❌ MoveJMulti failed (code={code}): {result.get('error', {}).get('msg', 'unknown')}")
 
 except requests.exceptions.ConnectionError:
     print("\n❌ 无法连接到 GeniArm (127.0.0.1:50080)，请确认程序已启动。")

@@ -125,7 +125,7 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     movej_multi_handle->MoveJMulti.ServeInline([this](aimrt::rpc::ContextRef ctx_ref,
                                                       const genisys_msgs::srv::MoveJMulti_Request& req,
                                                       genisys_msgs::srv::MoveJMulti_Response& rsp) {
-      AIMRT_INFO("\n---\n收到MoveJMuti请求\n---");
+      AIMRT_INFO("\n---\n收到MoveJMulti请求\n---");
       std::vector<ArmMotion::Joint6Dof> points;
       points.reserve(req.position.size());
       for (const auto& j : req.position) {
@@ -137,10 +137,10 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
         rsp.error.code = 0;
-        rsp.error.msg = "MoveJMuti succeeded";
+        rsp.error.msg = "MoveJMulti succeeded";
       } else {
         rsp.error.code = ret;
-        rsp.error.msg = "MoveJMuti failed";
+        rsp.error.msg = "MoveJMulti failed";
       }
 
       return aimrt::rpc::Status();
@@ -214,10 +214,10 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
         rsp.error.code = 0;
-        rsp.error.msg = "MoveLMuti succeeded";
+        rsp.error.msg = "MoveLMulti succeeded";
       } else {
         rsp.error.code = ret;
-        rsp.error.msg = "MoveLMuti failed";
+        rsp.error.msg = "MoveLMulti failed";
       }
 
       return aimrt::rpc::Status();

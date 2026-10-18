@@ -2,7 +2,7 @@
 """
 MoveL Demo — 笛卡尔空间直线运动
 
-先用 MoveJ 到安全姿态，再用 MoveL 做小范围直线运动。
+向 GeniArm 发送 MoveL RPC 请求，控制机械臂末端从当前位置沿直线运动到目标位姿。
 
 用法:
     python3 movel_demo.py                                     # 全部使用默认参数
@@ -21,9 +21,6 @@ MoveL Demo — 笛卡尔空间直线运动
 写法说明: --pose 的 6 个数值支持「空格分隔」或「逗号分隔」两种写法。
           注意逗号形式若以 '-' 开头 (如 -108,0,-90) 会被 argparse 当成选项,
           此时请改用空格写法，或写成 --pose=0.3,0,0.15,-108,0,-90。
-
-此外, 作为前置动作的 MoveJ 安全姿态也支持独立覆盖: --pre-joints / --pre-v / --pre-a,
-不想执行前置 MoveJ 可加 --skip-pre。
 """
 
 import argparse
@@ -36,7 +33,6 @@ import requests
 # ---------------------------------------------------------------------------
 # RPC endpoint
 # ---------------------------------------------------------------------------
-URL_MOVEJ = "http://127.0.0.1:50080/rpc/genisys_msgs/srv/MoveJ"
 URL_MOVEL = "http://127.0.0.1:50080/rpc/genisys_msgs/srv/MoveL"
 TIMEOUT = 30.0
 
@@ -50,13 +46,6 @@ POSE_FIELDS = ("x", "y", "z", "roll", "pitch", "yaw")
 # MoveL 运动参数
 DEFAULT_V = 0.3     # m/s
 DEFAULT_A = 0.2     # m/s^2
-
-# 前置 MoveJ 安全姿态 (关节角度, 度)
-DEFAULT_PRE_JOINTS_DEG = [0.0, 45.8366, -28.6479, 0.0, 0.0, 0.0]
-DEFAULT_PRE_V_DEG = 45.8366  # = 0.8 rad/s
-DEFAULT_PRE_A_DEG = 22.9183  # = 0.4 rad/s^2
-
-JOINT_COUNT = 6
 
 
 # ---------------------------------------------------------------------------
@@ -111,10 +100,6 @@ def parse_pose(value):
     return parse_float_list(value, 6, "--pose")
 
 
-def parse_joint_list(value, count=JOINT_COUNT):
-    return parse_float_list(value, count, "--pre-joints")
-
-
 # ---------------------------------------------------------------------------
 # 命令行
 # ---------------------------------------------------------------------------
@@ -129,8 +114,6 @@ def build_parser():
             "  %(prog)s --pose 0.30,0,0.15,-108,0,-90 --v 0.2 --a 0.1\n"
             "  %(prog)s --pose 0.35 0 0.20 -108 0 -90   # 只改目标位姿\n"
             "  %(prog)s --v 0.2                          # 只改运动参数\n"
-            "  %(prog)s --skip-pre                       # 跳过前置 MoveJ\n"
-            "  %(prog)s --pre-joints 0 45 -30 0 0 0      # 前置安全姿态也自定义\n"
         ),
     )
 
@@ -155,29 +138,8 @@ def build_parser():
         help=f"直线运动加速度 (m/s^2) (默认: {DEFAULT_A})",
     )
 
-    # 前置 MoveJ 安全姿态
-    g_pre = parser.add_argument_group("前置 MoveJ 安全姿态 (关节角, 度)")
-    g_pre.add_argument(
-        "--pre-joints", type=str, nargs="+", default=None, metavar="DEG",
-        help=f"前置 MoveJ 的 6 个关节角 (度) (默认: {DEFAULT_PRE_JOINTS_DEG})",
-    )
-    g_pre.add_argument(
-        "--pre-v", type=float, default=None, metavar="DEG_S",
-        help=f"前置 MoveJ 速度 (度/秒) (默认: {DEFAULT_PRE_V_DEG})",
-    )
-    g_pre.add_argument(
-        "--pre-a", type=float, default=None, metavar="DEG_S2",
-        help=f"前置 MoveJ 加速度 (度/秒^2) (默认: {DEFAULT_PRE_A_DEG})",
-    )
-    g_pre.add_argument(
-        "--skip-pre", action="store_true",
-        help="跳过前置 MoveJ，直接执行 MoveL",
-    )
-
     # 其他
     g_other = parser.add_argument_group("其他")
-    g_other.add_argument("--url-movej", default=URL_MOVEJ,
-                         help=f"MoveJ RPC 地址 (默认: {URL_MOVEJ})")
     g_other.add_argument("--url-movel", default=URL_MOVEL,
                          help=f"MoveL RPC 地址 (默认: {URL_MOVEL})")
     g_other.add_argument(
@@ -202,16 +164,6 @@ def resolve_pose(args):
     return parse_pose(args.pose), ["--pose"]
 
 
-def resolve_pre_joints(args):
-    """合并 --pre-joints (前置 MoveJ 关节角)。"""
-    joints_deg = list(DEFAULT_PRE_JOINTS_DEG)
-    overridden = []
-    if args.pre_joints is not None:
-        joints_deg = parse_joint_list(args.pre_joints)
-        overridden.append("--pre-joints")
-    return joints_deg, overridden
-
-
 def post_rpc(url, payload, timeout):
     """发送一次 RPC，返回 (是否成功, 原始响应 dict, 错误信息)。"""
     resp = requests.post(url, json=payload, timeout=timeout)
@@ -230,7 +182,6 @@ def main():
     # --- 第 1 组: 运动目标 -------------------------------------------------
     try:
         pose, pose_overridden = resolve_pose(args)
-        pre_joints_deg, pre_overridden = resolve_pre_joints(args)
     except argparse.ArgumentTypeError as exc:
         parser.error(str(exc))
 
@@ -244,15 +195,6 @@ def main():
         name for name, val in (("--v", args.v), ("--a", args.a)) if val is not None
     ]
 
-    # --- 前置 MoveJ 运动参数 -----------------------------------------------
-    pre_v_deg = args.pre_v if args.pre_v is not None else DEFAULT_PRE_V_DEG
-    pre_a_deg = args.pre_a if args.pre_a is not None else DEFAULT_PRE_A_DEG
-
-    movej_payload = {
-        "position": {"position": [math.radians(vv) for vv in pre_joints_deg]},
-        "v": math.radians(pre_v_deg),
-        "a": math.radians(pre_a_deg),
-    }
     movel_payload = {
         "pose": {
             "position": {"x": x, "y": y, "z": z},
@@ -264,16 +206,10 @@ def main():
 
     if args.dry_run:
         if args.json_out:
-            print(json.dumps({
-                "movej_payload": None if args.skip_pre else movej_payload,
-                "movel_payload": movel_payload,
-            }, indent=2))
+            print(json.dumps(movel_payload, indent=2))
             return 0
 
-        if not args.skip_pre:
-            print("[dry-run] Step 1 MoveJ payload:")
-            print(json.dumps(movej_payload, indent=2))
-        print("\n[dry-run] Step 2 MoveL payload:")
+        print("[dry-run] MoveL payload:")
         print(json.dumps(movel_payload, indent=2))
         print("\n[dry-run] 未发起实际请求。")
         return 0
@@ -281,7 +217,6 @@ def main():
     # --json: 只在结束时输出一行结构化结果, 不打印横幅
     quiet = args.json_out
     json_summary = {
-        "movej": {"skipped": bool(args.skip_pre), "ok": None, "code": None, "msg": None},
         "movel": {"ok": None, "code": None, "msg": None},
         "movel_payload": movel_payload,
     }
@@ -294,53 +229,11 @@ def main():
               f"{'[' + ','.join(motion_overridden) + ']' if motion_overridden else ''}")
 
     # ------------------------------------------------------------------
-    # Step 1: 前置 MoveJ 到安全姿态
-    # ------------------------------------------------------------------
-    if args.skip_pre:
-        if not quiet:
-            print("\n[跳过] 前置 MoveJ (--skip-pre)")
-    else:
-        if not quiet:
-            print("\n" + "=" * 60)
-            print("Step 1: MoveJ — 展开到安全姿态")
-            print("=" * 60)
-            print(f"目标关节角 (度): {[round(vv, 4) for vv in pre_joints_deg]}  "
-                  f"{'| 覆盖: ' + ','.join(pre_overridden) if pre_overridden else '| 默认'}")
-            print(f"速度: {round(pre_v_deg, 4)} 度/秒, 加速度: {round(pre_a_deg, 4)} 度/秒^2")
-        try:
-            ok, result, msg = post_rpc(args.url_movej, movej_payload, args.timeout)
-        except requests.exceptions.ConnectionError:
-            if quiet:
-                print(json.dumps({"error": f"无法连接到 {args.url_movej}"}))
-            else:
-                print(f"\n❌ 无法连接到 GeniArm ({args.url_movej})，请确认程序已启动。")
-            return 1
-        except requests.exceptions.RequestException as e:
-            if quiet:
-                print(json.dumps({"error": f"Step 1 请求失败: {e}"}))
-            else:
-                print(f"\n❌ Step 1 请求失败: {e}")
-            return 1
-
-        json_summary["movej"] = {
-            "skipped": False, "ok": ok,
-            "code": result.get("error", {}).get("code"), "msg": msg,
-        }
-        if not quiet:
-            print(f"Result: {'✅' if ok else '❌'} (code={result.get('error', {}).get('code')})")
-        if not ok:
-            if quiet:
-                print(json.dumps(json_summary))
-            else:
-                print(f"MoveJ 失败，无法继续 ({msg})")
-            return 1
-
-    # ------------------------------------------------------------------
-    # Step 2: MoveL 直线运动
+    # MoveL 直线运动
     # ------------------------------------------------------------------
     if not quiet:
         print("\n" + "=" * 60)
-        print("Step 2: MoveL — 直线运动到目标")
+        print("MoveL — 直线运动到目标")
         print("=" * 60)
         print(f"目标位置 (m): x={x}, y={y}, z={z}  "
               f"{'| 覆盖: ' + ','.join(pose_overridden) if pose_overridden else '| 默认'}")
