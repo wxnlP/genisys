@@ -206,9 +206,18 @@ void ActuatorModule::WriteLoop() {
         joint_cmd = cached_joint_cmd_;
         gripper_cmd = cached_gripper_cmd_;
       }
-      arm_actuator_->SetJointState(joint_cmd);
+      if (!arm_actuator_->SetJointState(joint_cmd)) {
+        if (tx_fail_count_++ % 500 == 0) {
+          AIMRT_WARN("关节指令下发失败（累计 {} 次）", tx_fail_count_);
+        }
+      } else {
+        tx_fail_count_ = 0;
+      }
       if (gripper_actuator_) {
-        gripper_actuator_->SendCommand(gripper_cmd);
+        if (!gripper_actuator_->SendCommand(gripper_cmd) &&
+            gripper_tx_fail_count_++ % 500 == 0) {
+          AIMRT_WARN("夹爪指令下发失败（累计 {} 次）", gripper_tx_fail_count_);
+        }
       }
     }
   } catch (const std::exception& e) {
@@ -222,6 +231,10 @@ void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandAr
   if (!ctx_ptr_->Running()) { return; }
   AIMRT_DEBUG("Received joint command message with {} joints.", msg->joints_size());
   int n = msg->joints_size();
+  if (n < 6) {
+    AIMRT_WARN("joint_cmd 关节数 {} < 6，丢弃", n);
+    return;
+  }
 
   {
     std::lock_guard<std::mutex> lock(cached_cmd_lock);

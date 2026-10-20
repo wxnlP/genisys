@@ -477,6 +477,7 @@ void ControlModule::PublishLoop() {
     ArmMotion::Pose6Dof expected_pose;
     // 告警计数（每 kWarnInterval 次失败打一条）
     uint32_t pose_warn_count = 0;
+    uint32_t fk_warn_count = 0;
 
     auto fill_pose_msg = [this](Pose& msg, const ArmMotion::Pose6Dof& source_pose, uint64_t& seq, const auto& time_ns) {
       auto* header = msg.mutable_header();
@@ -515,7 +516,15 @@ void ControlModule::PublishLoop() {
           joint_pos_cmd = last_arm_cmd_->position;
         }
       }
-      arm_controller_->JointToPose(joint_pos_cmd, expected_pose);
+      if (arm_controller_->JointToPose(joint_pos_cmd, expected_pose) != 0) {
+        if (fk_warn_count++ % kWarnInterval == 0) {
+          AIMRT_WARN("expected pose FK failed");
+        }
+        next_loop_time += period;
+        std::this_thread::sleep_until(next_loop_time);
+        continue;
+      }
+      fk_warn_count = 0;
 
       // 打包msg
       expected_pose_msg.Clear();
@@ -550,6 +559,7 @@ void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArr
   int n = msg->joints_size();
 
   if (n < 6) {
+    AIMRT_WARN("joint_state 关节数 {} < 6，丢弃", n);
     return;
   }
 
