@@ -2,12 +2,13 @@
 #include <fmt/ranges.h>
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
+#include "common/warn_throttle.h"
 #include "util/time_util.h"
 #include "yaml-cpp/yaml.h"
 
 namespace genisys::actuator_module {
 
-// 状态读取失败的告警节流：每 N 次失败打一条，避免 500Hz 循环刷屏
+// 状态读取失败的告警节流周期
 constexpr uint32_t kWarnInterval = 500;
 
 bool ActuatorModule::Initialize(aimrt::CoreRef core) {
@@ -123,33 +124,31 @@ void ActuatorModule::PublishLoop() {
     joint_state_msg.mutable_joints()->Reserve(7);
     ArmCtrlBase::JointState joint_state;
     GripperCtrlBase::GripperState gripper_state;
-    // 告警计数
-    uint32_t arm_warn_count = 0;
-    uint32_t gripper_warn_count = 0;
+    // 告警节流
+    WarnThrottle arm_state_warn;
+    WarnThrottle gripper_state_warn;
     
     while (ctx_ptr_->Running()) {
       joint_state_msg.Clear();
       if (!arm_actuator_->GetJointState(joint_state)) {
-        // 警告处理
-        if (arm_warn_count++ % kWarnInterval == 0 && arm_warn_count > 10) {
-          AIMRT_WARN("读取机械臂本体关节状态失败！");
+        if (arm_state_warn.ShouldLog(kWarnInterval)) {
+          AIMRT_WARN("读取机械臂本体关节状态失败（累计 {} 次）", arm_state_warn.count());
         }
         next_loop_time += period;
         std::this_thread::sleep_until(next_loop_time);
         continue;
       }
-      arm_warn_count = 0;
+      arm_state_warn.Reset();
       if (gripper_actuator_) {
         if (!gripper_actuator_->ReceiveState(gripper_state)) {
-          // 警告处理
-          if (gripper_warn_count++ % kWarnInterval == 0 && gripper_warn_count > 10) {
-            AIMRT_WARN("读取夹爪状态失败！");
+          if (gripper_state_warn.ShouldLog(kWarnInterval)) {
+            AIMRT_WARN("读取夹爪状态失败（累计 {} 次）", gripper_state_warn.count());
           }
           next_loop_time += period;
           std::this_thread::sleep_until(next_loop_time);
           continue;
         }
-        gripper_warn_count = 0;
+        gripper_state_warn.Reset();
       }
 
       // header 时间戳统一为 system_clock
@@ -194,6 +193,8 @@ void ActuatorModule::WriteLoop() {
   try {
     ArmCtrlBase::JointCommand joint_cmd;
     GripperCtrlBase::GripperCommand gripper_cmd;
+    WarnThrottle arm_tx_warn;
+    WarnThrottle gripper_tx_warn;
     while (ctx_ptr_->Running()) {
       if (!write_sem_.try_acquire_for(std::chrono::milliseconds(100))) {
         continue;
@@ -207,16 +208,19 @@ void ActuatorModule::WriteLoop() {
         gripper_cmd = cached_gripper_cmd_;
       }
       if (!arm_actuator_->SetJointState(joint_cmd)) {
-        if (tx_fail_count_++ % 500 == 0) {
-          AIMRT_WARN("关节指令下发失败（累计 {} 次）", tx_fail_count_);
+        if (arm_tx_warn.ShouldLog(kWarnInterval)) {
+          AIMRT_WARN("关节指令下发失败（累计 {} 次）", arm_tx_warn.count());
         }
       } else {
-        tx_fail_count_ = 0;
+        arm_tx_warn.Reset();
       }
       if (gripper_actuator_) {
-        if (!gripper_actuator_->SendCommand(gripper_cmd) &&
-            gripper_tx_fail_count_++ % 500 == 0) {
-          AIMRT_WARN("夹爪指令下发失败（累计 {} 次）", gripper_tx_fail_count_);
+        if (!gripper_actuator_->SendCommand(gripper_cmd)) {
+          if (gripper_tx_warn.ShouldLog(kWarnInterval)) {
+            AIMRT_WARN("夹爪指令下发失败（累计 {} 次）", gripper_tx_warn.count());
+          }
+        } else {
+          gripper_tx_warn.Reset();
         }
       }
     }

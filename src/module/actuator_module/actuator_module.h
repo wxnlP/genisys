@@ -63,9 +63,6 @@ class ActuatorModule : public aimrt::ModuleBase {
 
   ArmCtrlBase::JointCommand cached_joint_cmd_;
   GripperCtrlBase::GripperCommand cached_gripper_cmd_;
-
-  uint32_t tx_fail_count_{0};
-  uint32_t gripper_tx_fail_count_{0};
 };
 
 }  // namespace genisys::actuator_module

@@ -5,12 +5,13 @@
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "aimrt_module_ros2_interface/channel/ros2_channel.h"
+#include "common/warn_throttle.h"
 #include "util/time_util.h"
 #include "yaml-cpp/yaml.h"
 
 namespace genisys::control_module {
 
-// 状态读取失败的告警节流：每 N 次失败打一条，避免 500Hz 循环刷屏
+// 状态读取失败的告警节流周期
 constexpr uint32_t kWarnInterval = 500;
 
 bool ControlModule::Initialize(aimrt::CoreRef core) {
@@ -338,8 +339,8 @@ void ControlModule::ControlLoop() {
     joint_cmd_msg.mutable_joints()->Reserve(7);
     ArmMotion::JointCommand joint_cmd;
     GripperController::GripperCommand gripper_cmd;
-    // 告警计数
-    uint32_t lag_warn_count = 0;
+    // 告警节流
+    WarnThrottle lag_warn;
 
     // 周期计时统计
     uint64_t dbg_cycle = 0;
@@ -444,7 +445,7 @@ void ControlModule::ControlLoop() {
       next_loop_time += period;
       auto now = std::chrono::steady_clock::now();
       if (next_loop_time < now - period) {  // 落后超过 1 个周期
-        if (lag_warn_count++ % kWarnInterval == 0) {
+        if (lag_warn.ShouldLog(kWarnInterval)) {
           AIMRT_WARN("Control loop is lagging behind, skip to next cycle.");
           AIMRT_WARN(
               "\n---\nNow cycle: get_cmd={}μs, build_msg={}μs, publish={}μs, total={}μs\n---",
@@ -475,9 +476,9 @@ void ControlModule::PublishLoop() {
     ArmMotion::Pose6Dof current_pose;
     ArmMotion::Joint6Dof joint_pos_cmd;
     ArmMotion::Pose6Dof expected_pose;
-    // 告警计数（每 kWarnInterval 次失败打一条）
-    uint32_t pose_warn_count = 0;
-    uint32_t fk_warn_count = 0;
+    // 告警节流
+    WarnThrottle pose_warn;
+    WarnThrottle fk_warn;
 
     auto fill_pose_msg = [this](Pose& msg, const ArmMotion::Pose6Dof& source_pose, uint64_t& seq, const auto& time_ns) {
       auto* header = msg.mutable_header();
@@ -502,14 +503,14 @@ void ControlModule::PublishLoop() {
     while (ctx_ptr_->Running()) {
       // 获取期望和当前笛卡尔位姿
       if (arm_controller_->GetCurrentPose(current_pose) != 0) {
-        if (pose_warn_count++ % kWarnInterval == 0 && pose_warn_count > 10) {
+        if (pose_warn.ShouldLog(kWarnInterval)) {
           AIMRT_WARN("failed to get current pose");
         }
         next_loop_time += period;
         std::this_thread::sleep_until(next_loop_time);
         continue;
       }
-      pose_warn_count = 0;
+      pose_warn.Reset();
       {
         std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
         if (last_arm_cmd_.has_value()) {
@@ -517,14 +518,14 @@ void ControlModule::PublishLoop() {
         }
       }
       if (arm_controller_->JointToPose(joint_pos_cmd, expected_pose) != 0) {
-        if (fk_warn_count++ % kWarnInterval == 0) {
+        if (fk_warn.ShouldLog(kWarnInterval)) {
           AIMRT_WARN("expected pose FK failed");
         }
         next_loop_time += period;
         std::this_thread::sleep_until(next_loop_time);
         continue;
       }
-      fk_warn_count = 0;
+      fk_warn.Reset();
 
       // 打包msg
       expected_pose_msg.Clear();
