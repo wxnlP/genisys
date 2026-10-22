@@ -13,7 +13,7 @@ import numpy as np
 # ============================================================
 # 1. 加载模型
 # ============================================================
-def load_model(xml_path="geniarm_v1.1.4.xml"):
+def load_model(xml_path="geniarm_v1.1.5.xml"):
     """加载 MuJoCo 模型，返回 (model, data)"""
     m = mujoco.MjModel.from_xml_path(xml_path)
     d = mujoco.MjData(m)

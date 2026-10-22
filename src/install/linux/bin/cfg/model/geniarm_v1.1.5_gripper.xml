@@ -1,5 +1,5 @@
-<mujoco model="Geniarm_v1.1.4_high">
-  <compiler angle="radian" meshdir="../meshes/geniarm_v1.1.4/" />
+<mujoco model="Geniarm_v1.1.5_with_gripper">
+  <compiler angle="radian" meshdir="../meshes/geniarm_v1.1.5/" />
 
   <option timestep="0.001" gravity="0 0 -9.81" iterations="120" solver="Newton" integrator="implicitfast">
     <flag energy="enable"/>
@@ -23,6 +23,9 @@
     <mesh name="wrist1_link" file="wrist1_link.STL" />
     <mesh name="wrist2_link" file="wrist2_link.STL" />
     <mesh name="wrist3_link" file="wrist3_link.STL" />
+    <mesh name="gripper_base_link" file="gripper_base_link.STL" />
+    <mesh name="gripper_right_link" file="gripper_right_link.STL" />
+    <mesh name="gripper_left_link" file="gripper_left_link.STL" />
 
     <material name="base_link_mat" rgba="1 1 1 1" specular="0" />
     <material name="shoulder_link_mat" rgba="0.7529 0.7529 0.7529 1" specular="0" />
@@ -31,17 +34,16 @@
     <material name="wrist1_link_mat" rgba="0.7529 0.7529 0.7529 1" specular="0" />
     <material name="wrist2_link_mat" rgba="0.7529 0.7529 0.7529 1" specular="0" />
     <material name="wrist3_link_mat" rgba="0.6275 0.6275 0.6275 1" specular="0" />
+    <material name="gripper_base_link_mat" rgba="0.6275 0.6275 0.6275 1" specular="0" />
+    <material name="gripper_right_link_mat" rgba="1 1 1 1" specular="0" />
+    <material name="gripper_left_link_mat" rgba="1 1 1 1" specular="0" />
   </asset>
 
   <worldbody>
     <geom name="floor" type="plane" size="0 0 1" material="groundplane"/>
     <light directional="true" pos="0 0 5" dir="0 0 -1"/>
 
-    <body name="pedestal" pos="0 0 0">
-      <geom type="cylinder" size="0.06 0.375" pos="0 0 0.375" rgba="0.45 0.45 0.5 1"/>
-    </body>
-
-    <body name="base_link" pos="0 0 0.75">
+    <body name="base_link" pos="0 0 0">
       <inertial pos="-0.001712 -2.9e-05 0.040108" mass="1.27" fullinertia="0.00341534 0.00267588 0.00341499 -4.7e-07 -3.212e-05 -1.9e-07"/>
       <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="base_link_mat" type="mesh" mesh="base_link" />
       <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="base_link" />
@@ -62,19 +64,37 @@
             <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="elbow_link" />
             <body name="wrist1_link" pos="0.24668 0 0" quat="0.99321108 0 0 0.11632604">
               <joint name="wrist1_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.3" armature="0.0018"/>
-              <inertial pos="0.061483 -0.05823 -0.000658" mass="0.427" fullinertia="0.0004353 0.00052406 0.00065882 0.00024915 -5.52e-06 4.79e-06"/>
+              <inertial pos="0.062018 -0.059388 -0.000649" mass="0.441" fullinertia="0.00045629 0.000537479 0.000684587 0.00025559 -5.589e-06 4.932e-06"/>
               <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist1_link_mat" type="mesh" mesh="wrist1_link" />
               <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist1_link" />
               <body name="wrist2_link" pos="0.075 0 0" quat="0.49999816 -0.50000184 0.5 0.5">
                 <joint name="wrist2_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.3" armature="0.0018"/>
-                <inertial pos="0.000374 -0.000611 -0.003599" mass="0.362" fullinertia="0.00019793 0.00020475 0.00014485 0 -8e-08 2.51e-06"/>
+                <inertial pos="0.000374 -0.002002 -0.003453" mass="0.378" fullinertia="0.000211771 0.00021701 0.000161552 6e-09 -7.8e-08 4.265e-06"/>
                 <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist2_link_mat" type="mesh" mesh="wrist2_link" />
                 <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist2_link" />
-                <body name="wrist3_link" pos="0 -0.031 0" quat="2.5973435e-06 -2.597353e-06 -0.70710808 0.70710548">
+                <body name="wrist3_link" pos="0 -0.0335 0" quat="2.5973435e-06 -2.597353e-06 -0.70710808 0.70710548">
+                  <!-- v1.1.5: d6 = 0.0335 (was 0.031); wrist3 axis kept 0 0 1 -->
                   <joint name="wrist3_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.2" armature="0.0018"/>
                   <inertial pos="-0.00062904 0 -0.0031029" mass="0.0087849" fullinertia="7.8e-07 6.4e-07 1.36e-06 0 0 0"/>
                   <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist3_link_mat" type="mesh" mesh="wrist3_link" />
                   <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist3_link" />
+                  <body name="gripper_base_link" pos="0 0 0" quat="1 0 0 0">
+                    <inertial pos="-0.000668646627 0.014742944345 0.039069750043" mass="0.58636" fullinertia="0.001144557757 0.000607268913 0.001102219282 0.000000395633 -0.000008036936 0.000024856077"/>
+                    <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_base_link_mat" type="mesh" mesh="gripper_base_link" />
+                    <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_base_link" />
+                    <body name="gripper_right_link" pos="0.009 -0.019 0.077" quat="0.70710678 0 0 0.70710678">
+                      <joint name="gripper_right_joint" type="slide" axis="0 -1 0" limited="true" range="0 0.045" frictionloss="0.05" armature="0.001"/>
+                      <inertial pos="1.84160000e-02 -5.43660000e-03 2.00140000e-02" mass="0.044239" fullinertia="1.30500000e-05 1.44680000e-05 6.49340000e-06 -2.69420000e-08 -1.23290000e-07 -1.06890000e-06"/>
+                      <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_right_link_mat" type="mesh" mesh="gripper_right_link" />
+                      <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_right_link" />
+                    </body>
+                    <body name="gripper_left_link" pos="-0.009 0.019 0.077" quat="0.70710678 0 0 0.70710678">
+                      <joint name="gripper_left_joint" type="slide" axis="0 1 0" limited="true" range="0 0.045" frictionloss="0.05" armature="0.001"/>
+                      <inertial pos="-1.82700000e-02 5.17110000e-03 2.54190000e-02" mass="0.035401" fullinertia="1.28300000e-05 1.40510000e-05 5.94360000e-06 -2.69420000e-08 1.23290000e-07 1.06890000e-06"/>
+                      <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_left_link_mat" type="mesh" mesh="gripper_left_link" />
+                      <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_left_link" />
+                    </body>
+                  </body>
                 </body>
               </body>
             </body>
@@ -100,7 +120,14 @@
     <exclude body1="base_link" body2="wrist1_link" />
     <exclude body1="base_link" body2="wrist2_link" />
     <exclude body1="base_link" body2="wrist3_link" />
+    <exclude body1="wrist3_link" body2="gripper_base_link" />
+    <exclude body1="gripper_base_link" body2="gripper_right_link" />
+    <exclude body1="gripper_base_link" body2="gripper_left_link" />
   </contact>
+
+  <equality>
+    <joint name="gripper_left_joint_mimic" joint1="gripper_left_joint" joint2="gripper_right_joint" polycoef="0 1 0 0 0" />
+  </equality>
   <!-- MIT impedance control done in software by MujocoSimModule -->
   <!-- Computes: tau = effort + stiffness*(q_des - q) + damping*(q_des_dot - q_dot) -->
   <actuator>
@@ -110,6 +137,7 @@
     <motor name="wrist1_actuator" joint="wrist1_joint" ctrlrange="-7 7" forcelimited="true" forcerange="-7 7"/>
     <motor name="wrist2_actuator" joint="wrist2_joint" ctrlrange="-7 7" forcelimited="true" forcerange="-7 7"/>
     <motor name="wrist3_actuator" joint="wrist3_joint" ctrlrange="-7 7" forcelimited="true" forcerange="-7 7"/>
+    <motor name="gripper_right_actuator" joint="gripper_right_joint" ctrlrange="-10 10" forcelimited="true" forcerange="-10 10"/>
   </actuator>
 
   <sensor>
@@ -136,5 +164,9 @@
     <jointpos name="jointpos_wrist3" joint="wrist3_joint" noise="0.0002"/>
     <jointvel name="jointvel_wrist3" joint="wrist3_joint" noise="0.002"/>
     <jointactuatorfrc name="jointactuatorfrc_wrist3" joint="wrist3_joint" noise="0.02"/>
+
+    <jointpos name="jointpos_gripper_right" joint="gripper_right_joint" noise="0.0002"/>
+    <jointvel name="jointvel_gripper_right" joint="gripper_right_joint" noise="0.002"/>
+    <jointactuatorfrc name="jointactuatorfrc_gripper_right" joint="gripper_right_joint" noise="0.02"/>
   </sensor>
 </mujoco>
