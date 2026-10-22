@@ -1,5 +1,5 @@
 #include "actuator_module/actuator_module.h"
-#include <fmt/ranges.h>
+#include <fmt/ranges.h>  // 容器元素格式化
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "common/warn_throttle.h"
@@ -232,7 +232,9 @@ void ActuatorModule::WriteLoop() {
 }
 
 void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandArray>& msg) {
-  if (!ctx_ptr_->Running()) { return; }
+  if (!ctx_ptr_->Running()) {
+    return;
+  }
   AIMRT_DEBUG("Received joint command message with {} joints.", msg->joints_size());
   int n = msg->joints_size();
   if (n < 6) {

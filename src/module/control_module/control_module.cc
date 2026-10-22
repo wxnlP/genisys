@@ -1,7 +1,5 @@
 #include "control_module/control_module.h"
-#include <fmt/ranges.h>
-#include <pthread.h>
-#include <algorithm>
+#include <fmt/ranges.h> // 容器元素格式化
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "aimrt_module_ros2_interface/channel/ros2_channel.h"
@@ -26,6 +24,7 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     if (!file_path.empty()) {
       YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
       control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
+      publish_executor_name_ = cfg_node["publish_executor_name"].as<std::string>();
       topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
       topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
       topic_pub_cart_expected_ = cfg_node["topic_pub_cart_expected"].as<std::string>();
@@ -49,6 +48,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       AIMRT_INFO("\n---\n控制器器关节名称：{}\n---", joint_names_);
     }
     cycle_control_executor_ = ctx_ptr_->CreateExecutor(control_executor_name_);
+
+    publish_executor_ = ctx_ptr_->CreateExecutor(publish_executor_name_);
 
     pub_joint_cmd_ = ctx_ptr_->CreatePublisher<JointCommandArray>(topic_pub_joint_cmd_);
 
@@ -249,7 +250,7 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       return aimrt::rpc::Status();
     });
 
-    // GripperForce 服务处理：力控抓取（接近 -> 力矩保持，力到位后返回，力矩指令继续保持）
+    // GripperForce 服务处理：力控抓取
     gripper_force_handle->GripperForce.ServeInline(
         [this](aimrt::rpc::ContextRef ctx_ref,
                const genisys_msgs::srv::GripperForce_Request& req,
@@ -297,7 +298,7 @@ bool ControlModule::Start() {
       ctx_ptr_->LetMe();
       ControlLoop();
     });
-    publish_thread_ = std::jthread([this]() {
+    publish_executor_.Execute([this]() {
       ctx_ptr_->LetMe();
       PublishLoop();
     });
@@ -504,7 +505,7 @@ void ControlModule::PublishLoop() {
       // 获取期望和当前笛卡尔位姿
       if (arm_controller_->GetCurrentPose(current_pose) != 0) {
         if (pose_warn.ShouldLog(kWarnInterval)) {
-          AIMRT_WARN("failed to get current pose");
+          AIMRT_WARN("读取机械臂位姿失败（累计 {} 次）", pose_warn.count());
         }
         next_loop_time += period;
         std::this_thread::sleep_until(next_loop_time);
@@ -519,7 +520,7 @@ void ControlModule::PublishLoop() {
       }
       if (arm_controller_->JointToPose(joint_pos_cmd, expected_pose) != 0) {
         if (fk_warn.ShouldLog(kWarnInterval)) {
-          AIMRT_WARN("expected pose FK failed");
+          AIMRT_WARN("期望位姿正解失败（累计 {} 次）", fk_warn.count());
         }
         next_loop_time += period;
         std::this_thread::sleep_until(next_loop_time);

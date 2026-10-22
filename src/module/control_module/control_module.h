@@ -2,10 +2,10 @@
 
 #include <atomic>
 #include <cstdint>
+#include <future>
 #include <mutex>
 #include <optional>
 #include <string>
-#include <thread>
 #include <vector>
 #include "aimrt_module_cpp_interface/context/context.h"
 #include "aimrt_module_cpp_interface/module_base.h"
@@ -72,11 +72,12 @@ class ControlModule : public aimrt::ModuleBase {
   aimrt::context::res::Subscriber<ServoLCommand> sub_servol_cmd_;
   // 周期控制执行器（单独）
   aimrt::executor::ExecutorRef cycle_control_executor_;
+  // 笛卡尔位姿发布执行器
+  aimrt::executor::ExecutorRef publish_executor_;
 
   std::promise<void> pub_stop_sig_;
   std::promise<void> control_stop_sig_;
   std::mutex last_arm_cmd_mutex_;
-  std::jthread publish_thread_;
 
   std::string topic_pub_joint_cmd_;
   std::string topic_sub_joint_state_;
@@ -86,6 +87,7 @@ class ControlModule : public aimrt::ModuleBase {
   std::string topic_sub_servoj_pose_cmd_;
   std::string topic_sub_servol_cmd_;
   std::string control_executor_name_;
+  std::string publish_executor_name_;
   double control_frequency_;
   double publish_frequency_;
   std::vector<std::string> joint_names_;

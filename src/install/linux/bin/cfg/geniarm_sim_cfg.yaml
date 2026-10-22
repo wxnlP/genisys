@@ -88,22 +88,24 @@ aimrt:
   executor:
     executors:
       - name: gui_executor
+        type: simple_thread
+      - name: work_executor
         type: asio_thread
+        options:
+          thread_num: 5
       - name: control_executor
         type: asio_thread
         options:
           thread_bind_cpu: [7]
           thread_sched_policy: SCHED_FIFO:80
-      - name: work_executor
+      - name: control_pub_executor
         type: asio_thread
-        options:
-          thread_num: 5
       - name: storage_executor
         type: asio_thread
         options:
           thread_num: 2
       - name: record_thread
-        type: asio_thread
+        type: simple_thread
   channel:
     backends:
       - type: local # 官方支持local后端
@@ -141,7 +143,7 @@ aimrt:
 
 # Module custom configuration
 MujocoSimModule:
-  simulation_model_path: ./cfg/model/geniarm_v1.1.4_high.xml
+  simulation_model_path: ./cfg/model/geniarm_v1.1.5_high.xml
   sim_executor: work_executor
   gui_executor: gui_executor
   subscriber_options:
@@ -194,5 +196,6 @@ ControlModule:
   topic_sub_servoj_pose_cmd: /geniarm/servoj_pose_cmd
   topic_sub_servol_cmd: /geniarm/servol_cmd
   control_executor_name: control_executor
+  publish_executor_name: control_pub_executor
   control_frequency: 500
   publish_frequency: 500

@@ -22,28 +22,21 @@ aimrt:
     executors:
       - name: actuator_pub_executor
         type: asio_thread
-        options:
-          thread_bind_cpu: [1]
-          thread_sched_policy: SCHED_FIFO:85
+      - name: write_cmd_thread
+        type: asio_thread
       - name: control_executor
         type: asio_thread
         options:
           thread_bind_cpu: [0]  # 绑定 RK3588 A55 小核
           thread_sched_policy: SCHED_FIFO:80
-      - name: write_cmd_thread
+      - name: control_pub_executor
         type: asio_thread
-        options:
-          thread_bind_cpu: [2]
-          thread_sched_policy: SCHED_FIFO:75
       - name: storage_executor
         type: asio_thread
         options:
           thread_num: 2
-          thread_bind_cpu: [4, 5]
       - name: record_thread
-        type: asio_thread
-        options:
-          thread_bind_cpu: [6]
+        type: simple_thread
   plugin:
     plugins:
       # - name: ros2_plugin
@@ -153,5 +146,6 @@ ControlModule:
   topic_sub_servoj_pose_cmd: /geniarm/servoj_pose_cmd
   topic_sub_servol_cmd: /geniarm/servol_cmd
   control_executor_name: control_executor
+  publish_executor_name: control_pub_executor
   control_frequency: 500
   publish_frequency: 500
