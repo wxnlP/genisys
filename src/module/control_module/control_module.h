@@ -64,8 +64,9 @@ class ControlModule : public aimrt::ModuleBase {
   aimrt::CoreRef core_;
   std::shared_ptr<aimrt::context::Context> ctx_ptr_;
   aimrt::context::res::Publisher<JointCommandArray> pub_joint_cmd_;
-  aimrt::context::res::Publisher<Pose> pub_cart_expected_;
-  aimrt::context::res::Publisher<Pose> pub_cart_current_;
+  aimrt::context::res::Publisher<Pose> pub_tcp_pose_expected_;
+  aimrt::context::res::Publisher<Pose> pub_tcp_pose_;
+  aimrt::context::res::Publisher<Pose> pub_flange_pose_;
   aimrt::context::res::Subscriber<JointStateArray> sub_joint_state_;
   aimrt::context::res::Subscriber<ServoJCommand> sub_servoj_cmd_;
   aimrt::context::res::Subscriber<ServoJPoseCommand> sub_servoj_pose_cmd_;
@@ -81,8 +82,9 @@ class ControlModule : public aimrt::ModuleBase {
 
   std::string topic_pub_joint_cmd_;
   std::string topic_sub_joint_state_;
-  std::string topic_pub_cart_expected_;
-  std::string topic_pub_cart_current_;
+  std::string topic_pub_tcp_pose_expected_;
+  std::string topic_pub_tcp_pose_;
+  std::string topic_pub_flange_pose_;
   std::string topic_sub_servoj_cmd_;
   std::string topic_sub_servoj_pose_cmd_;
   std::string topic_sub_servol_cmd_;

@@ -183,8 +183,9 @@ ControlModule:
   config_file: control_module/geniarm_body_sim_gripper_gravity_cfg.yaml
   topic_pub_joint_cmd: /geniarm/joint_cmd
   topic_sub_joint_state: /geniarm/joint_state
-  topic_pub_cart_expected: /geniarm/pose_expected
-  topic_pub_cart_current: /geniarm/pose_current
+  topic_pub_tcp_pose_expected: /geniarm/tcp_pose_expected
+  topic_pub_tcp_pose: /geniarm/tcp_pose
+  topic_pub_flange_pose: /geniarm/flange_pose
   topic_sub_servoj_cmd: /geniarm/servoj_cmd
   topic_sub_servoj_pose_cmd: /geniarm/servoj_pose_cmd
   topic_sub_servol_cmd: /geniarm/servol_cmd

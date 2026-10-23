@@ -27,8 +27,9 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       publish_executor_name_ = cfg_node["publish_executor_name"].as<std::string>();
       topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
       topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
-      topic_pub_cart_expected_ = cfg_node["topic_pub_cart_expected"].as<std::string>();
-      topic_pub_cart_current_ = cfg_node["topic_pub_cart_current"].as<std::string>();
+      topic_pub_tcp_pose_expected_ = cfg_node["topic_pub_tcp_pose_expected"].as<std::string>();
+      topic_pub_tcp_pose_ = cfg_node["topic_pub_tcp_pose"].as<std::string>();
+      topic_pub_flange_pose_ = cfg_node["topic_pub_flange_pose"].as<std::string>();
       control_frequency_ = cfg_node["control_frequency"].as<double>();
       publish_frequency_ = cfg_node["publish_frequency"].as<double>();
       topic_sub_servoj_cmd_ = cfg_node["topic_sub_servoj_cmd"].as<std::string>();
@@ -53,9 +54,11 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
     pub_joint_cmd_ = ctx_ptr_->CreatePublisher<JointCommandArray>(topic_pub_joint_cmd_);
 
-    pub_cart_expected_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_cart_expected_);
+    pub_tcp_pose_expected_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_tcp_pose_expected_);
 
-    pub_cart_current_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_cart_current_);
+    pub_tcp_pose_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_tcp_pose_);
+
+    pub_flange_pose_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_flange_pose_);
 
     sub_joint_state_ = ctx_ptr_->CreateSubscriber<JointStateArray>(topic_sub_joint_state_, std::bind(&ControlModule::JointStateCallback, this, std::placeholders::_1));
 
@@ -105,12 +108,12 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                                                     const genisys_msgs::srv::MoveJPose_Request& req,
                                                     genisys_msgs::srv::MoveJPose_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJPose请求\n---");
-      ArmMotion::Pose6Dof target_pose(
+      ArmMotion::Pose6Dof target_tcp(
           req.pose.position.x, req.pose.position.y, req.pose.position.z,
           req.pose.orientation.w, req.pose.orientation.x,
           req.pose.orientation.y, req.pose.orientation.z);
 
-      int ret = arm_controller_->MoveJ(target_pose, req.v, req.a);
+      int ret = arm_controller_->MoveJ(target_tcp, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
         rsp.error.code = 0;
@@ -153,16 +156,16 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                                                                const genisys_msgs::srv::MoveJPoseMulti_Request& req,
                                                                genisys_msgs::srv::MoveJPoseMulti_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveJPoseMulti请求\n---");
-      std::vector<ArmMotion::Pose6Dof> points;
-      points.reserve(req.pose.size());
+      std::vector<ArmMotion::Pose6Dof> tcp_points;
+      tcp_points.reserve(req.pose.size());
       for (const auto& p : req.pose) {
-        points.emplace_back(
+        tcp_points.emplace_back(
             p.position.x, p.position.y, p.position.z,
             p.orientation.w, p.orientation.x,
             p.orientation.y, p.orientation.z);
       }
 
-      int ret = arm_controller_->MoveJMulti(points, req.r, req.v, req.a);
+      int ret = arm_controller_->MoveJMulti(tcp_points, req.r, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
         rsp.error.code = 0;
@@ -180,12 +183,12 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                                            const genisys_msgs::srv::MoveL_Request& req,
                                            genisys_msgs::srv::MoveL_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveL请求\n---");
-      ArmMotion::Pose6Dof target_pose(
+      ArmMotion::Pose6Dof target_tcp(
           req.pose.position.x, req.pose.position.y, req.pose.position.z,
           req.pose.orientation.w, req.pose.orientation.x,
           req.pose.orientation.y, req.pose.orientation.z);
 
-      int ret = arm_controller_->MoveL(target_pose, req.v, req.a);
+      int ret = arm_controller_->MoveL(target_tcp, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
         rsp.error.code = 0;
@@ -203,16 +206,16 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
                                                       const genisys_msgs::srv::MoveLMulti_Request& req,
                                                       genisys_msgs::srv::MoveLMulti_Response& rsp) {
       AIMRT_INFO("\n---\n收到MoveLMulti请求\n---");
-      std::vector<ArmMotion::Pose6Dof> points;
-      points.reserve(req.pose.size());
+      std::vector<ArmMotion::Pose6Dof> tcp_points;
+      tcp_points.reserve(req.pose.size());
       for (const auto& p : req.pose) {
-        points.emplace_back(
+        tcp_points.emplace_back(
             p.position.x, p.position.y, p.position.z,
             p.orientation.w, p.orientation.x,
             p.orientation.y, p.orientation.z);
       }
 
-      int ret = arm_controller_->MoveLMulti(points, req.r, req.v, req.a);
+      int ret = arm_controller_->MoveLMulti(tcp_points, req.r, req.v, req.a);
       if (ret == 0) {
         arm_controller_->WaitForCompletion();
         rsp.error.code = 0;
@@ -472,11 +475,12 @@ void ControlModule::PublishLoop() {
     // 序列
     uint64_t seq_count = 0;
 
-    Pose expected_pose_msg;
-    Pose current_pose_msg;
-    ArmMotion::Pose6Dof current_pose;
+    Pose tcp_pose_expected_msg;
+    Pose tcp_pose_msg;
+    Pose flange_pose_msg;
+    EndEffectorPoses end_effector_poses;
     ArmMotion::Joint6Dof joint_pos_cmd;
-    ArmMotion::Pose6Dof expected_pose;
+    ArmMotion::Pose6Dof tcp_pose_expected;
     // 告警节流
     WarnThrottle pose_warn;
     WarnThrottle fk_warn;
@@ -503,7 +507,7 @@ void ControlModule::PublishLoop() {
 
     while (ctx_ptr_->Running()) {
       // 获取期望和当前笛卡尔位姿
-      if (arm_controller_->GetCurrentPose(current_pose) != 0) {
+      if (arm_controller_->GetEndEffectorPoses(end_effector_poses) != 0) {
         if (pose_warn.ShouldLog(kWarnInterval)) {
           AIMRT_WARN("读取机械臂位姿失败（累计 {} 次）", pose_warn.count());
         }
@@ -518,7 +522,7 @@ void ControlModule::PublishLoop() {
           joint_pos_cmd = last_arm_cmd_->position;
         }
       }
-      if (arm_controller_->JointToPose(joint_pos_cmd, expected_pose) != 0) {
+      if (arm_controller_->JointToTCPPose(joint_pos_cmd, tcp_pose_expected) != 0) {
         if (fk_warn.ShouldLog(kWarnInterval)) {
           AIMRT_WARN("期望位姿正解失败（累计 {} 次）", fk_warn.count());
         }
@@ -529,18 +533,21 @@ void ControlModule::PublishLoop() {
       fk_warn.Reset();
 
       // 打包msg
-      expected_pose_msg.Clear();
-      current_pose_msg.Clear();
+      tcp_pose_expected_msg.Clear();
+      tcp_pose_msg.Clear();
+      flange_pose_msg.Clear();
 
       // header 时间戳统一为 system_clock
       auto time_ns = aimrt::common::util::GetCurTimestampNs();
 
-      fill_pose_msg(expected_pose_msg, expected_pose, seq_count, time_ns);
-      fill_pose_msg(current_pose_msg, current_pose, seq_count, time_ns);
+      fill_pose_msg(tcp_pose_expected_msg, tcp_pose_expected, seq_count, time_ns);
+      fill_pose_msg(tcp_pose_msg, end_effector_poses.tcp, seq_count, time_ns);
+      fill_pose_msg(flange_pose_msg, end_effector_poses.flange, seq_count, time_ns);
 
       ctx_ptr_->LetMe();
-      pub_cart_expected_.Publish(expected_pose_msg);
-      pub_cart_current_.Publish(current_pose_msg);
+      pub_tcp_pose_expected_.Publish(tcp_pose_expected_msg);
+      pub_tcp_pose_.Publish(tcp_pose_msg);
+      pub_flange_pose_.Publish(flange_pose_msg);
 
       next_loop_time += period;
       std::this_thread::sleep_until(next_loop_time);
@@ -615,12 +622,12 @@ void ControlModule::ServoJPoseCommandCallback(const std::shared_ptr<const ServoJ
   const double dt = msg->dt;
 
   const auto& p = msg->target;
-  ArmMotion::Pose6Dof target_pose(
+  ArmMotion::Pose6Dof target_tcp(
       p.position.x, p.position.y, p.position.z,
       p.orientation.w, p.orientation.x,
       p.orientation.y, p.orientation.z);
 
-  if (arm_controller_->ServoJ(target_pose, dt) != 0) {
+  if (arm_controller_->ServoJ(target_tcp, dt) != 0) {
     AIMRT_ERROR("[ServoJPose] ServoJ(pose) failed");
     return;
   }
@@ -639,12 +646,12 @@ void ControlModule::ServoLCommandCallback(const std::shared_ptr<const ServoLComm
   const double dt = msg->dt;
 
   const auto& p = msg->target;
-  ArmMotion::Pose6Dof target_pose(
+  ArmMotion::Pose6Dof target_tcp(
       p.position.x, p.position.y, p.position.z,
       p.orientation.w, p.orientation.x,
       p.orientation.y, p.orientation.z);
 
-  if (arm_controller_->ServoL(target_pose, dt) != 0) {
+  if (arm_controller_->ServoL(target_tcp, dt) != 0) {
     AIMRT_ERROR("[ServoL] ServoL failed");
     return;
   }
