@@ -43,8 +43,8 @@ MonitorSubscriberPyModule:
   topics:
     joint_state: "/geniarm/joint_state"
     joint_cmd: "/geniarm/joint_cmd"
-    pose_current: "/geniarm/pose_current"
-    pose_expected: "/geniarm/pose_expected"
+    pose_current: "/geniarm/tcp_pose"
+    pose_expected: "/geniarm/tcp_pose_expected"
 
   # 界面参数
   refresh_interval_ms: 2      # 绘图刷新间隔（毫秒），实际下限为 10
