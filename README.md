@@ -122,7 +122,7 @@ echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-re
 | `ArmController` | 轨迹规划（quintic/cubic/lspb）、逆运动学 (Piper/UR)|
 | `GripperController` | 夹爪运动规划 |
 | `ControlLoop` | 500Hz 控制循环，轮询轨迹插值点并下发 `/geniarm/joint_cmd` |
-| `PublishLoop` | 1000Hz 发布循环，发布期望和当前笛卡尔位姿到 `/geniarm/pose_expected`、`/geniarm/pose_current` |
+| `PublishLoop` | 1000Hz 发布循环，发布期望 TCP 位姿 `/geniarm/tcp_pose_expected` 与当前法兰/TCP 位姿 `/geniarm/flange_pose`、`/geniarm/tcp_pose` |
 | `JointStateCallback` | 接收执行器反馈，更新控制器状态 |
 
 ### ActuatorModule
@@ -175,8 +175,9 @@ python -m monitor.main
 │  │  MoveControlService (RPC)                        │    │
 │  │  ArmController · GripperController               │    │
 │  │  ControlLoop (500Hz) ---→ /geniarm/joint_cmd     │    │
-│  │  PublishLoop (1000Hz) --→ /geniarm/pose_expected │    │
-│  │  │                    --→ /geniarm/pose_current  │    │
+│  │  PublishLoop (1000Hz) --→ tcp_pose_expected      │    │
+│  │  │                    --→ tcp_pose               │    │
+│  │  │                    --→ flange_pose            │    │
 │  │  JointStateCallback  ←--- /geniarm/joint_state   │    │
 │  └──────────────────────┬───────────────────────────┘    │
 │                         │ channel (local / zenoh)        │
@@ -194,8 +195,9 @@ python -m monitor.main
 |:---|:---|:---|:---|:---|
 | `/geniarm/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` (protobuf) | ControlModule → Actuator/SimModule | 500 Hz | 关节控制指令 (位置/速度/刚度/阻尼) |
 | `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` (protobuf) | Actuator/SimModule → ControlModule | 500 Hz | 关节状态反馈 |
-| `/geniarm/pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **期望笛卡尔位姿** (由当前关节指令正解算出) |
-| `/geniarm/pose_current` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **当前实际笛卡尔位姿** (由关节反馈正解算出) |
+| `/geniarm/tcp_pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **期望 TCP 位姿** (由当前关节指令正解算出) |
+| `/geniarm/tcp_pose` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **当前 TCP 位姿** (由关节反馈正解算出) |
+| `/geniarm/flange_pose` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **当前法兰位姿** (不含工具变换) |
 | `/geniarm/servoj_cmd` | `genisys_msgs/msg/ServoJCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 关节空间伺服指令 (目标关节角 + dt + stop) |
 | `/geniarm/servoj_pose_cmd` | `genisys_msgs/msg/ServoJPoseCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔位姿伺服指令 (位姿 → IK → ServoJ) |
 | `/geniarm/servol_cmd` | `genisys_msgs/msg/ServoLCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔直线伺服指令 |
