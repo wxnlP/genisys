@@ -28,9 +28,10 @@ def rpy_to_quat(roll_deg, pitch_deg, yaw_deg):
 
 
 # 末端姿态 (RPY 欧拉角, 单位: 度)
-ROLL_DEG = -108.0
+# (0,0,0) 表示 TCP 轴与基座对齐；无夹爪时 TCP 也带默认虚拟工具旋转。
+ROLL_DEG = 0.0
 PITCH_DEG = 0.0
-YAW_DEG = -90.0
+YAW_DEG = 0.0
 
 ORI = rpy_to_quat(ROLL_DEG, PITCH_DEG, YAW_DEG)
 
@@ -40,15 +41,15 @@ URL_MOVELMULTI = "http://127.0.0.1:50080/rpc/genisys_msgs/srv/MoveLMulti"
 payload = {
     "pose": [
         {
-            "position": {"x": 0.30, "y": -0.10, "z": 0.15},
+            "position": {"x": 0.30, "y": -0.10, "z": 0.30},
             "orientation": ORI
         },
         {
-            "position": {"x": 0.30, "y": 0.10, "z": 0.15},
+            "position": {"x": 0.30, "y": 0.10, "z": 0.30},
             "orientation": ORI
         },
         {
-            "position": {"x": 0.30, "y": 0.00, "z": 0.20},
+            "position": {"x": 0.30, "y": 0.00, "z": 0.35},
             "orientation": ORI
         },
     ],

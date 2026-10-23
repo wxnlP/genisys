@@ -27,12 +27,12 @@ genisys
 ├── cmake                      # CMake 工具模块
 ├── examples                   # Python RPC 调用示例
 ├── monitor                    # ArmMonitor 数据监控与采集软件
-├── src
+└── src
     ├── install/linux/bin/cfg  # 运行配置文件
     ├── module/
     │   ├── actuator_module    # 执行器模块
     │   ├── control_module     # 控制模块 
-    │   └── genisys-core    # 底层驱动 SDK       
+    │   └── genisys-core       # 底层驱动 SDK       
     │		├── actuator       # 电机驱动
     │       └── arm_control    # 运动控制
     └── protocols/             # 自定义协议
@@ -191,16 +191,16 @@ python -m monitor.main
 
 ### Channel 话题列表
 
-| Topic | 消息类型 | 方向 | 频率 | 说明 |
-|:---|:---|:---|:---|:---|
-| `/geniarm/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` (protobuf) | ControlModule → Actuator/SimModule | 500 Hz | 关节控制指令 (位置/速度/刚度/阻尼) |
-| `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` (protobuf) | Actuator/SimModule → ControlModule | 500 Hz | 关节状态反馈 |
-| `/geniarm/tcp_pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **期望 TCP 位姿** (由当前关节指令正解算出) |
-| `/geniarm/tcp_pose` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **当前 TCP 位姿** (由关节反馈正解算出) |
-| `/geniarm/flange_pose` | `genisys.protocols.PoseStamped` (protobuf) | ControlModule → (echo/monitor) | 1000 Hz | **当前法兰位姿** (不含工具变换) |
-| `/geniarm/servoj_cmd` | `genisys_msgs/msg/ServoJCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 关节空间伺服指令 (目标关节角 + dt + stop) |
-| `/geniarm/servoj_pose_cmd` | `genisys_msgs/msg/ServoJPoseCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔位姿伺服指令 (位姿 → IK → ServoJ) |
-| `/geniarm/servol_cmd` | `genisys_msgs/msg/ServoLCommand` (ROS2 Message) | 外部 → ControlModule | 外部触发 | 笛卡尔直线伺服指令 |
+| Topic | 消息类型 | 说明 |
+|:---|:---|:---|
+| `/geniarm/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` (protobuf) | 关节控制指令 (MIT) |
+| `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` (protobuf) | 关节状态反馈 |
+| `/geniarm/tcp_pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | **期望 TCP 位姿** |
+| `/geniarm/tcp_pose` | `genisys.protocols.PoseStamped` (protobuf) | **当前 TCP 位姿** |
+| `/geniarm/flange_pose` | `genisys.protocols.PoseStamped` (protobuf) | **当前法兰位姿** |
+| `/geniarm/servoj_cmd` | `genisys_msgs/msg/ServoJCommand` (ROS2 Message) | 关节空间伺服指令 |
+| `/geniarm/servoj_pose_cmd` | `genisys_msgs/msg/ServoJPoseCommand` (ROS2 Message) | 笛卡尔位姿伺服指令 |
+| `/geniarm/servol_cmd` | `genisys_msgs/msg/ServoLCommand` (ROS2 Message) | 笛卡尔直线伺服指令 |
 
 ### RPC 接口
 
@@ -209,11 +209,11 @@ python -m monitor.main
 | 方法 | 请求 | 功能 |
 |:---|:---|:---|
 | `MoveJ` | 关节角度[6] + 速度 + 加速度 | 关节空间点到点运动 |
-| `MoveJPose` | 末端位姿(xyz+wxyz) + 速度 + 加速度 | 逆解后关节空间点到点运动 |
-| `MoveL` | 末端位姿(xyz+wxyz) + 速度 + 加速度 | 笛卡尔空间直线运动 |
+| `MoveJPose` | TCP 位姿(xyz+wxyz) + 速度 + 加速度 | 逆解后关节空间点到点运动 |
+| `MoveL` | TCP 位姿(xyz+wxyz) + 速度 + 加速度 | 笛卡尔空间直线运动 |
 | `MoveJMulti` | 多组关节角度 + 过渡半径 + v + a | 多路径点关节运动 |
-| `MoveJPoseMulti` | 多组末端位姿 + 过渡半径 + v + a | 多路径点位姿运动（逆解后关节空间） |
-| `MoveLMulti` | 多组末端位姿 + 过渡半径 + v + a | 多路径点笛卡尔运动 |
+| `MoveJPoseMulti` | 多组 TCP 位姿 + 过渡半径 + v + a | 多路径点位姿运动（逆解后关节空间） |
+| `MoveLMulti` | 多组 TCP 位姿 + 过渡半径 + v + a | 多路径点笛卡尔运动 |
 | `GripperPos` | 位置[0~1] + 速度 + 加速度 + 力矩 | 夹爪位置控制（开合） |
 | `GripperForce` | 目标力矩 + 速度亏欠阈值 + 接近速度 + 接近加速度 + 闭合释放 | 力控抓取（碰到后按力矩夹住） |
 
@@ -224,11 +224,11 @@ python -m monitor.main
 | 示例 | 文件 | 说明 |
 |:---|:---|:---|
 | MoveJ | [`examples/movej_demo.py`](examples/movej_demo.py) | 关节空间点到点运动 |
-| MoveJPose | [`examples/movej_pose_demo.py`](examples/movej_pose_demo.py) | 目标位姿的点到点运动 (逆解后关节空间插值) |
-| MoveL | [`examples/movel_demo.py`](examples/movel_demo.py) | 笛卡尔空间直线运动 |
+| MoveJPose | [`examples/movej_pose_demo.py`](examples/movej_pose_demo.py) | 目标 TCP 位姿的点到点运动 (逆解后关节空间插值) |
+| MoveL | [`examples/movel_demo.py`](examples/movel_demo.py) | TCP 位姿的笛卡尔空间直线运动 |
 | MoveJMulti | [`examples/movej_multi_demo.py`](examples/movej_multi_demo.py) | 多路径点关节运动 |
-| MoveJPoseMulti | [`examples/movej_pose_multi_demo.py`](examples/movej_pose_multi_demo.py) | 多路径点位姿运动 (逆解后关节空间插值) |
-| MoveLMulti | [`examples/movel_multi_demo.py`](examples/movel_multi_demo.py) | 多路径点笛卡尔运动 |
+| MoveJPoseMulti | [`examples/movej_pose_multi_demo.py`](examples/movej_pose_multi_demo.py) | 多路径点 TCP 位姿运动 (逆解后关节空间插值) |
+| MoveLMulti | [`examples/movel_multi_demo.py`](examples/movel_multi_demo.py) | 多路径点 TCP 位姿笛卡尔运动 |
 | Go Home | [`examples/go_home.py`](examples/go_home.py) | 一键回原点 (MoveJ) |
 | GripperPos / GripperForce | [`examples/gripper_demo.py`](examples/gripper_demo.py) | 夹爪测试：`--pos pos v a e` 位置控制，`--force target switch v a release` 力控抓取 |
 

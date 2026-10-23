@@ -39,9 +39,9 @@ robot:
         stiffness: 20.0
         damping: 0.4
   tool:
-    frame: "tcp"
+    frame: "default"
     xyz: [0, 0, 0]
-    rpy: [0, 0, 0] # ZYX 欧拉角
+    rpy: [90, -90.0, 0.0] # ZYX 欧拉角
   # gripper:
   #   name: "geniarm_gripper"
   #   max_range: 0.045

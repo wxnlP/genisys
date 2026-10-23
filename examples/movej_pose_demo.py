@@ -7,8 +7,8 @@ MoveJPose Demo — 目标位姿的点到点运动
 
 用法:
     python3 movej_pose_demo.py                        # 全部使用默认参数
-    python3 movej_pose_demo.py --pose 0.30 0 0.15 -108 0 -90
-    python3 movej_pose_demo.py --pose 0.30,0,0.15,-108,0,-90 --v 30 --a 60
+    python3 movej_pose_demo.py --pose 0.30 0 0.30 0 0 0
+    python3 movej_pose_demo.py --pose 0.30,0,0.30,0,0,0 --v 30 --a 60
     python3 movej_pose_demo.py --v 30                 # 只改速度，位姿仍用默认
 
 参数分两组，可各自独立覆盖（未指定的沿用默认值）:
@@ -17,8 +17,8 @@ MoveJPose Demo — 目标位姿的点到点运动
     2. 运动参数: --v / --a               关节速度 度/秒、加速度 度/秒^2
 
 写法说明: --pose 的 6 个数值支持「空格分隔」或「逗号分隔」两种写法。
-          注意逗号形式若以 '-' 开头 (如 -108,0,-90) 会被 argparse 当成选项,
-          此时请改用空格写法，或写成 --pose=0.3,0,0.15,-108,0,-90。
+          注意逗号形式若以 '-' 开头（例如需要负的姿态角）会被 argparse 当成选项,
+          此时请改用空格写法，或写成 --pose=... 形式。
 
 注意: 本脚本对外统一使用「度」和「度/秒」，内部自动换算成协议要求的
       弧度、弧度/秒后再发送。
@@ -41,7 +41,9 @@ TIMEOUT = 30.0
 # 默认参数
 # ---------------------------------------------------------------------------
 # 末端目标位姿: x y z (m) + roll pitch yaw (ZYX 欧拉角, 度)
-DEFAULT_POSE = (0.30, 0.0, 0.15, -108.0, 0.0, -90.0)
+# 这是 TCP 位姿；无夹爪时 TCP 仍带默认虚拟工具旋转（rpy=[90,-90,0]），
+# 因此零位时 TCP 轴与基座对齐，且 flange_pose 与 tcp_pose 不再相等。
+DEFAULT_POSE = (0.30, 0.0, 0.30, 0.0, 0.0, 0.0)
 
 # 关节运动参数 (度制)
 DEFAULT_VEL_DEG = 57.2958   # = 1.0 rad/s
@@ -72,9 +74,9 @@ def parse_float_list(value, count, label):
     """把 count 个 float 解析成列表。
 
     同时兼容:
-        --pose 0.30 0 0.15 -108 0 -90       (空格分隔 -> nargs 列表)
-        --pose 0.30,0,0.15,-108,0,-90       (逗号分隔 -> 单元素列表)
-        --pose "0.30 0 0.15 -108 0 -90"     (整串空格分隔 -> 单元素列表)
+        --pose 0.30 0 0.30 0 0 0            (空格分隔 -> nargs 列表)
+        --pose 0.30,0,0.30,0,0,0            (逗号分隔 -> 单元素列表)
+        --pose "0.30 0 0.30 0 0 0"          (整串空格分隔 -> 单元素列表)
     """
     if isinstance(value, str):
         items = [x for x in value.replace(",", " ").split() if x]
@@ -106,11 +108,11 @@ def build_parser():
         epilog=(
             "示例:\n"
             "  %(prog)s\n"
-            "  %(prog)s --pose 0.30 0 0.15 -108 0 -90\n"
-            "  %(prog)s --pose 0.30,0,0.15,-108,0,-90 --v 30 --a 60\n"
-            "  %(prog)s --pose 0.35 0 0.20 -108 0 -90   # 只改目标位姿\n"
-            "  %(prog)s --v 30                          # 只改速度\n"
-            "  %(prog)s --url http://10.0.0.5:50080 --pose 0.30 0 0.15 -108 0 -90\n"
+            "  %(prog)s --pose 0.30 0 0.30 0 0 0\n"
+            "  %(prog)s --pose 0.30,0,0.30,0,0,0 --v 30 --a 60\n"
+            "  %(prog)s --pose 0.35 0 0.30 0 0 0   # 只改目标位姿\n"
+            "  %(prog)s --v 30                      # 只改速度\n"
+            "  %(prog)s --url http://10.0.0.5:50080 --pose 0.30 0 0.30 0 0 0\n"
         ),
     )
 
@@ -120,7 +122,7 @@ def build_parser():
     )
     g_target.add_argument(
         "--pose", "-p", type=str, nargs="+", default=None, metavar="V",
-        help="目标位姿，依次为 x y z roll pitch yaw，如 '--pose 0.30 0 0.15 -108 0 -90' "
+        help="目标位姿，依次为 x y z roll pitch yaw，如 '--pose 0.30 0 0.30 0 0 0' "
              f"(默认: {' '.join(str(v) for v in DEFAULT_POSE)})",
     )
 
