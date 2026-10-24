@@ -1,4 +1,5 @@
 #include "control_module/control_module.h"
+#include <ranges>
 #include <fmt/ranges.h> // 容器元素格式化
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
@@ -24,14 +25,17 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     if (!file_path.empty()) {
       YAML::Node cfg_node = YAML::LoadFile(std::string(file_path));
       control_executor_name_ = cfg_node["control_executor_name"].as<std::string>();
-      publish_executor_name_ = cfg_node["publish_executor_name"].as<std::string>();
+      pose_publish_executor_name_ = cfg_node["pose_publish_executor_name"].as<std::string>();
       topic_pub_joint_cmd_ = cfg_node["topic_pub_joint_cmd"].as<std::string>();
       topic_sub_joint_state_ = cfg_node["topic_sub_joint_state"].as<std::string>();
       topic_pub_tcp_pose_expected_ = cfg_node["topic_pub_tcp_pose_expected"].as<std::string>();
       topic_pub_tcp_pose_ = cfg_node["topic_pub_tcp_pose"].as<std::string>();
       topic_pub_flange_pose_ = cfg_node["topic_pub_flange_pose"].as<std::string>();
       control_frequency_ = cfg_node["control_frequency"].as<double>();
-      publish_frequency_ = cfg_node["publish_frequency"].as<double>();
+      pose_publish_frequency_ = cfg_node["pose_publish_frequency"].as<double>();
+      task_publish_frequency_ = cfg_node["task_publish_frequency"].as<double>();
+      topic_pub_task_context_ = cfg_node["topic_pub_task_context"].as<std::string>();
+      task_publish_executor_name_ = cfg_node["task_publish_executor_name"].as<std::string>();
       topic_sub_servoj_cmd_ = cfg_node["topic_sub_servoj_cmd"].as<std::string>();
       topic_sub_servoj_pose_cmd_ = cfg_node["topic_sub_servoj_pose_cmd"].as<std::string>();
       topic_sub_servol_cmd_ = cfg_node["topic_sub_servol_cmd"].as<std::string>();
@@ -50,7 +54,9 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     }
     cycle_control_executor_ = ctx_ptr_->CreateExecutor(control_executor_name_);
 
-    publish_executor_ = ctx_ptr_->CreateExecutor(publish_executor_name_);
+    pose_publish_executor_ = ctx_ptr_->CreateExecutor(pose_publish_executor_name_);
+
+    task_publish_executor_ = ctx_ptr_->CreateExecutor(task_publish_executor_name_);
 
     pub_joint_cmd_ = ctx_ptr_->CreatePublisher<JointCommandArray>(topic_pub_joint_cmd_);
 
@@ -59,6 +65,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     pub_tcp_pose_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_tcp_pose_);
 
     pub_flange_pose_ = ctx_ptr_->CreatePublisher<Pose>(topic_pub_flange_pose_);
+
+    pub_task_context_ = ctx_ptr_->CreatePublisher<TaskContextMsg>(topic_pub_task_context_);
 
     sub_joint_state_ = ctx_ptr_->CreateSubscriber<JointStateArray>(topic_sub_joint_state_, std::bind(&ControlModule::JointStateCallback, this, std::placeholders::_1));
 
@@ -91,14 +99,18 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
 
       int ret = arm_controller_->MoveJ(target_joint, req.v, req.a);
-      if (ret == 0) {
-        arm_controller_->WaitForCompletion();
-        rsp.error.code = 0;
-        rsp.error.msg = "MoveJ succeeded";
-      } else {
+      if (ret != 0) {
         rsp.error.code = ret;
         rsp.error.msg = "MoveJ failed";
+        return aimrt::rpc::Status();
       }
+      ArmController::TaskContext task;
+      if (arm_controller_->GetCurrentTaskContext(task)) {
+        rsp.task_id = task.id;
+        rsp.duration_ms = task.duration_ms;
+      }
+      rsp.error.code = 0;
+      rsp.error.msg = "MoveJ accepted";
 
       return aimrt::rpc::Status();
     });
@@ -114,14 +126,18 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
           req.pose.orientation.y, req.pose.orientation.z);
 
       int ret = arm_controller_->MoveJ(target_tcp, req.v, req.a);
-      if (ret == 0) {
-        arm_controller_->WaitForCompletion();
-        rsp.error.code = 0;
-        rsp.error.msg = "MoveJPose succeeded";
-      } else {
+      if (ret != 0) {
         rsp.error.code = ret;
         rsp.error.msg = "MoveJPose failed";
+        return aimrt::rpc::Status();
       }
+      ArmController::TaskContext task;
+      if (arm_controller_->GetCurrentTaskContext(task)) {
+        rsp.task_id = task.id;
+        rsp.duration_ms = task.duration_ms;
+      }
+      rsp.error.code = 0;
+      rsp.error.msg = "MoveJPose accepted";
 
       return aimrt::rpc::Status();
     });
@@ -139,14 +155,18 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
 
       int ret = arm_controller_->MoveJMulti(points, req.r, req.v, req.a);
-      if (ret == 0) {
-        arm_controller_->WaitForCompletion();
-        rsp.error.code = 0;
-        rsp.error.msg = "MoveJMulti succeeded";
-      } else {
+      if (ret != 0) {
         rsp.error.code = ret;
         rsp.error.msg = "MoveJMulti failed";
+        return aimrt::rpc::Status();
       }
+      ArmController::TaskContext task;
+      if (arm_controller_->GetCurrentTaskContext(task)) {
+        rsp.task_id = task.id;
+        rsp.duration_ms = task.duration_ms;
+      }
+      rsp.error.code = 0;
+      rsp.error.msg = "MoveJMulti accepted";
 
       return aimrt::rpc::Status();
     });
@@ -166,14 +186,18 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
 
       int ret = arm_controller_->MoveJMulti(tcp_points, req.r, req.v, req.a);
-      if (ret == 0) {
-        arm_controller_->WaitForCompletion();
-        rsp.error.code = 0;
-        rsp.error.msg = "MoveJPoseMulti succeeded";
-      } else {
+      if (ret != 0) {
         rsp.error.code = ret;
         rsp.error.msg = "MoveJPoseMulti failed";
+        return aimrt::rpc::Status();
       }
+      ArmController::TaskContext task;
+      if (arm_controller_->GetCurrentTaskContext(task)) {
+        rsp.task_id = task.id;
+        rsp.duration_ms = task.duration_ms;
+      }
+      rsp.error.code = 0;
+      rsp.error.msg = "MoveJPoseMulti accepted";
 
       return aimrt::rpc::Status();
     });
@@ -189,14 +213,18 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
           req.pose.orientation.y, req.pose.orientation.z);
 
       int ret = arm_controller_->MoveL(target_tcp, req.v, req.a);
-      if (ret == 0) {
-        arm_controller_->WaitForCompletion();
-        rsp.error.code = 0;
-        rsp.error.msg = "MoveL succeeded";
-      } else {
+      if (ret != 0) {
         rsp.error.code = ret;
         rsp.error.msg = "MoveL failed";
+        return aimrt::rpc::Status();
       }
+      ArmController::TaskContext task;
+      if (arm_controller_->GetCurrentTaskContext(task)) {
+        rsp.task_id = task.id;
+        rsp.duration_ms = task.duration_ms;
+      }
+      rsp.error.code = 0;
+      rsp.error.msg = "MoveL accepted";
 
       return aimrt::rpc::Status();
     });
@@ -216,14 +244,18 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
 
       int ret = arm_controller_->MoveLMulti(tcp_points, req.r, req.v, req.a);
-      if (ret == 0) {
-        arm_controller_->WaitForCompletion();
-        rsp.error.code = 0;
-        rsp.error.msg = "MoveLMulti succeeded";
-      } else {
+      if (ret != 0) {
         rsp.error.code = ret;
         rsp.error.msg = "MoveLMulti failed";
+        return aimrt::rpc::Status();
       }
+      ArmController::TaskContext task;
+      if (arm_controller_->GetCurrentTaskContext(task)) {
+        rsp.task_id = task.id;
+        rsp.duration_ms = task.duration_ms;
+      }
+      rsp.error.code = 0;
+      rsp.error.msg = "MoveLMulti accepted";
 
       return aimrt::rpc::Status();
     });
@@ -301,9 +333,13 @@ bool ControlModule::Start() {
       ctx_ptr_->LetMe();
       ControlLoop();
     });
-    publish_executor_.Execute([this]() {
+    pose_publish_executor_.Execute([this]() {
       ctx_ptr_->LetMe();
-      PublishLoop();
+      PosePublishLoop();
+    });
+    task_publish_executor_.Execute([this]() {
+      ctx_ptr_->LetMe();
+      TaskPublishLoop();
     });
 
   } catch (const std::exception& e) {
@@ -318,8 +354,9 @@ void ControlModule::Shutdown() {
   try {
     ctx_ptr_->StopRunning();
 
-    pub_stop_sig_.get_future().wait();
+    pose_pub_stop_sig_.get_future().wait();
     control_stop_sig_.get_future().wait();
+    task_pub_stop_sig_.get_future().wait();
 
     if (arm_controller_) {
       arm_controller_->StopSampleThread();
@@ -328,6 +365,63 @@ void ControlModule::Shutdown() {
     AIMRT_ERROR("control_module Shutdown failed, {}", e.what());
   }
   AIMRT_INFO("control_module Shutdown succeeded.");
+}
+
+void ControlModule::TaskPublishLoop() {
+  try {
+    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / task_publish_frequency_ * 1000000000));
+    auto next_loop_time = std::chrono::steady_clock::now();
+
+    std::vector<ArmController::TaskContext> history;
+    std::vector<ArmController::TaskContext> pending;
+
+    while (ctx_ptr_->Running()) {
+      pending.clear();
+
+      if (arm_controller_->GetHistoryTaskContext(history)) {
+        std::ranges::sort(history, {}, &ArmController::TaskContext::id);
+        for (const auto& ctx : history) {
+          if (ctx.id <= last_finished_task_id_) {
+            continue;
+          }
+          pending.push_back(ctx);
+          last_finished_task_id_ = ctx.id;
+        }
+      }
+
+      ArmController::TaskContext current;
+      if (arm_controller_->GetCurrentTaskContext(current) && current.id != last_running_task_id_) {
+        pending.push_back(current);
+        last_running_task_id_ = current.id;
+      }
+
+      for (const auto& ctx : pending) {
+        auto time_ns = aimrt::common::util::GetCurTimestampNs();
+
+        TaskContextMsg msg;
+        msg.header.stamp.sec = static_cast<int32_t>(time_ns / 1000000000);
+        msg.header.stamp.nanosec = static_cast<uint32_t>(time_ns % 1000000000);
+        msg.header.frame_id = "base_link";
+        msg.id = ctx.id;
+        msg.duration_ms = ctx.duration_ms;
+        const int64_t end_ns = ctx.end_timestamp.time_since_epoch().count();
+        msg.end_timestamp.sec = static_cast<int32_t>(end_ns / 1000000000);
+        msg.end_timestamp.nanosec = static_cast<uint32_t>(end_ns % 1000000000);
+        msg.state = static_cast<int8_t>(ctx.state);
+        msg.code = ctx.code;
+
+        ctx_ptr_->LetMe();
+        pub_task_context_.Publish(msg);
+      }
+
+      next_loop_time += period;
+      std::this_thread::sleep_until(next_loop_time);
+    }
+  } catch (const std::exception& e) {
+    AIMRT_ERROR("ControlModule::TaskPublishLoop crashed: {}", e.what());
+  }
+  task_pub_stop_sig_.set_value();
+  AIMRT_INFO("成功退出 ControlModule::TaskPublishLoop");
 }
 
 void ControlModule::ControlLoop() {
@@ -387,6 +481,8 @@ void ControlModule::ControlLoop() {
         }
       }
       auto t_get_cmd = std::chrono::steady_clock::now();
+
+      arm_controller_->MotionStateHandle(std::chrono::system_clock::now());
 
       for (int i = 0; i < 6; ++i) {
         auto* joint = joint_cmd_msg.add_joints();
@@ -466,10 +562,10 @@ void ControlModule::ControlLoop() {
   AIMRT_INFO("成功退出 ControlModule::ControlLoop");
 }
 
-void ControlModule::PublishLoop() {
+void ControlModule::PosePublishLoop() {
   try {
     // 计算周期
-    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / publish_frequency_ * 1000000000));
+    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / pose_publish_frequency_ * 1000000000));
     // 记录下一次循环时间
     auto next_loop_time = std::chrono::steady_clock::now();
     // 序列
@@ -553,10 +649,10 @@ void ControlModule::PublishLoop() {
       std::this_thread::sleep_until(next_loop_time);
     }
   } catch (const std::exception& e) {
-    AIMRT_ERROR("ControlModule::PublishLoop crashed: {}", e.what());
+    AIMRT_ERROR("ControlModule::PosePublishLoop crashed: {}", e.what());
   }
-  pub_stop_sig_.set_value();
-  AIMRT_INFO("成功退出 ControlModule::PublishLoop");
+  pose_pub_stop_sig_.set_value();
+  AIMRT_INFO("成功退出 ControlModule::PosePublishLoop");
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {

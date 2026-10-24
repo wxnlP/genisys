@@ -29,7 +29,9 @@ aimrt:
         options:
           thread_bind_cpu: [0]  # 绑定 RK3588 A55 小核
           thread_sched_policy: SCHED_FIFO:80
-      - name: control_pub_executor
+      - name: pose_pub_executor
+        type: asio_thread
+      - name: task_pub_executor
         type: asio_thread
       - name: storage_executor
         type: asio_thread
@@ -147,6 +149,9 @@ ControlModule:
   topic_sub_servoj_pose_cmd: /geniarm/servoj_pose_cmd
   topic_sub_servol_cmd: /geniarm/servol_cmd
   control_executor_name: control_executor
-  publish_executor_name: control_pub_executor
+  pose_publish_executor_name: pose_pub_executor
   control_frequency: 500
-  publish_frequency: 500
+  pose_publish_frequency: 500
+  topic_pub_task_context: /geniarm/task_context
+  task_publish_executor_name: task_pub_executor
+  task_publish_frequency: 50

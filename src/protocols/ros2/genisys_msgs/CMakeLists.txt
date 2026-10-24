@@ -17,6 +17,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(builtin_interfaces REQUIRED)
 # find_package(rclcpp REQUIRED)
 
 # BUG of ros2
@@ -30,6 +31,7 @@ rosidl_generate_interfaces(${CUR_TARGET_NAME}
   "msg/ServoJCommand.msg"
   "msg/ServoJPoseCommand.msg"
   "msg/ServoLCommand.msg"
+  "msg/TaskContext.msg"
   "srv/MoveJ.srv"
   "srv/MoveJPose.srv"
   "srv/MoveJMulti.srv"
@@ -38,7 +40,7 @@ rosidl_generate_interfaces(${CUR_TARGET_NAME}
   "srv/MoveLMulti.srv"
   "srv/GripperPos.srv"
   "srv/GripperForce.srv"
-  DEPENDENCIES std_msgs geometry_msgs)
+  DEPENDENCIES std_msgs geometry_msgs builtin_interfaces)
 # cmake-format: on
 set(BUILD_SHARED_LIBS ${CUR_BUILD_SHARED_LIBS})
 
