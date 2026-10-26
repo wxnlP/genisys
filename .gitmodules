@@ -1,4 +1,4 @@
 [submodule "src/module/genisys-core"]
 	path = src/module/genisys-core
-	url = git@github.com:wxnlP/genisys-core.git
+	url = https://github.com/wxnlP/genisys-core.git
 	branch = dev
