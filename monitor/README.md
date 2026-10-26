@@ -33,6 +33,10 @@ python -m monitor.main
 |------|------|
 | **Joint State / Command** | 各关节位置、速度、力矩 |
 | **Pose Current / Expected** | 末端位置（XYZ）+ 姿态（RPY） |
+| **Flange Pose** | 法兰位置（XYZ）+ 姿态（RPY） |
+
+每个 Pose 表标题右侧有 `RPY` / `QUAT` 按钮：在 ZYX 欧拉角与四元数 (X Y Z W) 之间切换姿态显示，
+位置与右击绘图功能不受影响（四元数模式下右击可绘制 `orientation_x/y/z/w`）；`°`/`rad` 按钮仅在 RPY 模式下可用。
 
 ### 绘图区
 
@@ -59,7 +63,7 @@ python -m monitor.main
 | `y_range_min` | `0.001` | Y 轴最小范围 |
 | `ui_scale` | `1.0` | 界面缩放因子 |
 
-`topics` 的**话题**必须属于以下四种之一：
+`topics` 的**话题**必须属于以下五种之一：
 
 | 话题 | 消息类型 |
 |------|----------|
@@ -67,6 +71,7 @@ python -m monitor.main
 | `joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` |
 | `pose_current` | `genisys.protocols.PoseStamped` |
 | `pose_expected` | `genisys.protocols.PoseStamped` |
+| `flange_pose` | `genisys.protocols.PoseStamped` |
 
 Zenoh 插件的 `path` 填文件名即可（如 `libaimrt_zenoh_plugin.so`），程序会把 aimrt_py
 所在目录加入 `LD_LIBRARY_PATH`，不必写绝对路径。

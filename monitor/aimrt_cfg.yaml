@@ -45,6 +45,7 @@ MonitorSubscriberPyModule:
     joint_cmd: "/geniarm/joint_cmd"
     pose_current: "/geniarm/tcp_pose"
     pose_expected: "/geniarm/tcp_pose_expected"
+    flange_pose: "/geniarm/flange_pose"
 
   # 界面参数
   refresh_interval_ms: 2      # 绘图刷新间隔（毫秒），实际下限为 10

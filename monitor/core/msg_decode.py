@@ -13,6 +13,7 @@ Topic and message type (must match what the robot publishes)::
     /geniarm/joint_cmd      pb:aimrt.protocols.sensor.JointCommandArray
     /geniarm/tcp_pose    pb:genisys.protocols.PoseStamped
     /geniarm/tcp_pose_expected   pb:genisys.protocols.PoseStamped
+    /geniarm/flange_pose   pb:genisys.protocols.PoseStamped
 
 The robot publishes ``PoseStamped`` (aliased to ``Pose`` in ControlModule),
 not ``Pose``.
@@ -39,6 +40,9 @@ POSE_SCALAR_FIELDS = (
     "roll", "pitch", "yaw",
 )
 
+# Source names whose message is a bare ``PoseStamped`` (no joints array).
+POSE_SOURCES = ("pose_current", "pose_expected", "flange_pose")
+
 # source name (AIMRT config topics key) → protobuf message class.
 # ``genisys.protocols.PoseStamped`` lives in monitor/proto/pose_pb2.py.
 MSGTYPE_BY_SOURCE = {
@@ -46,6 +50,7 @@ MSGTYPE_BY_SOURCE = {
     "joint_cmd": JointCommandArray,
     "pose_current": PoseStamped,
     "pose_expected": PoseStamped,
+    "flange_pose": PoseStamped,
 }
 
 
@@ -118,7 +123,7 @@ def message_to_dict(source: str, msg) -> Optional[dict]:
         return joint_state_to_dict(msg)
     if source == "joint_cmd":
         return joint_cmd_to_dict(msg)
-    if source in ("pose_current", "pose_expected"):
+    if source in POSE_SOURCES:
         return pose_to_dict(msg, source)
     return None
 
@@ -169,7 +174,7 @@ def decode_json(source: str, json_bytes: bytes) -> Optional[dict]:
         ]
         return {**_hdr(), "joints": joints_data}
 
-    if source in ("pose_current", "pose_expected"):
+    if source in POSE_SOURCES:
         pose = obj.get("pose", {})
         pos = pose.get("position", {})
         orient = pose.get("orientation", {})

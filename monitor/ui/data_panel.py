@@ -1,6 +1,7 @@
 """
-Data display panel — two tables side by side showing the latest snapshot
-from ``joint_state`` (top) and ``joint_cmd`` (bottom).
+Data display panel — tables showing the latest snapshot from each subscribed
+topic: ``joint_state`` / ``joint_cmd`` (joint tables) and
+``pose_current`` / ``pose_expected`` / ``flange_pose`` (pose tables).
 
 Right-click a cell to add / remove the corresponding series from the plot.
 """
@@ -265,10 +266,12 @@ class _DataTableWidget(QtWidgets.QWidget):
 
 
 class _PoseTableWidget(QtWidgets.QWidget):
-    """Pose table: Position (X Y Z) + Orientation as ZYX Euler angles (RPY).
+    """Pose table: Position (X Y Z) + Orientation, RPY or quaternion.
 
     Quaternion from the data model is converted to Roll / Pitch / Yaw
-    (ZYX convention) for human-readable display.
+    (ZYX convention) for human-readable display.  The ``RPY`` / ``QUAT``
+    button in the title row switches the orientation block between the two
+    representations (the position block is unaffected).
 
       ┌──────────────────────────────┐
       │          Position            │  ← span 3, blue bold
@@ -285,7 +288,14 @@ class _PoseTableWidget(QtWidgets.QWidget):
 
     _POS_KEYS   = [("position_x", "X"), ("position_y", "Y"), ("position_z", "Z")]
     _RPY_LABELS = ["Roll", "Pitch", "Yaw"]
-    NCOLS = 3
+    _RPY_KEYS   = ["roll", "pitch", "yaw"]
+    _QUAT_LABELS = ["X", "Y", "Z", "W"]
+    _QUAT_KEYS   = ["orientation_x", "orientation_y", "orientation_z", "orientation_w"]
+    # Internal 12-column grid: RPY uses 3 equal columns (span 4), the
+    # quaternion uses 4 equal columns (span 3) — one table, equal widths.
+    NCOLS = 12
+    _SPAN_RPY = 4
+    _SPAN_QUAT = 3
 
     add_to_plot_requested = QtCore.pyqtSignal(str, str)
 
@@ -299,11 +309,14 @@ class _PoseTableWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self._source = source
         self._use_degrees = True  # display toggle: True→°  False→rad
+        self._quat_mode = False   # orientation display: False→RPY  True→quaternion
         # For position: msg_key → (row, col)
         self._pos_cells: dict[str, tuple[int, int]] = {}
-        # For RPY: just three cell positions
-        self._rpy_cells: list[tuple[int, int]] = []
-        self._last_rpy: list[float] | None = None
+        # Current orientation cells: msg_key → (row, col)
+        self._ori_cells: dict[str, tuple[int, int]] = {}
+        self._ori_span = self._SPAN_RPY   # span width currently used (rows 4/5)
+        self._last_rpy: list[float] | None = None    # radians
+        self._last_quat: list[float] | None = None   # x, y, z, w
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -318,6 +331,21 @@ class _PoseTableWidget(QtWidgets.QWidget):
         )
         title_row.addWidget(lbl)
         title_row.addStretch()
+
+        # Orientation mode toggle: ZYX Euler angles ↔ quaternion.
+        # Text shows the mode currently in effect, like the °/rad button.
+        self._ori_btn = QtWidgets.QPushButton("RPY")
+        self._ori_btn.setFixedWidth(44)
+        self._ori_btn.setFixedHeight(22)
+        self._ori_btn.setToolTip("切换姿态显示：ZYX 欧拉角 (RPY) ↔ 四元数 (X Y Z W)")
+        self._ori_btn.setStyleSheet(
+            "QPushButton { font-size: 10pt; padding: 0;"
+            " border: 1px solid #cbd5e1; border-radius: 3px; }"
+        )
+        self._ori_btn.setCheckable(True)
+        self._ori_btn.setChecked(False)
+        self._ori_btn.clicked.connect(self._toggle_orientation)
+        title_row.addWidget(self._ori_btn)
 
         self._unit_btn = QtWidgets.QPushButton("°")
         self._unit_btn.setFixedWidth(36)
@@ -334,41 +362,20 @@ class _PoseTableWidget(QtWidgets.QWidget):
 
         layout.addLayout(title_row)
 
-        # ── Build table rows (6 rows × 3 cols) ──────────────────
-        rows_data: list[list[Optional[tuple[str, str]]]] = []
-        # Row 0: Position section header (span 3)
-        rows_data.append([("section", "Position (m)")] + [None] * (self.NCOLS - 1))
-        # Row 1: X / Y / Z field labels
-        labels: list[Optional[tuple[str, str]]] = [None] * self.NCOLS
-        for i, (key, label) in enumerate(self._POS_KEYS):
-            labels[i] = ("label", label)
-        rows_data.append(labels)
-        # Row 2: position values
-        val_row: list[Optional[tuple[str, str]]] = [None] * self.NCOLS
-        for i, (key, label) in enumerate(self._POS_KEYS):
-            val_row[i] = ("pos_value", key)
-        rows_data.append(val_row)
-        # Row 3: Orientation section header (span 3)
-        rows_data.append([("section", "Orientation (°)")] + [None] * (self.NCOLS - 1))
-        # Row 4: Roll / Pitch / Yaw labels
-        labels2: list[Optional[tuple[str, str]]] = [None] * self.NCOLS
-        for i, lab in enumerate(self._RPY_LABELS):
-            labels2[i] = ("label", lab)
-        rows_data.append(labels2)
-        # Row 5: RPY values (computed from quaternion)
-        rpy_row: list[Optional[tuple[str, str]]] = [None] * self.NCOLS
-        for i in range(self.NCOLS):
-            rpy_row[i] = ("rpy_value", str(i))
-        rows_data.append(rpy_row)
-
-        nrows = len(rows_data)
-        self._table = QtWidgets.QTableWidget(nrows, self.NCOLS)
+        # ── Build table (6 rows on a 12-column grid) ────────────
+        self._table = QtWidgets.QTableWidget(6, self.NCOLS)
         self._table.setHorizontalHeaderLabels([""] * self.NCOLS)
         self._table.horizontalHeader().setVisible(False)
+        # The 12 grid columns must be allowed to shrink below the style's
+        # default minimum section width (36 px), otherwise 12 × 36 > panel
+        # width and the table grows its own horizontal scrollbar.
+        self._table.horizontalHeader().setMinimumSectionSize(8)
+        self._table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
         self._table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
         self._table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self._table.setWordWrap(False)
         self._table.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self._table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_context_menu)
@@ -377,37 +384,22 @@ class _PoseTableWidget(QtWidgets.QWidget):
         for i in range(self.NCOLS):
             hdr.setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
 
-        for row, cells in enumerate(rows_data):
-            for col, cell in enumerate(cells):
-                if cell is None:
-                    continue
-                typ, val = cell
-                item = QtWidgets.QTableWidgetItem(val)
-                item.setTextAlignment(QtCore.Qt.AlignCenter)
+        # Rows 0-2: position section, X/Y/Z labels, position values
+        self._set_section(0, "Position (m)")
+        for i, (key, label) in enumerate(self._POS_KEYS):
+            col = i * self._SPAN_RPY
+            self._table.setSpan(1, col, 1, self._SPAN_RPY)
+            self._table.setSpan(2, col, 1, self._SPAN_RPY)
+            self._set_cell(1, col, label, bold=True)
+            self._set_cell(2, col, "—")
+            self._pos_cells[key] = (2, col)
 
-                if typ == "section":
-                    fnt = item.font()
-                    fnt.setBold(True)
-                    item.setFont(fnt)
-                    item.setBackground(QtGui.QColor("#2563eb"))
-                    item.setForeground(QtGui.QColor("#ffffff"))
-                    self._table.setSpan(row, 0, 1, self.NCOLS)
-                    self._table.setItem(row, 0, item)
-                    break
-                elif typ == "label":
-                    fnt = item.font()
-                    fnt.setBold(True)
-                    item.setFont(fnt)
-                    self._table.setItem(row, col, item)
-                elif typ == "pos_value":
-                    self._table.setItem(row, col, item)
-                    self._pos_cells[val] = (row, col)
-                elif typ == "rpy_value":
-                    self._table.setItem(row, col, item)
-                    self._rpy_cells.append((row, col))
-
-        # Store reference to orientation section header for unit update
+        # Row 3: orientation section header (text depends on the mode)
+        self._set_section(3, "Orientation (°)")
         self._ori_header_item = self._table.item(3, 0)
+
+        # Rows 4-5: orientation labels + values, built per mode
+        self._build_orientation()
 
         layout.addWidget(self._table)
         self._fit_height()
@@ -448,41 +440,157 @@ class _PoseTableWidget(QtWidgets.QWidget):
     # Height
     # ------------------------------------------------------------------
 
+    def showEvent(self, event: QtGui.QShowEvent) -> None:
+        # The table font is only final once the widget is polished, so the
+        # heights computed in __init__ can be off; re-fit on first show.
+        super().showEvent(event)
+        self._fit_height()
+
     def _fit_height(self) -> None:
-        self._table.resizeRowsToContents()
-        h = self._table.horizontalHeader().height()
-        for r in range(self._table.rowCount()):
-            h += self._table.rowHeight(r)
-        h += 2 * self._table.frameWidth()
+        """Set deterministic row heights and the table's minimum height.
+
+        ``resizeRowsToContents()`` cannot be used here: with a 12-column grid
+        it measures each item in its own (narrow) column, ignoring spans, so
+        wrapped text inflates the rows — and switching RPY ↔ quaternion would
+        change the height.  Fixed heights keep the layout stable.
+        """
+        fm = self._table.fontMetrics()
+        normal = fm.height() + 10
+        band = fm.height() + 16       # blue section headers
+        for row in range(self._table.rowCount()):
+            self._table.setRowHeight(row, band if row in (0, 3) else normal)
+        h = (band * 2 + normal * (self._table.rowCount() - 2)
+             + 2 * self._table.frameWidth())
         self._table.setMinimumHeight(h)
 
     # ------------------------------------------------------------------
-    # Update
+    # Cell helpers
     # ------------------------------------------------------------------
 
-    def _refresh_rpy_display(self) -> None:
-        """Re-read stored RPY radians and redisplay based on _use_degrees."""
-        if self._last_rpy is None:
+    def _set_section(self, row: int, text: str) -> None:
+        """Full-width blue section header cell."""
+        item = QtWidgets.QTableWidgetItem(text)
+        item.setTextAlignment(QtCore.Qt.AlignCenter)
+        fnt = item.font()
+        fnt.setBold(True)
+        item.setFont(fnt)
+        item.setBackground(QtGui.QColor("#2563eb"))
+        item.setForeground(QtGui.QColor("#ffffff"))
+        self._table.setSpan(row, 0, 1, self.NCOLS)
+        self._table.setItem(row, 0, item)
+
+    def _set_cell(self, row: int, col: int, text: str,
+                  bold: bool = False) -> QtWidgets.QTableWidgetItem:
+        item = QtWidgets.QTableWidgetItem(text)
+        item.setTextAlignment(QtCore.Qt.AlignCenter)
+        if bold:
+            fnt = item.font()
+            fnt.setBold(True)
+            item.setFont(fnt)
+        self._table.setItem(row, col, item)
+        return item
+
+    # ------------------------------------------------------------------
+    # Orientation block (RPY ↔ quaternion)
+    # ------------------------------------------------------------------
+
+    def _apply_static_spans(self) -> None:
+        """Span layout that does not depend on the orientation mode."""
+        self._table.setSpan(0, 0, 1, self.NCOLS)          # "Position (m)"
+        for i in range(len(self._POS_KEYS)):
+            col = i * self._SPAN_RPY
+            self._table.setSpan(1, col, 1, self._SPAN_RPY)
+            self._table.setSpan(2, col, 1, self._SPAN_RPY)
+        self._table.setSpan(3, 0, 1, self.NCOLS)          # orientation header
+
+    def _build_orientation(self) -> None:
+        """(Re)build orientation labels/values for the current mode."""
+        # Drop the previous orientation cells, then rebuild every span:
+        # clearSpans() is used because setSpan(…, 1, 1) warns on stderr.
+        for col in range(0, self.NCOLS, self._ori_span):
+            if self._table.item(4, col) is not None:
+                self._table.takeItem(4, col)
+            if self._table.item(5, col) is not None:
+                self._table.takeItem(5, col)
+        self._table.clearSpans()
+        self._apply_static_spans()
+        self._ori_cells.clear()
+
+        if self._quat_mode:
+            labels, keys, span = (self._QUAT_LABELS, self._QUAT_KEYS,
+                                  self._SPAN_QUAT)
+        else:
+            labels, keys, span = (self._RPY_LABELS, self._RPY_KEYS,
+                                  self._SPAN_RPY)
+        self._ori_span = span
+
+        for i, (label, key) in enumerate(zip(labels, keys)):
+            col = i * span
+            self._table.setSpan(4, col, 1, span)
+            self._table.setSpan(5, col, 1, span)
+            self._set_cell(4, col, label, bold=True)
+            self._set_cell(5, col, "—")
+            self._ori_cells[key] = (5, col)
+
+        self._set_orientation_header()
+
+    def _set_orientation_header(self) -> None:
+        if self._ori_header_item is None:
             return
-        rpy_rad = self._last_rpy
-        for i, (row, col) in enumerate(self._rpy_cells):
-            item = self._table.item(row, col)
-            if item is None:
-                continue
+        if self._quat_mode:
+            self._ori_header_item.setText("Orientation (quaternion)")
+        else:
+            self._ori_header_item.setText(
+                "Orientation (°)" if self._use_degrees else "Orientation (rad)"
+            )
+
+    def _set_ori_text(self, key: str, text: str) -> None:
+        cell = self._ori_cells.get(key)
+        if cell is None:
+            return
+        item = self._table.item(*cell)
+        if item is not None:
+            item.setText(text)
+
+    def _refresh_orientation(self) -> None:
+        """Redraw rows 4/5 from cached values, honoring the current mode."""
+        if self._quat_mode:
+            if self._last_quat is None:
+                for key in self._QUAT_KEYS:
+                    self._set_ori_text(key, "—")
+                return
+            for key, value in zip(self._QUAT_KEYS, self._last_quat):
+                self._set_ori_text(key, f"{value:.4f}")
+            return
+
+        if self._last_rpy is None:
+            for key in self._RPY_KEYS:
+                self._set_ori_text(key, "—")
+            return
+        for key, rad in zip(self._RPY_KEYS, self._last_rpy):
             if self._use_degrees:
-                item.setText(f"{_math.degrees(rpy_rad[i]):.2f}")
+                self._set_ori_text(key, f"{_math.degrees(rad):.2f}")
             else:
-                item.setText(f"{rpy_rad[i]:.4f}")
+                self._set_ori_text(key, f"{rad:.4f}")
 
     def _toggle_unit(self, checked: bool) -> None:
         self._use_degrees = checked
         self._unit_btn.setText("°" if checked else "rad")
-        # Update orientation section header unit
-        if self._ori_header_item is not None:
-            self._ori_header_item.setText(
-                "Orientation (°)" if checked else "Orientation (rad)"
-            )
-        self._refresh_rpy_display()
+        self._set_orientation_header()
+        self._refresh_orientation()
+
+    def _toggle_orientation(self, quat: bool) -> None:
+        """Switch orientation between ZYX Euler angles and quaternion."""
+        self._quat_mode = bool(quat)
+        self._ori_btn.setText("QUAT" if quat else "RPY")
+        self._unit_btn.setEnabled(not quat)  # unit is meaningless for quaternions
+        self._build_orientation()
+        self._refresh_orientation()
+        self._fit_height()
+
+    # ------------------------------------------------------------------
+    # Update
+    # ------------------------------------------------------------------
 
     def update_from_message(self, msg: dict) -> None:
         # -- Position values (direct pass-through) --
@@ -490,49 +598,45 @@ class _PoseTableWidget(QtWidgets.QWidget):
             item = self._table.item(row, col)
             if item is not None:
                 val = msg.get(field)
-                if val is not None:
-                    item.setText(f"{val:.4f}")
-                else:
-                    item.setText("—")
+                item.setText(f"{val:.4f}" if val is not None else "—")
 
-        # -- Orientation: RPY values --
-        rpy_rad = [msg.get("roll"), msg.get("pitch"), msg.get("yaw")]
-        if all(v is not None for v in rpy_rad):
-            self._last_rpy = rpy_rad
-            self._refresh_rpy_display()
-        else:
-            self._last_rpy = None
-            for row, col in self._rpy_cells:
-                item = self._table.item(row, col)
-                if item is not None:
-                    item.setText("—")
+        # -- Orientation: cache both representations, show the active one --
+        rpy = [msg.get(k) for k in self._RPY_KEYS]
+        self._last_rpy = rpy if all(v is not None for v in rpy) else None
+        quat = [msg.get(k) for k in self._QUAT_KEYS]
+        self._last_quat = quat if all(v is not None for v in quat) else None
+        self._refresh_orientation()
 
     # ------------------------------------------------------------------
     # Context menu — right-click to add/remove from plot
     # ------------------------------------------------------------------
 
+    def _plot_target(self, row: int, col: int) -> Optional[tuple[str, str]]:
+        """Map a cell (anchor column) to (series key, label) for the plot menu."""
+        if row == 2:
+            idx = col // self._SPAN_RPY
+            if 0 <= idx < len(self._POS_KEYS):
+                return self._POS_KEYS[idx]
+        elif row == 5:
+            if self._quat_mode:
+                idx = col // self._SPAN_QUAT
+                if 0 <= idx < len(self._QUAT_KEYS):
+                    return (self._QUAT_KEYS[idx],
+                            "Q" + self._QUAT_LABELS[idx])
+            else:
+                idx = col // self._SPAN_RPY
+                if 0 <= idx < len(self._RPY_KEYS):
+                    return self._RPY_KEYS[idx], self._RPY_LABELS[idx]
+        return None
+
     def _on_context_menu(self, pos: QtCore.QPoint) -> None:
-        """Right-click handler: plot position or quaternion fields."""
-        item = self._table.itemAt(pos)
-        if item is None:
+        """Right-click handler: plot position / RPY / quaternion fields."""
+        index = self._table.indexAt(pos)
+        if not index.isValid():
             return
-
-        row = item.row()
-        col = item.column()
-
-        # Row 2 = position values (X / Y / Z)
-        if row == 2 and 0 <= col < len(self._POS_KEYS):
-            msg_key, short = self._POS_KEYS[col]
-            self._show_plot_menu(pos, msg_key, short)
-        # Row 5 = RPY values → plot roll / pitch / yaw
-        elif row == 5 and 0 <= col < 3:
-            rpy_map = {
-                0: ("roll", "Roll"),
-                1: ("pitch", "Pitch"),
-                2: ("yaw", "Yaw"),
-            }
-            msg_key, short = rpy_map[col]
-            self._show_plot_menu(pos, msg_key, short)
+        target = self._plot_target(index.row(), index.column())
+        if target is not None:
+            self._show_plot_menu(pos, *target)
 
     def _show_plot_menu(self, pos: QtCore.QPoint,
                         msg_key: str, short: str) -> None:
@@ -607,6 +711,15 @@ class DataPanel(QtWidgets.QWidget):
         self._pose_exp_table.add_to_plot_requested.connect(self._relay)
         layout.addWidget(self._pose_exp_table)
 
+        # -- flange_pose table --
+        self._flange_pose_table = _PoseTableWidget(
+            source="flange_pose",
+            title="Flange Pose",
+            accent_color="#2563eb",
+        )
+        self._flange_pose_table.add_to_plot_requested.connect(self._relay)
+        layout.addWidget(self._flange_pose_table)
+
         # 底部 stretch 吸收多余空间
         layout.addStretch(1)
 
@@ -627,6 +740,8 @@ class DataPanel(QtWidgets.QWidget):
             self._pose_cur_table.update_from_message(msg)
         elif source == "pose_expected":
             self._pose_exp_table.update_from_message(msg)
+        elif source == "flange_pose":
+            self._flange_pose_table.update_from_message(msg)
 
     def set_plotted_keys(self, keys: set[str]) -> None:
         self._plotted_keys = keys
