@@ -15,6 +15,7 @@
 #include "pose.pb.h"
 #include "GripperForce.aimrt_rpc.srv.h"
 #include "GripperPos.aimrt_rpc.srv.h"
+#include "IKCheck.aimrt_rpc.srv.h"
 #include "MoveJ.aimrt_rpc.srv.h"
 #include "MoveJPose.aimrt_rpc.srv.h"
 #include "MoveJPoseMulti.aimrt_rpc.srv.h"
@@ -62,6 +63,9 @@ class ControlModule : public aimrt::ModuleBase {
   void ServoJCommandCallback(const std::shared_ptr<const ServoJCommand>& msg);
   void ServoJPoseCommandCallback(const std::shared_ptr<const ServoJPoseCommand>& msg);
   void ServoLCommandCallback(const std::shared_ptr<const ServoLCommand>& msg);
+  void IKCheckHandler(aimrt::rpc::ContextRef ctx_ref,
+                      const genisys_msgs::srv::IKCheck_Request& req,
+                      genisys_msgs::srv::IKCheck_Response& rsp);
 
  private:
   aimrt::CoreRef core_;

@@ -1,0 +1,7 @@
+# 批量逆解查询服务
+# 请求：批量目标位姿
+# 响应：每个目标的逆解结果
+
+IKRequest[] request
+---
+IKResult[] results

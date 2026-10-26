@@ -1,6 +1,8 @@
 #include "control_module/control_module.h"
+#include <fmt/ranges.h>  // 容器元素格式化
+#include <chrono>
+#include <cmath>
 #include <ranges>
-#include <fmt/ranges.h> // 容器元素格式化
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "aimrt_module_ros2_interface/channel/ros2_channel.h"
@@ -314,6 +316,16 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
             rsp.error.msg = "GripperForce failed";
           }
 
+          return aimrt::rpc::Status();
+        });
+
+    // IKCheck 服务处理：批量逆解查询（只读，不产生运动任务）
+    auto ik_check_handle = ctx_ptr_->CreateServer<genisys_msgs::srv::IKCheckCoServer>();
+    ik_check_handle->IKCheck.ServeInline(
+        [this](aimrt::rpc::ContextRef ctx_ref,
+               const genisys_msgs::srv::IKCheck_Request& req,
+               genisys_msgs::srv::IKCheck_Response& rsp) {
+          IKCheckHandler(ctx_ref, req, rsp);
           return aimrt::rpc::Status();
         });
 
@@ -755,6 +767,68 @@ void ControlModule::ServoLCommandCallback(const std::shared_ptr<const ServoLComm
   // 最后一条指令显式停止
   if (msg->stop) {
     arm_controller_->ServoStop();
+  }
+}
+
+void ControlModule::IKCheckHandler(aimrt::rpc::ContextRef ctx_ref,
+                                   const genisys_msgs::srv::IKCheck_Request& req,
+                                   genisys_msgs::srv::IKCheck_Response& rsp) {
+  (void)ctx_ref;
+  const auto t_start = std::chrono::steady_clock::now();
+  const auto& targets = req.request;
+
+  rsp.results.clear();
+  rsp.results.reserve(targets.size());
+
+  if (targets.size() > 64) {
+    AIMRT_WARN("IKCheck: 大批量请求 n={}，会占用 RPC 线程较久", targets.size());
+  }
+
+  for (const auto& target : targets) {
+    auto& result = rsp.results.emplace_back();
+    result.id = target.id;
+    result.joint.position.fill(0.0);
+
+    const auto& p = target.pose;
+    const double qw = p.orientation.w;
+    const double qx = p.orientation.x;
+    const double qy = p.orientation.y;
+    const double qz = p.orientation.z;
+    const double quat_norm = std::sqrt(qw * qw + qx * qx + qy * qy + qz * qz);
+
+    const bool frame_ok = (target.frame == genisys_msgs::msg::IKRequest::FRAME_TCP) ||
+                          (target.frame == genisys_msgs::msg::IKRequest::FRAME_FLANGE);
+    if (!frame_ok) {
+      result.status = genisys_msgs::msg::IKResult::INVALID_INPUT;
+      result.solved = false;
+      continue;
+    }
+
+    ArmMotion::Pose6Dof pose(p.position.x, p.position.y, p.position.z, qw, qx, qy, qz);
+    const bool is_flange = (target.frame == genisys_msgs::msg::IKRequest::FRAME_FLANGE);
+
+    ArmMotion::Joint6Dof joint;
+    const int ret = arm_controller_->SolveIK(pose, is_flange, target.do_fk, joint);
+
+    if (ret == 0) {
+      result.status = genisys_msgs::msg::IKResult::OK;
+      result.solved = true;
+      for (int i = 0; i < 6; ++i) {
+        result.joint.position[i] = joint[i];
+      }
+    } else if (ret == -2) {
+      // -2: 没有通过限位的分支；
+      result.status = genisys_msgs::msg::IKResult::NO_SOLUTION;
+      result.solved = false;
+    } else if (ret == -3 ){
+      // -3: 选中的解过不了 FK 反代
+      result.status = genisys_msgs::msg::IKResult::FK_VERIFY_WARN;
+      result.solved = false;
+    } else {
+      result.status = genisys_msgs::msg::IKResult::OTHER_ERRORS;
+      result.solved = false;
+      AIMRT_WARN("IK Check failed with OTHER_ERRORS");
+    }
   }
 }
 
