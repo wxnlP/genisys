@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Genisys 系统图集 · 架构 / 服务与话题 / 状态机</title>
+<meta name="description" content="基于 AimRT 的六轴机械臂控制栈：分层架构、服务与话题数据流、genisys-core 运动状态机三张可交互图。">
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#f4f6f9; --panel:#ffffff; --ink:#0f172a; --muted:#5b6b82; --line:#e3e8f0;
+    --accent:#0f766e; --accent-soft:#e6f4f1; --chip:#f1f5f9; --shadow:0 1px 2px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0b1220; --panel:#121b2c; --ink:#e8eef8; --muted:#9aa9bf; --line:#22304a;
+      --accent:#5eead4; --accent-soft:#10241f; --chip:#16233a; --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1060px; margin:0 auto; padding:clamp(28px,6vw,72px) clamp(18px,4vw,32px) 48px}
+
+  .eyebrow{
+    margin:0 0 14px; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--muted); font-weight:600;
+  }
+  h1{margin:0 0 16px; font-size:clamp(30px,4.4vw,44px); line-height:1.15; letter-spacing:-.02em; font-weight:680}
+  .lede{margin:0; max-width:64ch; color:var(--muted); font-size:clamp(15px,1.5vw,17px)}
+  .pins{
+    margin:22px 0 0; padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+    background:var(--panel); color:var(--muted); font-size:13px; display:flex; flex-wrap:wrap; gap:6px 18px;
+  }
+  .pins code{color:var(--ink); font-size:12.5px}
+
+  .cards{list-style:none; margin:clamp(26px,4vw,40px) 0 0; padding:0; display:grid; gap:16px;
+         grid-template-columns:repeat(auto-fit, minmax(280px, 1fr))}
+  .cards > li{display:flex}
+  .card{
+    flex:1 1 auto; display:flex; flex-direction:column; gap:10px; position:relative;
+    padding:22px 22px 18px; border:1px solid var(--line); border-radius:14px;
+    background:var(--panel); box-shadow:var(--shadow); color:inherit; text-decoration:none;
+    transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+  }
+  .card:hover, .card:focus-visible{
+    transform:translateY(-2px); border-color:var(--accent);
+    box-shadow:0 2px 4px rgba(15,23,42,.06), 0 14px 34px rgba(15,23,42,.12); outline:none;
+  }
+  .card:focus-visible{box-shadow:0 0 0 3px var(--accent-soft), 0 14px 34px rgba(15,23,42,.12)}
+  .num{
+    font:600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.08em;
+    color:var(--accent); background:var(--accent-soft); border-radius:999px; padding:5px 9px; align-self:flex-start;
+  }
+  .card h2{margin:2px 0 0; font-size:19px; letter-spacing:-.01em}
+  .card p{margin:0; color:var(--muted); font-size:14.5px}
+  .chips{list-style:none; display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 0; padding:0}
+  .chips li{
+    font-size:12px; color:var(--muted); background:var(--chip); border:1px solid var(--line);
+    border-radius:999px; padding:3px 9px; white-space:nowrap;
+  }
+  .open{margin-top:auto; padding-top:12px; font-size:13.5px; font-weight:600; color:var(--accent)}
+
+  footer{margin-top:clamp(30px,5vw,52px); padding-top:20px; border-top:1px solid var(--line);
+         display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px}
+  .made{display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:.16em;
+        text-transform:uppercase; color:var(--muted); font-weight:600}
+  .made a{display:inline-flex; line-height:0; border-radius:3px}
+  .made img{display:block; width:121px; height:20px; border:0}
+  .note{margin:0; max-width:54ch; color:var(--muted); font-size:12.5px}
+  .note a{color:var(--accent); text-decoration:none}
+  .note a:hover{text-decoration:underline}
+
+  @media (max-width:520px){
+    .pins{flex-direction:column; gap:6px}
+    footer{align-items:flex-start}
+  }
+  @media print{
+    body{background:#fff; color:#000}
+    .card{box-shadow:none}
+    footer{border-color:#ccc}
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Genisys · AimRT 六轴机械臂控制栈</p>
+    <h1>系统图集</h1>
+    <p class="lede">
+      三张可交互的结构图：控制栈的分层架构、服务与话题的数据流、genisys-core 的运动状态机。
+    </p>
+  </header>
+
+  <ul class="cards">
+    <li>
+      <a class="card" href="html/genisys-architecture.html">
+        <span class="num">01 · ARCHITECTURE</span>
+        <h2>系统架构</h2>
+        <p>四层控制栈：上位机 → ControlModule 控制层 → ActuatorModule 驱动层 → 现场总线与执行机构；层间只有 HTTP RPC 与 9 个话题两条缝。</p>
+        <ul class="chips">
+          <li>genisys_msgs/srv · 8 个方法</li>
+          <li>joint_cmd / joint_state</li>
+          <li>500 Hz</li>
+        </ul>
+        <span class="open">打开图 →</span>
+      </a>
+    </li>
+
+    <li>
+      <a class="card" href="html/genisys-channel-rpc-dataflow.html">
+        <span class="num">02 · DATA FLOW</span>
+        <h2>服务与话题数据流</h2>
+        <p>以话题为主语：每条话题标出消息类型、通信后端与频率，服务侧只看 RPC 受理语义与 task_context 结论。</p>
+        <ul class="chips">
+          <li>HTTP :50080</li>
+          <li>local / zenoh</li>
+          <li>50 / 500 Hz</li>
+        </ul>
+        <span class="open">打开图 →</span>
+      </a>
+    </li>
+
+    <li>
+      <a class="card" href="html/genisys-core-motion-state.html">
+        <span class="num">03 · LIFECYCLE</span>
+        <h2>运动状态机</h2>
+        <p>Idle / Running / Sampled / Error / Servo 五态：谁能受理、什么时候回到 Idle、什么结论落到 task_context。</p>
+        <ul class="chips">
+          <li>单任务严格模式</li>
+          <li>排空后出结论</li>
+          <li>±0.02 rad</li>
+        </ul>
+        <span class="open">打开图 →</span>
+      </a>
+    </li>
+  </ul>
+
+  <footer>
+    <div class="made">
+      <span>Made with</span>
+      <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener noreferrer" title="powered by dsh — DeepSeek Harness">
+        <img src="assets/dsh-badge.png" alt="powered by dsh" width="121" height="20" decoding="async">
+      </a>
+      <a href="https://github.com/tt-a1i/archify" target="_blank" rel="noopener noreferrer" title="powered by archify — 图表渲染器">
+        <img src="assets/archify-badge.svg" alt="powered by archify" width="121" height="20">
+      </a>
+    </div>
+    <p class="note">
+      仓库源码：<a href="https://github.com/wxnlP/genisys">wxnlP/genisys</a> ·
+      子模块：<a href="https://github.com/wxnlP/genisys-core">wxnlP/genisys-core</a>
+    </p>
+  </footer>
+</main>
+</body>
+</html>
