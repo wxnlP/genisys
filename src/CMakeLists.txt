@@ -8,12 +8,7 @@ add_subdirectory(protocols)
 # module
 add_subdirectory(module/control_module)
 add_subdirectory(module/actuator_module)
-add_subdirectory(module/genisys-core/actuator)
-add_subdirectory(module/genisys-core/arm_control)
-
-if(GENISYS_BUILD_SDK_EXAMPLES)
-  add_subdirectory(module/genisys-core/example)
-endif()
+add_subdirectory(module/genisys-core)
 
 # pkg
 add_subdirectory(pkg/arm_control_pkg)

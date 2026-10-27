@@ -48,7 +48,6 @@ if(WIN32)
 endif()
 
 option(GENISYS_BUILD_MUJOCO_SIM "Build AimRT Mujoco Sim" OFF)
-option(GENISYS_BUILD_SDK_EXAMPLES "Build genisys-core examples" OFF)
 
 # Include cmake module
 include(NamespaceTool)

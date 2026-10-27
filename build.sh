@@ -45,9 +45,9 @@ cmake -B build \
     -DAIMRT_BUILD_ECHO_PLUGIN=ON \
     -DAIMRT_BUILD_OPENTELEMETRY_PLUGIN=OFF \
     -DAIMRT_BUILD_RECORD_PLAYBACK_PLUGIN=ON \
-    -DGENISYS_BUILD_SDK_EXAMPLES=ON \
-    -DDMDRIVER_BUILD_WITH_EXAMPLE=OFF \
+    -DGENISYS_CORE_BUILD_EXAMPLES=ON \
     -DGENISYS_BUILD_MUJOCO_SIM=OFF \
+    -DGENISYS_CORE_BUILD_ARM=geniarm \
     $@
 
 cmake --build build --config Release --target install --parallel $(nproc)
