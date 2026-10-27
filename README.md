@@ -6,6 +6,10 @@
 
 > [genisys文档](https://tonmoon.top/genisys/index.html)
 
+> [!WARNING]
+> 当前仓库仍在持续迭代，接口尚未完全稳定，后续可能会引入不兼容的破坏性更新。
+> 如果你希望将自己的机械臂接入本控制程序，欢迎通过 GitHub Issue 留言或发送邮件至 2661006892@qq.com 咨询。
+
 ### 支持的机械臂构型
 
 系统支持常见的两种构型机械臂：
@@ -13,7 +17,7 @@
 | 构型 | IK 方法 | 说明 |
 |:---|:---|:---|
 | **类 UR 构型** | UR 解析解 | 参考 [reBot-DevArm](https://github.com/Seeed-Projects/reBot-DevArm) 、[Panthera-HT](https://github.com/HighTorque-Robotics/Panthera-HT_Main)，系统提供 GeniArm 适配。 |
-| **Piper 构型** | Piper 解析解 | 参考 [Dummy-Robot](https://github.com/peng-zhihui/Dummy-Robot)，系统提供 S6h4d 适配。 |
+| **Piper 构型** | Piper 解析解 | 参考 [Dummy-Robot](https://github.com/peng-zhihui/Dummy-Robot)。 |
 
 两套构型共用同一套控制栈（ControlModule + ActuatorModule），仅需替换 yaml 配置文件即可切换。此外，得益于 [genisys-core](https://github.com/wxnlP/genisys-core) 的解藕设计，开发者可以拓展适配自己的机械臂，无论你是 UART 、CAN、Ethernet，只需按照 actuator 模块的接口做适配，即可丝滑对接 control 模块。
 
