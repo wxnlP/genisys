@@ -92,6 +92,11 @@ source ~/.bashrc
 ### 构建
 
 ```bash
+# 获取源码
+git clone --recursive https://github.com/wxnlP/genisys.git
+```
+
+```bash
 # 首次使用需配置当前用户的调度策略权限
 echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-realtime.conf
 ```
