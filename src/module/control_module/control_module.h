@@ -86,11 +86,6 @@ class ControlModule : public aimrt::ModuleBase {
   // 任务状态发布执行器
   aimrt::executor::ExecutorRef task_publish_executor_;
 
-  std::promise<void> pose_pub_stop_sig_;
-  std::promise<void> control_stop_sig_;
-  std::promise<void> task_pub_stop_sig_;
-  std::mutex last_arm_cmd_mutex_;
-
   std::string topic_pub_joint_cmd_;
   std::string topic_sub_joint_state_;
   std::string topic_pub_tcp_pose_expected_;
@@ -116,6 +111,7 @@ class ControlModule : public aimrt::ModuleBase {
   std::shared_ptr<GripperController> gripper_controller_;
 
   // 记录上一帧有效指令，用于轨迹间保持
+  std::mutex last_arm_cmd_mutex_;
   std::optional<ArmMotion::JointCommand> last_arm_cmd_;
   std::optional<GripperController::GripperCommand> last_gripper_cmd_;
 };

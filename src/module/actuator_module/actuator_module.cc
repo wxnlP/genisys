@@ -90,9 +90,6 @@ void ActuatorModule::Shutdown() {
     ctx_ptr_->StopRunning();
     write_sem_.release();
 
-    pub_stop_sig_.get_future().wait();
-    write_stop_sig_.get_future().wait();
-
     // 失能各执行器
     if (arm_actuator_) {
       arm_actuator_->Disable();
@@ -185,7 +182,6 @@ void ActuatorModule::PublishLoop() {
   } catch (const std::exception& e) {
     AIMRT_ERROR("ActuatorModule::PublishLoop crashed: {}", e.what());
   }
-  pub_stop_sig_.set_value();
   AIMRT_INFO("成功退出 ActuatorModule::PublishLoop");
 }
 
@@ -227,7 +223,6 @@ void ActuatorModule::WriteLoop() {
   } catch (const std::exception& e) {
     AIMRT_ERROR("ActuatorModule::WriteLoop crashed: {}", e.what());
   }
-  write_stop_sig_.set_value();
   AIMRT_INFO("成功退出 ActuatorModule::WriteLoop");
 }
 

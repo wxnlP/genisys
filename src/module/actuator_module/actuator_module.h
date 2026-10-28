@@ -44,8 +44,6 @@ class ActuatorModule : public aimrt::ModuleBase {
   aimrt::executor::ExecutorRef pub_executor_;
   aimrt::executor::ExecutorRef write_executor_;
 
-  std::promise<void> pub_stop_sig_;
-  std::promise<void> write_stop_sig_;
   std::binary_semaphore write_sem_{0};
   std::mutex cached_cmd_lock;
 

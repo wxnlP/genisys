@@ -366,10 +366,6 @@ void ControlModule::Shutdown() {
   try {
     ctx_ptr_->StopRunning();
 
-    pose_pub_stop_sig_.get_future().wait();
-    control_stop_sig_.get_future().wait();
-    task_pub_stop_sig_.get_future().wait();
-
     if (arm_controller_) {
       arm_controller_->StopSampleThread();
     }
@@ -432,7 +428,6 @@ void ControlModule::TaskPublishLoop() {
   } catch (const std::exception& e) {
     AIMRT_ERROR("ControlModule::TaskPublishLoop crashed: {}", e.what());
   }
-  task_pub_stop_sig_.set_value();
   AIMRT_INFO("成功退出 ControlModule::TaskPublishLoop");
 }
 
@@ -570,7 +565,6 @@ void ControlModule::ControlLoop() {
   } catch (const std::exception& e) {
     AIMRT_ERROR("ControlModule::ControlLoop crashed: {}", e.what());
   }
-  control_stop_sig_.set_value();
   AIMRT_INFO("成功退出 ControlModule::ControlLoop");
 }
 
@@ -663,7 +657,6 @@ void ControlModule::PosePublishLoop() {
   } catch (const std::exception& e) {
     AIMRT_ERROR("ControlModule::PosePublishLoop crashed: {}", e.what());
   }
-  pose_pub_stop_sig_.set_value();
   AIMRT_INFO("成功退出 ControlModule::PosePublishLoop");
 }
 
