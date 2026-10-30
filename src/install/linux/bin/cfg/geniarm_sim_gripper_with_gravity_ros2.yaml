@@ -1,0 +1,252 @@
+# 在 geniarm_sim_gripper_with_gravity.yaml 基础上增加 ROS2 桥接：
+#   - ROS2ProxyModule 把 pb 话题转成标准 ROS2 消息，经 ros2 后端发布
+#   - 原有 local / zenoh 链路不变
+# 构建时需要打开：-DGENISYS_BUILD_ROS2_PROXY=ON -DAIMRT_BUILD_ROS2_PLUGIN=ON
+# 运行前需要 source ROS2 环境，ros2 插件依赖 rclcpp 的动态库
+aimrt:
+  log:
+    core_lvl: INFO # Trace/Debug/Info/Warn/Error/Fatal/Off
+    backends:
+      - type: console
+      - type: rotate_file # 文件
+        options:
+          path: ./log
+          filename: geniarm_sim.log
+          max_file_size_m: 4
+          max_file_num: 10
+  module:
+    pkgs:
+      - path: ./libarm_control_pkg.so
+        disable_modules: ['ActuatorModule']
+      - path: ./libmujoco_sim_pkg.so # 官方仿真组件
+        disable_modules: []
+      - path: ./libros2_proxy_pkg.so
+        disable_modules: []
+    modules:
+      - name: MujocoSimModule # 官方仿真组件
+        log_lvl: INFO
+      - name: ControlModule
+        log_lvl: INFO
+      - name: ROS2ProxyModule
+        log_lvl: INFO
+  plugin:
+    plugins:
+      - name: ros2_plugin
+        path: ./libaimrt_ros2_plugin.so
+        options:
+          node_name: geniarm
+          executor_type: MultiThreaded
+          executor_thread_num: 2
+          auto_initialize_logging: false  # 避免依赖可写的 ~/.ros/log
+      # - name: echo_plugin
+      #   path: ./libaimrt_echo_plugin.so
+      #   options:
+      #     type_support_pkgs:
+      #       - path: ./libactuator_pb_ts.so
+      #     topic_meta_list:
+      #       - topic_name: /geniarm/joint_cmd
+      #         msg_type: pb:aimrt.protocols.sensor.JointCommandArray
+      #         echo_type: json
+      - name: net_plugin
+        path: ./libaimrt_net_plugin.so
+        options:
+          thread_num: 2
+          http_options:
+            listen_ip: 127.0.0.1
+            listen_port: 50080
+      - name: zenoh_plugin
+        path: ./libaimrt_zenoh_plugin.so
+        options:
+          native_cfg_path: ./cfg/zenoh_native_config_sim.json5
+      - name: record_playback_plugin
+        path: ./libaimrt_record_playback_plugin.so
+        options:
+          timer_executor: storage_executor
+          type_support_pkgs:
+            - path: ./libsensor_pb_ts.so
+          record_actions:
+            - name: record_joint_state
+              options:
+                bag_path: ./bag
+                mode: signal
+                max_preparation_duration_s: 10
+                executor: record_thread
+                storage_policy:
+                  max_bag_size_m: 2048            # MB
+                  msg_write_interval: 1000        # message count period
+                  msg_write_interval_time: 1000   # ms
+                  compression_mode: zstd          # comression mode
+                  compression_level: default      # comression level
+                extra_attributes:
+                  platform: x86_64
+                  os: ubuntu-22.04
+                topic_meta_list:
+                  - topic_name: /geniarm/joint_state
+                    msg_type: pb:aimrt.protocols.sensor.JointStateArray
+                    serialization_type: pb 
+                    record_enabled: true
+                    sample_freq: 0
+      # - name: opentelemetry_plugin
+      #   path: ./libaimrt_opentelemetry_plugin.so
+      #   options:
+      #     node_name: geniarm_node
+      #     trace_otlp_http_exporter_url: http://localhost:4318/v1/traces
+      #     force_trace: true
+      #     attributes:
+      #       - key: sn
+      #         val: wxnlP
+  executor:
+    executors:
+      - name: gui_executor
+        type: simple_thread
+      - name: work_executor
+        type: asio_thread
+        options:
+          thread_num: 5
+      - name: control_executor
+        type: asio_thread
+        options:
+          thread_bind_cpu: [7]
+          thread_sched_policy: SCHED_FIFO:80
+      - name: pose_pub_executor
+        type: asio_thread
+      - name: task_pub_executor
+        type: asio_thread
+      - name: ros2_proxy_executor
+        type: asio_thread
+      - name: storage_executor
+        type: asio_thread
+        options:
+          thread_num: 2
+      - name: record_thread
+        type: simple_thread
+  channel:
+    backends:
+      - type: local # 官方支持local后端
+      - type: zenoh
+        options:
+          pub_topics_options:
+            - topic_name: "(.*)"
+              shm_enabled: false
+      - type: ros2
+        options:
+          pub_topics_options:
+            - topic_name: "(.*)"
+              qos:
+                history: keep_last
+                depth: 1
+                reliability: best_effort
+                durability: volatile
+    pub_topics_options:
+      # ROS2 输出使用独立话题名：发布规则只按话题名匹配，同名会连带改变 pb 话题的后端
+      - topic_name: "/joint_states"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "^/geniarm/ros2/.*$"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "(.*)"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+    sub_topics_options:
+      # ROS2ProxyModule 的输入，只走进程内 local
+      - topic_name: "/geniarm/joint_state"
+        enable_backends: [local]
+        enable_filters: []
+      - topic_name: "/geniarm/tcp_pose"
+        enable_backends: [local]
+        enable_filters: []
+      - topic_name: "/geniarm/tcp_pose_expected"
+        enable_backends: [local]
+        enable_filters: []
+      - topic_name: "/geniarm/flange_pose"
+        enable_backends: [local]
+        enable_filters: []
+      - topic_name: "(.*)"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+  rpc:
+    backends:
+      - type: http
+    clients_options:
+      - func_name: "(.*)"
+        enable_backends: []
+        enable_filters: []
+    servers_options:
+      - func_name: "(.*)"
+        enable_backends: [http]
+        enable_filters: []
+
+# Module custom configuration
+MujocoSimModule:
+  simulation_model_path: ./cfg/model/geniarm_v1.1.5_gripper.xml
+  sim_executor: work_executor
+  gui_executor: gui_executor
+  subscriber_options:
+    - topic: /geniarm/joint_cmd
+      type: joint_actuator
+      options:
+        joints:
+          - name: shoulder_joint
+            bind_joint: shoulder_joint
+          - name: upper_arm_joint
+            bind_joint: upper_arm_joint
+          - name: elbow_joint
+            bind_joint: elbow_joint
+          - name: wrist1_joint
+            bind_joint: wrist1_joint
+          - name: wrist2_joint
+            bind_joint: wrist2_joint
+          - name: wrist3_joint
+            bind_joint: wrist3_joint
+          - name: geniarm_gripper
+            bind_joint: gripper_right_joint
+  publisher_options:
+    - topic: /geniarm/joint_state
+      frequency: 500
+      executor: work_executor
+      type: joint_sensor
+      options:
+        joints:
+          - name: shoulder_joint
+            bind_joint: shoulder_joint
+          - name: upper_arm_joint
+            bind_joint: upper_arm_joint
+          - name: elbow_joint
+            bind_joint: elbow_joint
+          - name: wrist1_joint
+            bind_joint: wrist1_joint
+          - name: wrist2_joint
+            bind_joint: wrist2_joint
+          - name: wrist3_joint
+            bind_joint: wrist3_joint
+          - name: geniarm_gripper
+            bind_joint: gripper_right_joint
+ControlModule:
+  config_file: control_module/geniarm_body_sim_gripper_gravity_cfg.yaml
+  topic_pub_joint_cmd: /geniarm/joint_cmd
+  topic_sub_joint_state: /geniarm/joint_state
+  topic_pub_tcp_pose_expected: /geniarm/tcp_pose_expected
+  topic_pub_tcp_pose: /geniarm/tcp_pose
+  topic_pub_flange_pose: /geniarm/flange_pose
+  topic_sub_servoj_cmd: /geniarm/servoj_cmd
+  topic_sub_servoj_pose_cmd: /geniarm/servoj_pose_cmd
+  topic_sub_servol_cmd: /geniarm/servol_cmd
+  control_executor_name: control_executor
+  pose_publish_executor_name: pose_pub_executor
+  control_frequency: 500
+  pose_publish_frequency: 500
+  topic_pub_task_context: /geniarm/task_context
+  task_publish_executor_name: task_pub_executor
+  task_publish_frequency: 50
+ROS2ProxyModule:
+  publish_executor_name: ros2_proxy_executor
+  publish_frequency: 100  # 从 500Hz 状态降到 100Hz 再进 DDS
+  topic_sub_joint_state: /geniarm/joint_state
+  topic_sub_tcp_pose: /geniarm/tcp_pose
+  topic_sub_tcp_pose_expected: /geniarm/tcp_pose_expected
+  topic_sub_flange_pose: /geniarm/flange_pose
+  topic_pub_joint_state: /joint_states
+  topic_pub_tcp_pose: /geniarm/ros2/tcp_pose
+  topic_pub_tcp_pose_expected: /geniarm/ros2/tcp_pose_expected
+  topic_pub_flange_pose: /geniarm/ros2/flange_pose

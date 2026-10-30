@@ -49,6 +49,8 @@ endif()
 
 option(GENISYS_BUILD_MUJOCO_SIM "Build AimRT Mujoco Sim" OFF)
 
+option(GENISYS_BUILD_ROS2_PROXY "Build AimRT ROS2 proxy pkg" OFF)
+
 # Include cmake module
 include(NamespaceTool)
 

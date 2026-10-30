@@ -10,8 +10,21 @@ add_subdirectory(module/control_module)
 add_subdirectory(module/actuator_module)
 add_subdirectory(module/genisys-core)
 
+if(GENISYS_BUILD_ROS2_PROXY)
+  if(NOT AIMRT_BUILD_ROS2_PLUGIN)
+    message(FATAL_ERROR
+      "GENISYS_BUILD_ROS2_PROXY requires the aimrt ros2 plugin, "
+      "configure with -DAIMRT_BUILD_ROS2_PLUGIN=ON")
+  endif()
+  add_subdirectory(module/ros2_proxy_module)
+endif()
+
 # pkg
 add_subdirectory(pkg/arm_control_pkg)
+
+if(GENISYS_BUILD_ROS2_PROXY)
+  add_subdirectory(pkg/ros2_proxy_pkg)
+endif()
 
 # install
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
