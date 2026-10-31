@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "aimrt_module_cpp_interface/context/context.h"
 #include "aimrt_module_cpp_interface/module_base.h"
@@ -32,39 +33,39 @@ class Ros2ProxyModule : public aimrt::ModuleBase {
   void Shutdown() override;
 
  private:
+  struct JointStateBridge {
+    using SrcMsg = JointStateArray;
+
+    aimrt::context::res::Subscriber<JointStateArray> sub;
+    aimrt::context::res::Publisher<sensor_msgs::msg::JointState> pub;
+    std::shared_ptr<const JointStateArray> latest;
+    bool updated{false};
+  };
+
+  struct PoseBridge {
+    using SrcMsg = PbPoseStamped;
+
+    aimrt::context::res::Subscriber<PbPoseStamped> sub;
+    aimrt::context::res::Publisher<geometry_msgs::msg::PoseStamped> pub;
+    std::shared_ptr<const PbPoseStamped> latest;
+    bool updated{false};
+  };
+
+  void AddJointStateBridge(const std::string& sub_topic, const std::string& pub_topic);
+  void AddPoseBridge(const std::string& sub_topic, const std::string& pub_topic);
+
   void PublishLoop();
-  void PublishJointState();
-  void PublishPose(aimrt::context::res::Publisher<geometry_msgs::msg::PoseStamped>& publisher,
-                   std::shared_ptr<const PbPoseStamped>& latest,
-                   bool& updated);
 
   aimrt::CoreRef core_;
   std::shared_ptr<aimrt::context::Context> ctx_ptr_;
-
-  aimrt::context::res::Subscriber<JointStateArray> sub_joint_state_;
-  aimrt::context::res::Subscriber<PbPoseStamped> sub_tcp_pose_;
-  aimrt::context::res::Subscriber<PbPoseStamped> sub_tcp_pose_expected_;
-  aimrt::context::res::Subscriber<PbPoseStamped> sub_flange_pose_;
-
-  aimrt::context::res::Publisher<sensor_msgs::msg::JointState> pub_joint_state_;
-  aimrt::context::res::Publisher<geometry_msgs::msg::PoseStamped> pub_tcp_pose_;
-  aimrt::context::res::Publisher<geometry_msgs::msg::PoseStamped> pub_tcp_pose_expected_;
-  aimrt::context::res::Publisher<geometry_msgs::msg::PoseStamped> pub_flange_pose_;
-
   aimrt::executor::ExecutorRef publish_executor_;
 
   std::string publish_executor_name_;
   double publish_frequency_{0.0};
 
   std::mutex mutex_;
-  std::shared_ptr<const JointStateArray> latest_joint_state_;
-  bool joint_state_updated_{false};
-  std::shared_ptr<const PbPoseStamped> latest_tcp_pose_;
-  bool tcp_pose_updated_{false};
-  std::shared_ptr<const PbPoseStamped> latest_tcp_pose_expected_;
-  bool tcp_pose_expected_updated_{false};
-  std::shared_ptr<const PbPoseStamped> latest_flange_pose_;
-  bool flange_pose_updated_{false};
+  std::vector<std::unique_ptr<JointStateBridge>> joint_state_bridges_;
+  std::vector<std::unique_ptr<PoseBridge>> pose_bridges_;
 };
 
 }  // namespace genisys::ros2_proxy_module

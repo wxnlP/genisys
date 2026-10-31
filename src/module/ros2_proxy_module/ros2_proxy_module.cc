@@ -16,8 +16,7 @@ namespace {
 
 constexpr uint64_t kNanoSecondsPerSecond = 1000000000ULL;
 
-void FillHeader(const aimrt::protocols::common::Header& src,
-                std_msgs::msg::Header& dst) {
+void FillHeader(const aimrt::protocols::common::Header& src, std_msgs::msg::Header& dst) {
   dst.stamp.sec = static_cast<int32_t>(src.time_stamp() / kNanoSecondsPerSecond);
   dst.stamp.nanosec = static_cast<uint32_t>(src.time_stamp() % kNanoSecondsPerSecond);
   dst.frame_id = src.frame_id();
@@ -59,6 +58,22 @@ geometry_msgs::msg::PoseStamped ToRosPoseStamped(const PbPoseStamped& src) {
   return dst;
 }
 
+template <class TBridge, class TConvert>
+void PublishLatest(TBridge& bridge, std::mutex& mutex, TConvert convert) {
+  std::shared_ptr<const typename TBridge::SrcMsg> msg;
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!bridge.updated) return;
+
+    bridge.updated = false;
+    msg = bridge.latest;
+  }
+
+  if (!msg) return;
+
+  bridge.pub.Publish(convert(*msg));
+}
+
 }  // namespace
 
 bool Ros2ProxyModule::Initialize(aimrt::CoreRef core) {
@@ -76,56 +91,38 @@ bool Ros2ProxyModule::Initialize(aimrt::CoreRef core) {
     publish_frequency_ = cfg_node["publish_frequency"].as<double>();
     AIMRT_CHECK_ERROR_THROW(publish_frequency_ > 0.0, "publish_frequency must be positive");
 
-    const auto topic_sub_joint_state = cfg_node["topic_sub_joint_state"].as<std::string>();
-    const auto topic_sub_tcp_pose = cfg_node["topic_sub_tcp_pose"].as<std::string>();
-    const auto topic_sub_tcp_pose_expected = cfg_node["topic_sub_tcp_pose_expected"].as<std::string>();
-    const auto topic_sub_flange_pose = cfg_node["topic_sub_flange_pose"].as<std::string>();
-    const auto topic_pub_joint_state = cfg_node["topic_pub_joint_state"].as<std::string>();
-    const auto topic_pub_tcp_pose = cfg_node["topic_pub_tcp_pose"].as<std::string>();
-    const auto topic_pub_tcp_pose_expected = cfg_node["topic_pub_tcp_pose_expected"].as<std::string>();
-    const auto topic_pub_flange_pose = cfg_node["topic_pub_flange_pose"].as<std::string>();
-
     publish_executor_ = ctx_ptr_->CreateExecutor(publish_executor_name_);
 
-    sub_joint_state_ = ctx_ptr_->CreateSubscriber<JointStateArray>(
-        topic_sub_joint_state, [this](std::shared_ptr<const JointStateArray> msg) {
-          std::lock_guard<std::mutex> lock(mutex_);
-          latest_joint_state_ = std::move(msg);
-          joint_state_updated_ = true;
-        });
+    const auto bridges_node = cfg_node["bridges"];
+    AIMRT_CHECK_ERROR_THROW(bridges_node && bridges_node.IsSequence(),
+                            "ROS2ProxyModule 'bridges' must be a sequence");
 
-    sub_tcp_pose_ = ctx_ptr_->CreateSubscriber<PbPoseStamped>(
-        topic_sub_tcp_pose, [this](std::shared_ptr<const PbPoseStamped> msg) {
-          std::lock_guard<std::mutex> lock(mutex_);
-          latest_tcp_pose_ = std::move(msg);
-          tcp_pose_updated_ = true;
-        });
+    for (const auto& bridge_node : bridges_node) {
+      if (!bridge_node["enable"].as<bool>(true)) continue;
 
-    sub_tcp_pose_expected_ = ctx_ptr_->CreateSubscriber<PbPoseStamped>(
-        topic_sub_tcp_pose_expected, [this](std::shared_ptr<const PbPoseStamped> msg) {
-          std::lock_guard<std::mutex> lock(mutex_);
-          latest_tcp_pose_expected_ = std::move(msg);
-          tcp_pose_expected_updated_ = true;
-        });
+      const auto type = bridge_node["type"].as<std::string>();
+      const auto sub_topic = bridge_node["sub_topic"].as<std::string>();
+      const auto pub_topic = bridge_node["pub_topic"].as<std::string>();
 
-    sub_flange_pose_ = ctx_ptr_->CreateSubscriber<PbPoseStamped>(
-        topic_sub_flange_pose, [this](std::shared_ptr<const PbPoseStamped> msg) {
-          std::lock_guard<std::mutex> lock(mutex_);
-          latest_flange_pose_ = std::move(msg);
-          flange_pose_updated_ = true;
-        });
+      if (type == "joint_state") {
+        AddJointStateBridge(sub_topic, pub_topic);
+      } else if (type == "pose_stamped") {
+        AddPoseBridge(sub_topic, pub_topic);
+      } else {
+        AIMRT_CHECK_ERROR_THROW(false, "Unsupported ROS2ProxyModule bridge type '{}'", type);
+      }
+    }
 
-    pub_joint_state_ = ctx_ptr_->CreatePublisher<sensor_msgs::msg::JointState>(topic_pub_joint_state);
-    pub_tcp_pose_ = ctx_ptr_->CreatePublisher<geometry_msgs::msg::PoseStamped>(topic_pub_tcp_pose);
-    pub_tcp_pose_expected_ = ctx_ptr_->CreatePublisher<geometry_msgs::msg::PoseStamped>(topic_pub_tcp_pose_expected);
-    pub_flange_pose_ = ctx_ptr_->CreatePublisher<geometry_msgs::msg::PoseStamped>(topic_pub_flange_pose);
+    AIMRT_CHECK_ERROR_THROW(!joint_state_bridges_.empty() || !pose_bridges_.empty(),
+                            "No bridge is enabled in ROS2ProxyModule");
 
   } catch (const std::exception& e) {
     AIMRT_ERROR("Init failed, {}", e.what());
     return false;
   }
 
-  AIMRT_INFO("Init succeeded.");
+  AIMRT_INFO("Init succeeded, bridging {} joint_state and {} pose topic(s).",
+             joint_state_bridges_.size(), pose_bridges_.size());
 
   return true;
 }
@@ -151,53 +148,52 @@ void Ros2ProxyModule::Shutdown() {
   AIMRT_INFO("Shutdown succeeded.");
 }
 
+void Ros2ProxyModule::AddJointStateBridge(const std::string& sub_topic, const std::string& pub_topic) {
+  auto bridge = std::make_unique<JointStateBridge>();
+  auto* bridge_ptr = bridge.get();
+
+  bridge->pub = ctx_ptr_->CreatePublisher<sensor_msgs::msg::JointState>(pub_topic);
+  bridge->sub = ctx_ptr_->CreateSubscriber<JointStateArray>(
+      sub_topic, [this, bridge_ptr](std::shared_ptr<const JointStateArray> msg) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        bridge_ptr->latest = std::move(msg);
+        bridge_ptr->updated = true;
+      });
+
+  joint_state_bridges_.push_back(std::move(bridge));
+}
+
+void Ros2ProxyModule::AddPoseBridge(const std::string& sub_topic, const std::string& pub_topic) {
+  auto bridge = std::make_unique<PoseBridge>();
+  auto* bridge_ptr = bridge.get();
+
+  bridge->pub = ctx_ptr_->CreatePublisher<geometry_msgs::msg::PoseStamped>(pub_topic);
+  bridge->sub = ctx_ptr_->CreateSubscriber<PbPoseStamped>(
+      sub_topic, [this, bridge_ptr](std::shared_ptr<const PbPoseStamped> msg) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        bridge_ptr->latest = std::move(msg);
+        bridge_ptr->updated = true;
+      });
+
+  pose_bridges_.push_back(std::move(bridge));
+}
+
 void Ros2ProxyModule::PublishLoop() {
   const auto period = std::chrono::nanoseconds(
       static_cast<int64_t>(1.0 / publish_frequency_ * 1e9));
   auto next_loop_time = std::chrono::steady_clock::now();
 
   while (ctx_ptr_->Running()) {
-    PublishJointState();
-    PublishPose(pub_tcp_pose_, latest_tcp_pose_, tcp_pose_updated_);
-    PublishPose(pub_tcp_pose_expected_, latest_tcp_pose_expected_, tcp_pose_expected_updated_);
-    PublishPose(pub_flange_pose_, latest_flange_pose_, flange_pose_updated_);
+    for (auto& bridge : joint_state_bridges_) {
+      PublishLatest(*bridge, mutex_, ToRosJointState);
+    }
+    for (auto& bridge : pose_bridges_) {
+      PublishLatest(*bridge, mutex_, ToRosPoseStamped);
+    }
 
     next_loop_time += period;
     std::this_thread::sleep_until(next_loop_time);
   }
-}
-
-void Ros2ProxyModule::PublishJointState() {
-  std::shared_ptr<const JointStateArray> msg;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!joint_state_updated_) return;
-
-    joint_state_updated_ = false;
-    msg = latest_joint_state_;
-  }
-
-  if (!msg) return;
-
-  pub_joint_state_.Publish(ToRosJointState(*msg));
-}
-
-void Ros2ProxyModule::PublishPose(
-    aimrt::context::res::Publisher<geometry_msgs::msg::PoseStamped>& publisher,
-    std::shared_ptr<const PbPoseStamped>& latest,
-    bool& updated) {
-  std::shared_ptr<const PbPoseStamped> msg;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!updated) return;
-
-    updated = false;
-    msg = latest;
-  }
-
-  if (!msg) return;
-
-  publisher.Publish(ToRosPoseStamped(*msg));
 }
 
 }  // namespace genisys::ros2_proxy_module

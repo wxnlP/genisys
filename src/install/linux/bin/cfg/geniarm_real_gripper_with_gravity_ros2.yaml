@@ -1,8 +1,3 @@
-# 在 geniarm_real_gripper_with_gravity.yaml 基础上增加 ROS2 桥接：
-#   - ROS2ProxyModule 把 pb 话题转成标准 ROS2 消息，经 ros2 后端发布
-#   - 原有 local / zenoh 链路不变
-# 构建时需要打开：-DGENISYS_BUILD_ROS2_PROXY=ON -DAIMRT_BUILD_ROS2_PLUGIN=ON
-# 运行前需要 source ROS2 环境，ros2 插件依赖 rclcpp 的动态库
 aimrt:
   log:
     core_lvl: INFO # Trace/Debug/Info/Warn/Error/Fatal/Off
@@ -193,11 +188,20 @@ ControlModule:
 ROS2ProxyModule:
   publish_executor_name: ros2_proxy_executor
   publish_frequency: 100  # 从 500Hz 状态降到 100Hz 再进 DDS
-  topic_sub_joint_state: /geniarm/joint_state
-  topic_sub_tcp_pose: /geniarm/tcp_pose
-  topic_sub_tcp_pose_expected: /geniarm/tcp_pose_expected
-  topic_sub_flange_pose: /geniarm/flange_pose
-  topic_pub_joint_state: /joint_states
-  topic_pub_tcp_pose: /geniarm/ros2/tcp_pose
-  topic_pub_tcp_pose_expected: /geniarm/ros2/tcp_pose_expected
-  topic_pub_flange_pose: /geniarm/ros2/flange_pose
+  bridges:
+    - type: joint_state
+      sub_topic: /geniarm/joint_state
+      pub_topic: /joint_states
+      enable: true
+    - type: pose_stamped
+      sub_topic: /geniarm/tcp_pose
+      pub_topic: /geniarm/ros2/tcp_pose
+      enable: true
+    - type: pose_stamped
+      sub_topic: /geniarm/tcp_pose_expected
+      pub_topic: /geniarm/ros2/tcp_pose_expected
+      enable: false  # 期望位姿调试看 monitor 即可
+    - type: pose_stamped
+      sub_topic: /geniarm/flange_pose
+      pub_topic: /geniarm/ros2/flange_pose
+      enable: true
