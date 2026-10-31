@@ -46,8 +46,9 @@ cmake -B build \
     -DAIMRT_BUILD_OPENTELEMETRY_PLUGIN=OFF \
     -DAIMRT_BUILD_RECORD_PLAYBACK_PLUGIN=ON \
     -DGENISYS_CORE_BUILD_EXAMPLES=ON \
-    -DGENISYS_BUILD_MUJOCO_SIM=OFF \
     -DGENISYS_CORE_BUILD_ARM=geniarm \
+    -DGENISYS_BUILD_MUJOCO_SIM=OFF \
+    -DGENISYS_BUILD_ROS2_PROXY=OFF \
     $@
 
 cmake --build build --config Release --target install --parallel $(nproc)

@@ -12,9 +12,10 @@ add_subdirectory(module/genisys-core)
 
 if(GENISYS_BUILD_ROS2_PROXY)
   if(NOT AIMRT_BUILD_ROS2_PLUGIN)
-    message(FATAL_ERROR
-      "GENISYS_BUILD_ROS2_PROXY requires the aimrt ros2 plugin, "
-      "configure with -DAIMRT_BUILD_ROS2_PLUGIN=ON")
+    set(AIMRT_BUILD_ROS2_PLUGIN ON CACHE BOOL "")
+  endif()
+  if(NOT AIMRT_BUILD_WITH_ROS2) 
+    set(AIMRT_BUILD_WITH_ROS2 ON CACHE BOOL "")
   endif()
   add_subdirectory(module/ros2_proxy_module)
 endif()
