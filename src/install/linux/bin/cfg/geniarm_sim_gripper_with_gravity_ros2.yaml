@@ -127,24 +127,76 @@ aimrt:
         options:
           pub_topics_options:
             - topic_name: "(.*)"
+              use_serialized: false
               qos:
                 history: keep_last
                 depth: 1
                 reliability: best_effort
                 durability: volatile
+                lifespan: -1
+                deadline: -1
+                liveliness: automatic
+                liveliness_lease_duration: -1
+          sub_topics_options:
+            - topic_name: "(.*)"
+              use_serialized: false
+              qos:
+                history: keep_last
+                depth: 10
+                reliability: reliable
+                durability: volatile
+                lifespan: -1
+                deadline: -1
+                liveliness: automatic
+                liveliness_lease_duration: -1
     pub_topics_options:
-      # ROS2 输出使用独立话题名：发布规则只按话题名匹配，同名会连带改变 pb 话题的后端
+      # 内部话题（ControlModule / MujocoSimModule 之间）：local + zenoh
+      - topic_name: "/geniarm/joint_cmd"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/joint_state"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/tcp_pose"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/tcp_pose_expected"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/flange_pose"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/task_context"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      # 对外 ROS2 话题（ROS2ProxyModule 发布）：只走 ros2
       - topic_name: "/joint_states"
         enable_backends: [ros2]
         enable_filters: []
-      - topic_name: "^/geniarm/ros2/.*$"
+      - topic_name: "/tcp_pose"
         enable_backends: [ros2]
         enable_filters: []
-      - topic_name: "(.*)"
-        enable_backends: [local, zenoh]
+      - topic_name: "/tcp_pose_expected"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/flange_pose"
+        enable_backends: [ros2]
         enable_filters: []
     sub_topics_options:
-      # ROS2ProxyModule 的输入，只走进程内 local
+      # 外部 servo 指令入口：从 ROS2 订阅
+      - topic_name: "/geniarm/servoj_cmd"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/geniarm/servoj_pose_cmd"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/geniarm/servol_cmd"
+        enable_backends: [ros2]
+        enable_filters: []
+      # 进程内话题（ControlModule / MujocoSimModule / ROS2ProxyModule 互订）：local
+      - topic_name: "/geniarm/joint_cmd"
+        enable_backends: [local]
+        enable_filters: []
       - topic_name: "/geniarm/joint_state"
         enable_backends: [local]
         enable_filters: []
@@ -157,19 +209,45 @@ aimrt:
       - topic_name: "/geniarm/flange_pose"
         enable_backends: [local]
         enable_filters: []
-      - topic_name: "(.*)"
-        enable_backends: [local, zenoh]
-        enable_filters: []
   rpc:
     backends:
       - type: http
+      - type: ros2
+        options:
+          clients_options:
+            - func_name: "(.*)/(.*)/(.*)/(.*)"
+              qos:
+                history: keep_last
+                depth: 10
+                reliability: reliable
+                durability: volatile
+                lifespan: -1
+                deadline: -1
+                liveliness: automatic
+                liveliness_lease_duration: -1
+              remapping_rule: "/geniarm/srv/{4}"
+          servers_options:
+            - func_name: "(.*)/(.*)/(.*)/(.*)"
+              qos:
+                history: keep_last
+                depth: 10
+                reliability: reliable
+                durability: volatile
+                lifespan: -1
+                deadline: -1
+                liveliness: automatic
+                liveliness_lease_duration: -1
+              remapping_rule: "/geniarm/srv/{4}"
     clients_options:
       - func_name: "(.*)"
         enable_backends: []
         enable_filters: []
     servers_options:
-      - func_name: "(.*)"
+      - func_name: ".*record_playback_plugin.*"
         enable_backends: [http]
+        enable_filters: []
+      - func_name: "(.*)"
+        enable_backends: [http, ros2]
         enable_filters: []
 
 # Module custom configuration
@@ -244,13 +322,13 @@ ROS2ProxyModule:
       enable: true
     - type: pose_stamped
       sub_topic: /geniarm/tcp_pose
-      pub_topic: /geniarm/ros2/tcp_pose
+      pub_topic: /tcp_pose
       enable: true
     - type: pose_stamped
       sub_topic: /geniarm/tcp_pose_expected
-      pub_topic: /geniarm/ros2/tcp_pose_expected
-      enable: false  # 期望位姿调试看 monitor 即可
+      pub_topic: /tcp_pose_expected
+      enable: false
     - type: pose_stamped
       sub_topic: /geniarm/flange_pose
-      pub_topic: /geniarm/ros2/flange_pose
+      pub_topic: /flange_pose
       enable: true
