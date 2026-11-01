@@ -4,6 +4,8 @@
 
 本项目是一套基于 **AimRT** 框架的六自由度协作机械臂实时控制系统，支持本体 + 夹爪一体式控制。系统提供基础的通信和算法能力，配合 **ArmMonitor** 可视化工具做轨迹调试和录制。
 
+系统同时原生兼容 **ROS2**：内置的 `ROS2ProxyModule` 把内部 protobuf 话题桥接为标准 ROS2 Message 话题，RPC 也通过 `ros2` 后端暴露为 ROS2 服务。也就是说，ROS2 节点不需要任何适配，直接用 `ros2 topic` / `ros2 service` 就能和 genisys 通信，rviz2、MoveIt2 等生态工具可直接接入。详见 [ROS2ProxyModule](#ros2proxymodule)。
+
 > [genisys文档](https://tonmoon.top/genisys/index.html)
 
 > [!WARNING]
@@ -38,6 +40,7 @@ genisys
     ├── module/
     │   ├── actuator_module    # 执行器模块
     │   ├── control_module     # 控制模块 
+    │   ├── ros2_proxy_module  # ROS2 桥接模块（话题 / 服务）
     │   └── genisys-core       # 底层驱动 SDK       
     │		├── actuator       # 电机驱动
     │       └── arm_control    # 运动控制
@@ -52,6 +55,7 @@ genisys
 环境要求：
 
 - **OS**: Ubuntu 22.04/Ubuntu 24.04
+- **ROS2**：Humble/Jazzy
 - **编译器**: GCC 11+，Rust编译器（Zenoh）
 - **构建工具**: CMake 3.24+,
 - **通信硬件**: SocketCAN 
@@ -154,6 +158,89 @@ echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-re
 
 基于 **MuJoCo** 物理引擎的仿真环境，可在无硬件条件下离线验证控制算法。当前提供 GeniArm 仿真配置，替换 yaml 配置即可仿真其他构型。
 
+### ROS2ProxyModule
+
+AimRT 的 `ros2_plugin` 本身就兼容 ROS2：srv、servo 这类接口可以纯 ROS2 直达 ControlModule，不需要额外组件。而 Channel 内部话题使用 protobuf，ROS2 生态无法直接消费（否则要写 `RosMsgWrapper.msg` 之类的转义包装）——ROS2ProxyModule 补的就是这一环：把内部 `pb` 话题转成标准 ROS2 消息并按 100Hz 发布；RPC 则由 `ros2` 后端直接暴露成 ROS2 服务，不经过 Proxy。
+
+ROS2 节点可以直接订阅这些标准话题、调用服务；rviz2 可用 JointState / PoseStamped 显示状态与位姿。完整 MoveIt2 控制还需使用方配置 robot_description / controller 接口。
+
+话题映射：
+
+| 内部话题（AimRT · pb） | ROS2 话题 | ROS2 类型 |
+|:---|:---|:---|
+| `/genisys/joint_state` | `/joint_states` | `sensor_msgs/msg/JointState` |
+| `/genisys/tcp_pose` | `/tcp_pose` | `geometry_msgs/msg/PoseStamped` |
+| `/genisys/flange_pose` | `/flange_pose` | `geometry_msgs/msg/PoseStamped` |
+| `/genisys/tcp_pose_expected` | `/tcp_pose_expected`（默认 `enable: false`） | `geometry_msgs/msg/PoseStamped` |
+
+- 服务：`genisys_msgs` 的 9 个 srv 以 `/genisys/srv/<方法>` 出现在 ROS2 服务侧，和 HTTP RPC 并存、两个后端都能调。
+- 频率：内部状态 500Hz，桥接后按 `publish_frequency`（默认 100Hz）进 DDS。
+
+⚠：ROS2ProxyModule 依赖 AimRT 的 [ros2_plugin](https://docs.aimrt.org/tutorials/plugins/ros2_plugin.html) ，因此使用前需要做如下配置：
+
+- 在`build.sh`中设置`-DGENISYS_BUILD_ROS2_PROXY=ON`；
+
+genisys 提供仿真和真机两种配置文件使用 ROS2ProxyModule：
+
+```bash
+./pkg_start.sh geniarm_real_gripper_with_gravity_ros2.yaml   # 真机
+./pkg_start.sh geniarm_sim_gripper_with_gravity_ros2.yaml    # 仿真
+```
+
+启动哪些话题的桥接，由 cfg 的 `ROS2ProxyModule.bridges` 里每条的 `enable` 决定（`type` 支持 `joint_state` / `pose_stamped`，`sub_topic` 指定要桥接的内部话题）：
+
+```yaml
+ROS2ProxyModule:
+  publish_executor_name: ros2_proxy_executor
+  publish_frequency: 100
+  bridges:
+    - type: joint_state
+      sub_topic: /genisys/joint_state   # 要桥接的内部话题
+      pub_topic: /joint_states          # 发布到的 ROS2 话题
+      enable: true                      # 启动；false 则不启动
+```
+
+启动 genisys 后，即可使用 ROS2 工具查看：
+
+```bash
+# 查看话题
+ros2 topic list -t
+# 打印一次关节状态
+ros2 topic echo /joint_states --once
+# 查看服务
+ros2 service list | grep genisys
+```
+
+预计输出结果如下：
+
+```bash
+╰─❯ ros2 topic list -t
+/flange_pose [geometry_msgs/msg/PoseStamped]
+/genisys/servoj_cmd [genisys_msgs/msg/ServoJCommand]
+/genisys/servoj_pose_cmd [genisys_msgs/msg/ServoJPoseCommand]
+/genisys/servol_cmd [genisys_msgs/msg/ServoLCommand]
+/joint_states [sensor_msgs/msg/JointState]
+/parameter_events [rcl_interfaces/msg/ParameterEvent]
+/rosout [rcl_interfaces/msg/Log]
+/tcp_pose [geometry_msgs/msg/PoseStamped]
+
+╰─❯ ros2 service list | grep genisys
+/genisys/describe_parameters
+/genisys/get_parameter_types
+/genisys/get_parameters
+/genisys/list_parameters
+/genisys/set_parameters
+/genisys/set_parameters_atomically
+/genisys/srv/GripperForce
+/genisys/srv/GripperPos
+/genisys/srv/IKCheck
+/genisys/srv/MoveJ
+/genisys/srv/MoveJMulti
+/genisys/srv/MoveJPose
+/genisys/srv/MoveJPoseMulti
+/genisys/srv/MoveL
+/genisys/srv/MoveLMulti
+```
 
 ### Monitor
 
@@ -204,6 +291,13 @@ python -m monitor.main
 └──────────────────────────────────────────────────────────┘
 ```
 
+ROS2 侧（换成 `_ros2` cfg 后多出来的一条缝，可选）：
+
+```
+/genisys/* (pb) ──ROS2ProxyModule(100Hz)──▶ /joint_states · /tcp_pose · /flange_pose ──▶ rviz2 / MoveIt2 / 自定义节点
+ControlModule 9 个 srv ──ros2 后端──▶ /genisys/srv/<方法>        （与 HTTP :50080 并存）
+```
+
 ### Channel 话题列表
 
 | Topic | 消息类型 | 说明 |
@@ -220,7 +314,7 @@ python -m monitor.main
 
 ### RPC 接口
 
-服务名: `MoveControlService` | 后端: HTTP (端口 50080)
+服务名: `MoveControlService` | 后端: HTTP (端口 50080) + ROS2（`/genisys/srv/<方法>`，需 `_ros2` cfg）
 
 | 方法 | 请求 | 功能 |
 |:---|:---|:---|
@@ -232,6 +326,7 @@ python -m monitor.main
 | `MoveLMulti` | 多组 TCP 位姿 + 过渡半径 + v + a | 多路径点笛卡尔运动 |
 | `GripperPos` | 位置[0~1] + 速度 + 加速度 + 力矩 | 夹爪位置控制（开合） |
 | `GripperForce` | 目标力矩 + 速度亏欠阈值 + 接近速度 + 接近加速度 + 闭合释放 | 力控抓取（碰到后按力矩夹住） |
+| `IKCheck` | 批量 `IKRequest[]`（TCP/法兰位姿，可选 FK 校验） | 批量逆解查询，返回每个目标的 `IKResult` |
 
 ### 运动指令与完成通知
 

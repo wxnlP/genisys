@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Genisys 系统图集 · 架构 / 服务与话题 / 状态机</title>
-<meta name="description" content="基于 AimRT 的六轴机械臂控制栈：分层架构、服务与话题数据流、genisys-core 运动状态机三张可交互图。">
+<meta name="description" content="基于 AimRT 的六轴机械臂控制栈：分层架构、服务与话题数据流、genisys-core 运动状态机三张可交互图，以及 ROS2 兼容层（ROS2ProxyModule）说明。">
 <style>
   :root{
     color-scheme: light dark;
@@ -64,6 +64,21 @@
   }
   .open{margin-top:auto; padding-top:12px; font-size:13.5px; font-weight:600; color:var(--accent)}
 
+  /* ROS2 兼容层 */
+  .ros2{margin-top:clamp(28px,4vw,44px); padding:clamp(20px,3vw,28px); border:1px solid var(--line);
+        border-radius:16px; background:var(--panel); box-shadow:var(--shadow)}
+  .ros2 h2{margin:0 0 8px; font-size:clamp(20px,2.4vw,24px); letter-spacing:-.01em}
+  .ros2 .kicker{margin:0 0 6px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); font-weight:600}
+  .ros2 p{margin:0; color:var(--muted); font-size:15px}
+  .ros2 figure{margin:18px 0 0; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--bg); overflow:auto}
+  .ros2 svg{display:block; width:100%; height:auto; min-width:620px}
+  .ros2 code{font-size:12.5px; color:var(--ink); background:var(--chip); border:1px solid var(--line); border-radius:5px; padding:1px 5px}
+  .ros2 .cfg{margin:16px 0 0; font-size:14px; color:var(--muted)}
+  .ros2 .cfg a{color:var(--accent); text-decoration:none}
+  .ros2 .cfg a:hover{text-decoration:underline}
+  .ros2 pre{margin:10px 0 0; padding:14px 16px; border:1px solid var(--line); border-radius:10px;
+            background:var(--bg); overflow:auto; font:12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--ink)}
+
   footer{margin-top:clamp(30px,5vw,52px); padding-top:20px; border-top:1px solid var(--line);
          display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px}
   .made{display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:.16em;
@@ -91,7 +106,7 @@
     <p class="eyebrow">Genisys · AimRT 六轴机械臂控制栈</p>
     <h1>系统图集</h1>
     <p class="lede">
-      三张可交互的结构图：控制栈的分层架构、服务与话题的数据流、genisys-core 的运动状态机。
+      三张可交互的结构图：控制栈的分层架构、服务与话题的数据流、genisys-core 的运动状态机；末尾附 ROS2 兼容层（ROS2ProxyModule）说明。
     </p>
   </header>
 
@@ -100,11 +115,12 @@
       <a class="card" href="html/genisys-architecture.html">
         <span class="num">01 · ARCHITECTURE</span>
         <h2>系统架构</h2>
-        <p>四层控制栈：上位机 → ControlModule 控制层 → ActuatorModule 驱动层 → 现场总线与执行机构；层间只有 HTTP RPC 与 9 个话题两条缝。</p>
+        <p>Genisys 是跑在 AimRT 上的六轴机械臂控制栈：三个模块分别管 RPC 与控制回路、执行、ROS2 适配；算法与驱动收在 genisys-core 子模块里，真机与仿真只差一个执行后端。</p>
         <ul class="chips">
-          <li>genisys_msgs/srv · 8 个方法</li>
-          <li>joint_cmd / joint_state</li>
-          <li>500 Hz</li>
+          <li>AimRT</li>
+          <li>ROS2</li>
+          <li>genisys-core</li>
+          <li>YAML cfg</li>
         </ul>
         <span class="open">打开图 →</span>
       </a>
@@ -114,11 +130,13 @@
       <a class="card" href="html/genisys-channel-rpc-dataflow.html">
         <span class="num">02 · DATA FLOW</span>
         <h2>服务与话题数据流</h2>
-        <p>以话题为主语：每条话题标出消息类型、通信后端与频率，服务侧只看 RPC 受理语义与 task_context 结论。</p>
+        <p>Genisys 是一条 500Hz 实时控制回路：指令从 HTTP、ROS2 或 zenoh 进来，状态在进程内 local 通道闭环，经 ROS2ProxyModule 转成标准消息交给 ROS2 生态。</p>
         <ul class="chips">
-          <li>HTTP :50080</li>
-          <li>local / zenoh</li>
-          <li>50 / 500 Hz</li>
+          <li>HTTP</li>
+          <li>ROS2 srv</li>
+          <li>Zenoh</li>
+          <li>Protobuf</li>
+          <li>DDS</li>
         </ul>
         <span class="open">打开图 →</span>
       </a>
@@ -138,6 +156,104 @@
       </a>
     </li>
   </ul>
+
+  <section class="ros2" id="ros2">
+    <p class="kicker">ROS2 Compatible</p>
+    <h2>ROS2 兼容层 · ROS2ProxyModule</h2>
+    <p>
+      genisys 不是“能对接 ROS2”，而是本身就作为一个 ROS2 节点参与通信：内部 <code>protobuf</code> 话题由
+      <code>ROS2ProxyModule</code> 转成标准 ROS2 消息并按固定频率发布，9 个 srv 由 <code>ros2</code>
+      后端暴露成 ROS2 服务。ROS2 侧不需要任何适配代码——<code>ros2 topic echo</code>、rviz2、MoveIt2
+      拿到的是标准的 <code>sensor_msgs/JointState</code> 与 <code>geometry_msgs/PoseStamped</code>。
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 980 300" role="img" aria-label="ROS2 桥接数据流：内部话题经 ROS2ProxyModule 转为 ROS2 话题，供 rviz2 等节点使用">
+        <defs>
+          <marker id="ros2-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" fill="var(--muted)"/>
+          </marker>
+        </defs>
+
+        <!-- 内部话题 -->
+        <rect x="8" y="26" width="210" height="150" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+        <text x="24" y="50" font-size="12.5" font-weight="600" fill="var(--accent)">内部话题 · AimRT</text>
+        <text x="24" y="78" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--ink)">joint_state</text>
+        <text x="24" y="100" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--ink)">tcp_pose</text>
+        <text x="24" y="122" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--ink)">flange_pose</text>
+        <text x="24" y="152" font-size="11" fill="var(--muted)">protobuf · 500 Hz · local / zenoh</text>
+
+        <!-- 桥接 -->
+        <rect x="278" y="56" width="200" height="96" rx="10" fill="var(--panel)" stroke="var(--accent)"/>
+        <text x="298" y="86" font-size="13" font-weight="600" fill="var(--ink)">ROS2ProxyModule</text>
+        <text x="298" y="108" font-size="12" fill="var(--muted)">protobuf → ROS2 消息</text>
+        <text x="298" y="128" font-size="11" fill="var(--muted)">100 Hz 发布循环</text>
+
+        <!-- ROS2 话题 -->
+        <rect x="538" y="26" width="214" height="150" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+        <text x="554" y="50" font-size="12.5" font-weight="600" fill="var(--accent)">ROS2 话题 · DDS</text>
+        <text x="554" y="78" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--ink)">/joint_states</text>
+        <text x="554" y="100" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--ink)">/tcp_pose</text>
+        <text x="554" y="122" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--ink)">/flange_pose</text>
+        <text x="554" y="152" font-size="11" fill="var(--muted)">JointState / PoseStamped</text>
+
+        <!-- 消费端 -->
+        <rect x="812" y="56" width="158" height="96" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+        <text x="830" y="84" font-size="13" font-weight="600" fill="var(--ink)">rviz2</text>
+        <text x="830" y="104" font-size="12" fill="var(--muted)">MoveIt2</text>
+        <text x="830" y="124" font-size="12" fill="var(--muted)">自定义节点</text>
+
+        <!-- 话题流 -->
+        <path d="M218 100 H272" stroke="var(--muted)" stroke-width="1.5" fill="none" marker-end="url(#ros2-arrow)"/>
+        <path d="M478 100 H532" stroke="var(--muted)" stroke-width="1.5" fill="none" marker-end="url(#ros2-arrow)"/>
+        <path d="M752 100 H806" stroke="var(--muted)" stroke-width="1.5" fill="none" marker-end="url(#ros2-arrow)"/>
+        <text x="226" y="92" font-size="10.5" fill="var(--muted)">订阅</text>
+        <text x="486" y="92" font-size="10.5" fill="var(--muted)">发布</text>
+        <text x="760" y="92" font-size="10.5" fill="var(--muted)">DDS</text>
+
+        <!-- RPC 侧 -->
+        <rect x="8" y="214" width="250" height="62" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+        <text x="24" y="240" font-size="12.5" font-weight="600" fill="var(--ink)">ControlModule · 9 个 srv</text>
+        <text x="24" y="260" font-size="10.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--muted)">MoveJ · MoveL · MoveJMulti · …</text>
+
+        <rect x="318" y="214" width="180" height="62" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+        <text x="336" y="240" font-size="12.5" font-weight="600" fill="var(--ink)">ros2 后端</text>
+        <text x="336" y="260" font-size="11" fill="var(--muted)">RPC remap · QoS</text>
+
+        <path d="M258 245 H312" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#ros2-arrow)"/>
+        <path d="M498 245 H552" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#ros2-arrow)"/>
+        <text x="566" y="240" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="var(--ink)">/genisys/srv/&lt;方法&gt;</text>
+        <text x="566" y="260" font-size="11" fill="var(--muted)">与 HTTP :50080 并存，两个后端都能调</text>
+      </svg>
+    </figure>
+
+
+    <p class="cfg">
+      启动方式：用带 <code>_ros2</code> 后缀的配置启动即可（<code>geniarm_real_gripper_with_gravity_ros2.yaml</code> /
+      <code>geniarm_sim_gripper_with_gravity_ros2.yaml</code>，直接 <code>./pkg_start.sh &lt;cfg&gt;</code>）。
+      启动哪些话题的桥接，由 <code>ROS2ProxyModule.bridges</code> 里每条的 <code>enable</code> 决定：
+    </p>
+    <pre><code>ROS2ProxyModule:
+  publish_executor_name: ros2_proxy_executor
+  publish_frequency: 100
+  bridges:
+    - type: joint_state
+      sub_topic: /genisys/joint_state      # 要桥接的内部话题
+      pub_topic: /joint_states            # 发布到的 ROS2 话题
+      enable: true                        # 启动
+    - type: pose_stamped
+      sub_topic: /genisys/tcp_pose
+      pub_topic: /tcp_pose
+      enable: true
+    - type: pose_stamped
+      sub_topic: /genisys/tcp_pose_expected
+      pub_topic: /tcp_pose_expected
+      enable: false                       # 不启动
+    - type: pose_stamped
+      sub_topic: /genisys/flange_pose
+      pub_topic: /flange_pose
+      enable: true</code></pre>
+  </section>
 
   <footer>
     <div class="made">
