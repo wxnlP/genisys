@@ -87,17 +87,17 @@ genisys/
 | **模块 / 循环**   | **职责 / 频率** | **核心作用**                                                 |
 | ----------------- | --------------- | ------------------------------------------------------------ |
 | `ControlModule`   | 500Hz           | 创建 RPC server、3 个循环、订阅 joint_state / 3 个 servo 通道 |
-| `ActuatorModule`  | 500Hz           | 订阅 `/geniarm/joint_cmd` 下发电机，发布 `/geniarm/joint_state` |
-| `ControlLoop`     | 500Hz           | 取轨迹采样点 → 组 `JointCommandArray` → `/geniarm/joint_cmd` |
-| `PosePublishLoop` | 500Hz           | 发布 `/geniarm/tcp_pose_expected`、`/geniarm/tcp_pose`、`/geniarm/flange_pose` |
-| `TaskPublishLoop` | 50Hz            | 把任务历史 / 当前任务发到 `/geniarm/task_context`            |
+| `ActuatorModule`  | 500Hz           | 订阅 `/genisys/joint_cmd` 下发电机，发布 `/genisys/joint_state` |
+| `ControlLoop`     | 500Hz           | 取轨迹采样点 → 组 `JointCommandArray` → `/genisys/joint_cmd` |
+| `PosePublishLoop` | 500Hz           | 发布 `/genisys/tcp_pose_expected`、`/genisys/tcp_pose`、`/genisys/flange_pose` |
+| `TaskPublishLoop` | 50Hz            | 把任务历史 / 当前任务发到 `/genisys/task_context`            |
 
 ### RPC（HTTP `:50080`）
 
 方法名 = srv 文件名；URL 形如：`http://127.0.0.1:50080/rpc/genisys_msgs/srv/MoveJ`
 
 - **运动 RPC 语义**：受理即返回，不阻塞到运动完成。成功返回 `error.code = 0` 及 `task_id`。
-- 完成/失败通过 `/geniarm/task_context` 通知（按 `task_id` 归并）。
+- 完成/失败通过 `/genisys/task_context` 通知（按 `task_id` 归并）。
 - 常见方法：`MoveJ`、`MoveJPose`、`MoveL`、`MoveJMulti`、`MoveJPoseMulti`、`MoveLMulti`、`GripperPos`、`GripperForce`。
 
 ## 6. 配置系统（两层）

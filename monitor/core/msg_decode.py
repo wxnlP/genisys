@@ -9,11 +9,11 @@ UI stay transport-agnostic::
 
 Topic and message type (must match what the robot publishes)::
 
-    /geniarm/joint_state    pb:aimrt.protocols.sensor.JointStateArray
-    /geniarm/joint_cmd      pb:aimrt.protocols.sensor.JointCommandArray
-    /geniarm/tcp_pose    pb:genisys.protocols.PoseStamped
-    /geniarm/tcp_pose_expected   pb:genisys.protocols.PoseStamped
-    /geniarm/flange_pose   pb:genisys.protocols.PoseStamped
+    /genisys/joint_state    pb:aimrt.protocols.sensor.JointStateArray
+    /genisys/joint_cmd      pb:aimrt.protocols.sensor.JointCommandArray
+    /genisys/tcp_pose    pb:genisys.protocols.PoseStamped
+    /genisys/tcp_pose_expected   pb:genisys.protocols.PoseStamped
+    /genisys/flange_pose   pb:genisys.protocols.PoseStamped
 
 The robot publishes ``PoseStamped`` (aliased to ``Pose`` in ControlModule),
 not ``Pose``.

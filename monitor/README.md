@@ -57,7 +57,7 @@ python -m monitor.main
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
-| `topics.*` | `/geniarm/...` | 订阅话题 |
+| `topics.*` | `/genisys/...` | 订阅话题 |
 | `refresh_interval_ms` | `2` | 绘图刷新间隔（ms），实际下限为 10 |
 | `initial_x_window_s` | `10.0` | 初始 X 轴宽度（秒） |
 | `y_range_min` | `0.001` | Y 轴最小范围 |
@@ -94,7 +94,7 @@ monitor 与控制器之间的 zenoh 连接由 `zenoh_native_config.json5` 描述
 | `src/install/linux/bin/cfg/zenoh_native_config_sim.json5` | 仿真 7448 |
 
 > 安全提示：这套系统里 zenoh 不只是"读"通道——robot 通过 zenoh 订阅
-> `/geniarm/servoj_cmd` 等话题并直接驱动机器人运动，且没有鉴权。把 zenoh
+> `/genisys/servoj_cmd` 等话题并直接驱动机器人运动，且没有鉴权。把 zenoh
 > 端口暴露到不可信网络前，请先确认网络边界，或配置 zenoh 的 `access_control`。
 
 

@@ -22,7 +22,7 @@ import yaml
 # Section of aimrt_cfg.yaml holding this program's parameters.
 _SECTION = "MonitorSubscriberPyModule"
 
-_TOPICS_FALLBACK = {"joint_state": "/geniarm/joint_state"}
+_TOPICS_FALLBACK = {"joint_state": "/genisys/joint_state"}
 
 
 def config_path() -> str:

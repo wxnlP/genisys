@@ -41,11 +41,11 @@ aimrt:
 # ---------------------------------------------------------------------------
 MonitorSubscriberPyModule:
   topics:
-    joint_state: "/geniarm/joint_state"
-    joint_cmd: "/geniarm/joint_cmd"
-    pose_current: "/geniarm/tcp_pose"
-    pose_expected: "/geniarm/tcp_pose_expected"
-    flange_pose: "/geniarm/flange_pose"
+    joint_state: "/genisys/joint_state"
+    joint_cmd: "/genisys/joint_cmd"
+    pose_current: "/genisys/tcp_pose"
+    pose_expected: "/genisys/tcp_pose_expected"
+    flange_pose: "/genisys/flange_pose"
 
   # 界面参数
   refresh_interval_ms: 2      # 绘图刷新间隔（毫秒），实际下限为 10

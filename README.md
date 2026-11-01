@@ -131,12 +131,12 @@ echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-re
 
 | 组件 | 功能 |
 |:---|:---|
-| `MoveControlServiceImpl` | HTTP RPC 服务，提供 MoveJ / MoveJPose / MoveL / MoveJMulti / MoveJPoseMulti / MoveLMulti 以及夹爪 GripperPos / GripperForce 原语；运动指令**受理即返回**，完成状态经 `/geniarm/task_context` 通知 |
+| `MoveControlServiceImpl` | HTTP RPC 服务，提供 MoveJ / MoveJPose / MoveL / MoveJMulti / MoveJPoseMulti / MoveLMulti 以及夹爪 GripperPos / GripperForce 原语；运动指令**受理即返回**，完成状态经 `/genisys/task_context` 通知 |
 | `ArmController` | 轨迹规划（quintic/cubic/lspb）、逆运动学 (Piper/UR)、运动状态机与任务记录 |
 | `GripperController` | 夹爪运动规划 |
-| `ControlLoop` | 500Hz 控制循环，轮询轨迹插值点并下发 `/geniarm/joint_cmd` |
-| `PosePublishLoop` | 500Hz 发布循环，发布期望 TCP 位姿 `/geniarm/tcp_pose_expected` 与当前法兰/TCP 位姿 `/geniarm/flange_pose`、`/geniarm/tcp_pose` |
-| `TaskPublishLoop` | 50Hz 任务状态发布循环，把最近的任务记录发布到 `/geniarm/task_context` |
+| `ControlLoop` | 500Hz 控制循环，轮询轨迹插值点并下发 `/genisys/joint_cmd` |
+| `PosePublishLoop` | 500Hz 发布循环，发布期望 TCP 位姿 `/genisys/tcp_pose_expected` 与当前法兰/TCP 位姿 `/genisys/flange_pose`、`/genisys/tcp_pose` |
+| `TaskPublishLoop` | 50Hz 任务状态发布循环，把最近的任务记录发布到 `/genisys/task_context` |
 | `JointStateCallback` | 接收执行器反馈，更新控制器状态 |
 
 ### ActuatorModule
@@ -188,18 +188,18 @@ python -m monitor.main
 │  ┌─ ControlModule ──────────────────────────────────┐    │
 │  │  MoveControlService (RPC)                        │    │
 │  │  ArmController · GripperController               │    │
-│  │  ControlLoop (500Hz) ------→ /geniarm/joint_cmd  │    │
+│  │  ControlLoop (500Hz) ------→ /genisys/joint_cmd  │    │
 │  │  PosePublishLoop (500Hz) --→ tcp_pose_expected   │    │
 │  │  │                      --→ tcp_pose             │    │
 │  │  │                      --→ flange_pose          │    │
 │  │  TaskPublishLoop (50Hz) --→ task_context         │    │
-│  │  JointStateCallback  ←--- /geniarm/joint_state   │    │
+│  │  JointStateCallback  ←--- /genisys/joint_state   │    │
 │  └──────────────────────┬───────────────────────────┘    │
 │                         │ channel (local / zenoh)        │
 │  ┌──────────────────────▼───────────────────────────┐    │
 │  │  ActuatorModule  / MujocoSimModule               │    │
-│  │  JointCmdCallback ←-- /geniarm/joint_cmd         │    │
-│  │  Publish/SimLoop --→ /geniarm/joint_state        │    │
+│  │  JointCmdCallback ←-- /genisys/joint_cmd         │    │
+│  │  Publish/SimLoop --→ /genisys/joint_state        │    │
 │  └──────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -208,15 +208,15 @@ python -m monitor.main
 
 | Topic | 消息类型 | 说明 |
 |:---|:---|:---|
-| `/geniarm/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` (protobuf) | 关节控制指令 (MIT) |
-| `/geniarm/joint_state` | `aimrt.protocols.sensor.JointStateArray` (protobuf) | 关节状态反馈 |
-| `/geniarm/tcp_pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | **期望 TCP 位姿** |
-| `/geniarm/tcp_pose` | `genisys.protocols.PoseStamped` (protobuf) | **当前 TCP 位姿** |
-| `/geniarm/flange_pose` | `genisys.protocols.PoseStamped` (protobuf) | **当前法兰位姿** |
-| `/geniarm/servoj_cmd` | `genisys_msgs/msg/ServoJCommand` (ROS2 Message) | 关节空间伺服指令 |
-| `/geniarm/servoj_pose_cmd` | `genisys_msgs/msg/ServoJPoseCommand` (ROS2 Message) | 笛卡尔位姿伺服指令 |
-| `/geniarm/servol_cmd` | `genisys_msgs/msg/ServoLCommand` (ROS2 Message) | 笛卡尔直线伺服指令 |
-| `/geniarm/task_context` | `genisys_msgs/msg/TaskContext` (ROS2 Message) | 任务状态事件，按 `task_id` 归并 |
+| `/genisys/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` (protobuf) | 关节控制指令 (MIT) |
+| `/genisys/joint_state` | `aimrt.protocols.sensor.JointStateArray` (protobuf) | 关节状态反馈 |
+| `/genisys/tcp_pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | **期望 TCP 位姿** |
+| `/genisys/tcp_pose` | `genisys.protocols.PoseStamped` (protobuf) | **当前 TCP 位姿** |
+| `/genisys/flange_pose` | `genisys.protocols.PoseStamped` (protobuf) | **当前法兰位姿** |
+| `/genisys/servoj_cmd` | `genisys_msgs/msg/ServoJCommand` (ROS2 Message) | 关节空间伺服指令 |
+| `/genisys/servoj_pose_cmd` | `genisys_msgs/msg/ServoJPoseCommand` (ROS2 Message) | 笛卡尔位姿伺服指令 |
+| `/genisys/servol_cmd` | `genisys_msgs/msg/ServoLCommand` (ROS2 Message) | 笛卡尔直线伺服指令 |
+| `/genisys/task_context` | `genisys_msgs/msg/TaskContext` (ROS2 Message) | 任务状态事件，按 `task_id` 归并 |
 
 ### RPC 接口
 
@@ -244,7 +244,7 @@ python -m monitor.main
 
 不受理时返回 `error.code = -1`。系统采用严格模式：同一时刻只允许一条运动任务，当前状态不是空闲时新请求直接失败，不排队。
 
-运动是否完成、是否成功，通过 `/geniarm/task_context` 通知，客户端按 `task_id` 归并：
+运动是否完成、是否成功，通过 `/genisys/task_context` 通知，客户端按 `task_id` 归并：
 
 | state | 值 | 含义 | code |
 |:---|:---|:---|:---|
@@ -259,7 +259,7 @@ python -m monitor.main
 
 项目提供八种 RPC 调用的 Python 示例脚本，位于 `examples/` 目录：
 
-> 这些脚本只检查 RPC 的**受理结果**。运动指令受理即返回，脚本退出不代表动作已经完成；要等运动结束，需要订阅 `/geniarm/task_context` 并按 `task_id` 匹配。
+> 这些脚本只检查 RPC 的**受理结果**。运动指令受理即返回，脚本退出不代表动作已经完成；要等运动结束，需要订阅 `/genisys/task_context` 并按 `task_id` 匹配。
 
 | 示例 | 文件 | 说明 |
 |:---|:---|:---|
