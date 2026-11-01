@@ -112,9 +112,11 @@ echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-re
 # 交互式选择配置文件
 ./pkg_start.sh
 
-# 或直接指定
-./pkg_start.sh geniarm_real_cfg.yaml   # GeniArm 真机模式
-./pkg_start.sh geniarm_sim_cfg.yaml    # GeniArm 仿真模式
+# 或直接指定（全部为带重力补偿的配置）
+./pkg_start.sh geniarm_real_gripper_with_gravity.yaml       # 真机 + 夹爪
+./pkg_start.sh geniarm_real_gripper_with_gravity_ros2.yaml  # 真机 + 夹爪 + ROS2 桥接
+./pkg_start.sh geniarm_sim_gripper_with_gravity.yaml        # 仿真 + 夹爪
+./pkg_start.sh geniarm_sim_gripper_with_gravity_ros2.yaml   # 仿真 + 夹爪 + ROS2 桥接
 ```
 
 > 切换机械臂构型需替换 yaml 配置文件。

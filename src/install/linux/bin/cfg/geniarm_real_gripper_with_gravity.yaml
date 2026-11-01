@@ -104,30 +104,57 @@ aimrt:
             - topic_name: "(.*)"
               shm_enabled: false
     pub_topics_options:
-      - topic_name: "(.*)" # 正则表达式
+      # 内部话题：本进程内走 local，同时发布到 zenoh 供外部订阅
+      - topic_name: "/geniarm/joint_cmd"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/joint_state"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/tcp_pose"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/tcp_pose_expected"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/flange_pose"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/geniarm/task_context"
         enable_backends: [local, zenoh]
         enable_filters: []
     sub_topics_options:
-      - topic_name: "/geniarm/servoj_cmd" 
+      # 外部 servo 指令入口：从 zenoh 订阅
+      - topic_name: "/geniarm/servoj_cmd"
         enable_backends: [zenoh]
-      - topic_name: "/geniarm/servoj_pose_cmd" 
+        enable_filters: []
+      - topic_name: "/geniarm/servoj_pose_cmd"
         enable_backends: [zenoh]
-      - topic_name: "/geniarm/servol_cmd" 
+        enable_filters: []
+      - topic_name: "/geniarm/servol_cmd"
         enable_backends: [zenoh]
-      - topic_name: "/geniarm/joint_cmd" 
+        enable_filters: []
+      # 进程内话题：local
+      - topic_name: "/geniarm/joint_cmd"
         enable_backends: [local]
-      - topic_name: "/geniarm/joint_state" 
+        enable_filters: []
+      - topic_name: "/geniarm/joint_state"
         enable_backends: [local]
+        enable_filters: []
   rpc:
     backends:
       - type: http
+      - type: zenoh
     clients_options:
       - func_name: "(.*)"
         enable_backends: []
         enable_filters: []
     servers_options:
-      - func_name: "(.*)"
+      - func_name: ".*record_playback_plugin.*"
         enable_backends: [http]
+        enable_filters: []
+      - func_name: "(.*)"
+        enable_backends: [http, zenoh]
         enable_filters: []
 
 # Module custom configuration

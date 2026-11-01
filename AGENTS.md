@@ -27,7 +27,7 @@
 | 改逆解 / 选解 / 轨迹 / 状态机 | [`arm_controller.cc`](src/module/genisys-core/arm_control/src/arm_controller.cc)、[`arm_controller.h`](src/module/genisys-core/arm_control/include/arm_controller.h) |
 | 改解析 FK/IK | [`kinematic.cc`](src/module/genisys-core/arm_control/src/kinematic.cc)、[`tool_frame.cc`](src/module/genisys-core/arm_control/src/tool_frame.cc) |
 | 加/改接口 | [`genisys_msgs`](src/protocols/ros2/genisys_msgs)、同目录 [`CMakeLists.txt`](src/protocols/ros2/genisys_msgs/CMakeLists.txt) |
-| 改配置 / 换构型 | `src/install/linux/bin/cfg/geniarm_real_cfg.yaml`、`src/module/control_module/cfg/geniarm_body_cfg.yaml`、[`ADAPTATION.md`](src/module/genisys-core/ADAPTATION.md) |
+| 改配置 / 换构型 | `src/install/linux/bin/cfg/geniarm_real_gripper_with_gravity_ros2.yaml`、`src/module/control_module/cfg/geniarm_body_gripper_gravity_cfg.yaml`、[`ADAPTATION.md`](src/module/genisys-core/ADAPTATION.md) |
 | 写客户端 | [`examples/`](examples)（`requests.post` 直连 HTTP JSON） |
 | 驱动 / CAN | [`actuator_module.cc`](src/module/actuator_module/actuator_module.cc)、[`genisys-core/actuator`](src/module/genisys-core/actuator) |
 | 监控 / 数据 | [`monitor/README.md`](monitor/README.md) |
