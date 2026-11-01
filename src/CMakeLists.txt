@@ -11,12 +11,6 @@ add_subdirectory(module/actuator_module)
 add_subdirectory(module/genisys-core)
 
 if(GENISYS_BUILD_ROS2_PROXY)
-  if(NOT AIMRT_BUILD_ROS2_PLUGIN)
-    set(AIMRT_BUILD_ROS2_PLUGIN ON CACHE BOOL "")
-  endif()
-  if(NOT AIMRT_BUILD_WITH_ROS2) 
-    set(AIMRT_BUILD_WITH_ROS2 ON CACHE BOOL "")
-  endif()
   add_subdirectory(module/ros2_proxy_module)
 endif()
 

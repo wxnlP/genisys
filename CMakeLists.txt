@@ -51,6 +51,11 @@ option(GENISYS_BUILD_MUJOCO_SIM "Build AimRT Mujoco Sim" OFF)
 
 option(GENISYS_BUILD_ROS2_PROXY "Build AimRT ROS2 proxy pkg" OFF)
 
+if(GENISYS_BUILD_ROS2_PROXY)
+  set(AIMRT_BUILD_WITH_ROS2 ON CACHE BOOL "" FORCE)
+  set(AIMRT_BUILD_ROS2_PLUGIN ON CACHE BOOL "" FORCE)
+endif()
+
 # Include cmake module
 include(NamespaceTool)
 
