@@ -42,7 +42,11 @@ def make_pose(x, y, z, qw=1.0, qx=0.0, qy=0.0, qz=0.0):
 def call_ik_check(url, targets, timeout=60.0):
     resp = requests.post(url, json={"request": targets}, timeout=timeout)
     resp.raise_for_status()
-    return resp.json().get("results", [])
+    data = resp.json()
+    error = data.get("error") or {}
+    if int(error.get("code", 0)) != 0:
+        raise RuntimeError(f"IKCheck 服务错误 (code={error.get('code')}): {error.get('msg', 'unknown')}")
+    return data.get("results", [])
 
 
 def print_results(results, targets):

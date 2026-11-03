@@ -108,8 +108,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
       ArmController::TaskContext task;
       if (arm_controller_->GetCurrentTaskContext(task)) {
-        rsp.task_id = task.id;
-        rsp.duration_ms = task.duration_ms;
+        rsp.result.task_id = task.id;
+        rsp.result.duration_ms = task.duration_ms;
       }
       rsp.error.code = 0;
       rsp.error.msg = "MoveJ accepted";
@@ -135,8 +135,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
       ArmController::TaskContext task;
       if (arm_controller_->GetCurrentTaskContext(task)) {
-        rsp.task_id = task.id;
-        rsp.duration_ms = task.duration_ms;
+        rsp.result.task_id = task.id;
+        rsp.result.duration_ms = task.duration_ms;
       }
       rsp.error.code = 0;
       rsp.error.msg = "MoveJPose accepted";
@@ -164,8 +164,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
       ArmController::TaskContext task;
       if (arm_controller_->GetCurrentTaskContext(task)) {
-        rsp.task_id = task.id;
-        rsp.duration_ms = task.duration_ms;
+        rsp.result.task_id = task.id;
+        rsp.result.duration_ms = task.duration_ms;
       }
       rsp.error.code = 0;
       rsp.error.msg = "MoveJMulti accepted";
@@ -195,8 +195,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
       ArmController::TaskContext task;
       if (arm_controller_->GetCurrentTaskContext(task)) {
-        rsp.task_id = task.id;
-        rsp.duration_ms = task.duration_ms;
+        rsp.result.task_id = task.id;
+        rsp.result.duration_ms = task.duration_ms;
       }
       rsp.error.code = 0;
       rsp.error.msg = "MoveJPoseMulti accepted";
@@ -222,8 +222,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
       ArmController::TaskContext task;
       if (arm_controller_->GetCurrentTaskContext(task)) {
-        rsp.task_id = task.id;
-        rsp.duration_ms = task.duration_ms;
+        rsp.result.task_id = task.id;
+        rsp.result.duration_ms = task.duration_ms;
       }
       rsp.error.code = 0;
       rsp.error.msg = "MoveL accepted";
@@ -253,8 +253,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       }
       ArmController::TaskContext task;
       if (arm_controller_->GetCurrentTaskContext(task)) {
-        rsp.task_id = task.id;
-        rsp.duration_ms = task.duration_ms;
+        rsp.result.task_id = task.id;
+        rsp.result.duration_ms = task.duration_ms;
       }
       rsp.error.code = 0;
       rsp.error.msg = "MoveLMulti accepted";
@@ -792,7 +792,7 @@ void ControlModule::IKCheckHandler(aimrt::rpc::ContextRef ctx_ref,
     const bool frame_ok = (target.frame == genisys_msgs::msg::IKRequest::FRAME_TCP) ||
                           (target.frame == genisys_msgs::msg::IKRequest::FRAME_FLANGE);
     if (!frame_ok) {
-      result.status = genisys_msgs::msg::IKResult::INVALID_INPUT;
+      result.status = genisys_msgs::srv::IKCheck_Response::INVALID_INPUT;
       result.solved = false;
       continue;
     }
@@ -804,25 +804,29 @@ void ControlModule::IKCheckHandler(aimrt::rpc::ContextRef ctx_ref,
     const int ret = arm_controller_->SolveIK(pose, is_flange, target.do_fk, joint);
 
     if (ret == 0) {
-      result.status = genisys_msgs::msg::IKResult::OK;
+      result.status = genisys_msgs::srv::IKCheck_Response::OK;
       result.solved = true;
       for (int i = 0; i < 6; ++i) {
         result.joint.position[i] = joint[i];
       }
     } else if (ret == -2) {
       // -2: 没有通过限位的分支；
-      result.status = genisys_msgs::msg::IKResult::NO_SOLUTION;
+      result.status = genisys_msgs::srv::IKCheck_Response::NO_SOLUTION;
       result.solved = false;
     } else if (ret == -3 ){
       // -3: 选中的解过不了 FK 反代
-      result.status = genisys_msgs::msg::IKResult::FK_VERIFY_WARN;
+      result.status = genisys_msgs::srv::IKCheck_Response::FK_VERIFY_WARN;
       result.solved = false;
     } else {
-      result.status = genisys_msgs::msg::IKResult::OTHER_ERRORS;
+      result.status = genisys_msgs::srv::IKCheck_Response::OTHER_ERRORS;
       result.solved = false;
       AIMRT_WARN("IK Check failed with OTHER_ERRORS");
     }
   }
+
+  // 服务级错误：单个目标的失败体现在 results[].status 中，code 恒为 0
+  rsp.error.code = 0;
+  rsp.error.msg = "IKCheck succeeded";
 }
 
 }  // namespace genisys::control_module

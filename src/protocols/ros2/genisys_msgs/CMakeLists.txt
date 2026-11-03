@@ -27,7 +27,8 @@ set(BUILD_SHARED_LIBS ON)
 rosidl_generate_interfaces(${CUR_TARGET_NAME}
   "msg/RosChangeMe.msg"
   "msg/Joint.msg"
-  "msg/MoveResponse.msg"
+  "msg/Error.msg"
+  "msg/MoveResult.msg"
   "msg/ServoJCommand.msg"
   "msg/ServoJPoseCommand.msg"
   "msg/ServoLCommand.msg"

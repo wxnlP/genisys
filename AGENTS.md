@@ -55,7 +55,7 @@ genisys/
 │   │       ├── arm_control/         #   运动学、雅可比、路径、时间缩放、轨迹、ArmController
 │   │       └── actuator/            #   GeniArm(CANFD) / 夹爪 + dm_driver、serial
 │   ├── protocols/
-│   │   ├── pb/genisys/              # Proto：Pose/PoseStamped 在用；move_control.proto 是历史遗留
+│   │   ├── pb/genisys/              # Proto：仅 Pose/PoseStamped（channel 用），无 RPC
 │   │   └── ros2/genisys_msgs/       # ROS2 msg/srv + aimrt rpc gencode（当前 RPC 的真身）
 │   └── install/linux/bin/           # 运行 cfg、MuJoCo 模型/网格、启动脚本、录制脚本
 └── build/                           # 产物：aimrt_main、libarm_control_pkg.so、cfg/、log/、install/
@@ -96,7 +96,7 @@ genisys/
 
 方法名 = srv 文件名；URL 形如：`http://127.0.0.1:50080/rpc/genisys_msgs/srv/MoveJ`
 
-- **运动 RPC 语义**：受理即返回，不阻塞到运动完成。成功返回 `error.code = 0` 及 `task_id`。
+- **运动 RPC 语义**：受理即返回，不阻塞到运动完成。响应平铺：`error`（`Error`）+ `result`（`MoveResult`，含 `task_id` / `duration_ms`）；夹爪与 IKCheck 的 `error` 同样在顶层。
 - 完成/失败通过 `/genisys/task_context` 通知（按 `task_id` 归并）。
 - 常见方法：`MoveJ`、`MoveJPose`、`MoveL`、`MoveJMulti`、`MoveJPoseMulti`、`MoveLMulti`、`GripperPos`、`GripperForce`。
 
