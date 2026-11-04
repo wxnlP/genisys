@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Genisys 架构：三模块、两库、一份契约</title>
-<meta name="description" content="Genisys 分层架构：aimrt_main 按 cfg 加载动态库并注册模块；ControlModule 承担 RPC 与 500Hz 控制循环，执行后端在 ActuatorModule 与官方 MujocoSimModule 之间二选一，ROS2ProxyModule 独立打包；算法与驱动在 genisys-core 子模块，对外以 genisys_msgs 为契约。">
+<title>Genisys 架构：三模块、两库、一份协议</title>
+<meta name="description" content="Genisys 分层架构：aimrt_main 按 cfg 加载动态库并注册模块；ControlModule 承担 RPC 与 500Hz 控制循环，执行后端在 ActuatorModule 与官方 MujocoSimModule 之间二选一，ROS2ProxyModule 独立打包；算法与驱动在 genisys-core 子模块，对外以 genisys_msgs 为协议。">
 <style>
   :root{
     --page:#f7f7f4; --paper:#ffffff; --ink:#1e2227; --body:#414750; --muted:#858c95;
@@ -132,7 +132,7 @@
 
   <header class="masthead">
     <p class="eyebrow">Genisys · Architecture</p>
-    <h1>架构：三模块、两库、一份契约</h1>
+    <h1>架构：三模块、两库、一份协议</h1>
     <p class="lede">
       Genisys 是跑在 AimRT 上的六轴机械臂控制栈：三个模块分别管 RPC 与控制回路、执行、ROS2 适配；
       算法与驱动收在 <code>genisys-core</code> 子模块里，真机与仿真只差一个执行后端。
@@ -157,7 +157,7 @@
     <div class="canvas" id="canvas">
       <svg id="arch" class="df" viewBox="0 0 1560 900" role="img" aria-labelledby="fig-title fig-desc">
         <title id="fig-title">Genisys 系统架构</title>
-        <desc id="fig-desc">外部调用方、伺服指令源与 ArmMonitor 接入 AimRT 进程；进程内 ControlModule 负责 RPC 与 500Hz 控制循环，执行后端在 ActuatorModule 与 MujocoSimModule 之间由 cfg 二选一，ROS2ProxyModule 把 protobuf 话题转成标准 ROS2 消息送往 rviz2、rosbag2、MoveIt2。算法与驱动来自 genisys-core 子模块，契约是 genisys_msgs 的 9 个 srv 与 msg，配置分运行 cfg 与模块 cfg 两层。</desc>
+        <desc id="fig-desc">外部调用方、伺服指令源与 ArmMonitor 接入 AimRT 进程；进程内 ControlModule 负责 RPC 与 500Hz 控制循环，执行后端在 ActuatorModule 与 MujocoSimModule 之间由 cfg 二选一，ROS2ProxyModule 把 protobuf 话题转成标准 ROS2 消息送往 rviz2、rosbag2、MoveIt2。算法与驱动来自 genisys-core 子模块，协议是 genisys_msgs 的 9 个 srv 与 msg，配置分运行 cfg 与模块 cfg 两层。</desc>
         <defs>
           <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
             <path d="M1 1.2 L9.2 5 L1 8.8 Z" fill="#23262b"/>
@@ -243,7 +243,7 @@
           </g>
           <g class="legend-item" data-focus="kind:contract">
             <rect x="24" y="176" width="246" height="52" rx="5" class="box box--amber"/>
-            <text x="147" y="208" class="t-legend" text-anchor="middle">契约 / 配置</text>
+            <text x="147" y="208" class="t-legend" text-anchor="middle">协议 / 配置</text>
           </g>
           <g class="legend-item" data-focus="kind:external">
             <rect x="24" y="236" width="246" height="52" rx="5" class="box box--ext"/>
@@ -332,22 +332,19 @@
 
         <!-- ===================== 硬件 / 仿真 ===================== -->
         <rect x="300" y="596" width="680" height="264" class="frame frame--hw"/>
-        <text x="324" y="626" class="t-frame">硬件 / 仿真植物</text>
+        <text x="324" y="626" class="t-frame">硬件 / 仿真</text>
 
         <g class="node" data-kind="hardware">
           <rect x="320" y="664" width="200" height="134" rx="7" class="box box--gray"/>
           <text x="420" y="726" class="t-row" text-anchor="middle">CANFD 总线</text>
-          <text x="420" y="750" class="t-sub" text-anchor="middle">SocketCAN</text>
         </g>
         <g class="node" data-kind="hardware">
           <rect x="540" y="664" width="200" height="134" rx="7" class="box box--gray"/>
           <text x="640" y="726" class="t-row" text-anchor="middle">关节电机 · 夹爪</text>
-          <text x="640" y="750" class="t-sub" text-anchor="middle">J1–J6 · 夹爪</text>
         </g>
         <g class="node" data-kind="hardware">
           <rect x="760" y="664" width="200" height="134" rx="7" class="box box--gray"/>
-          <text x="860" y="726" class="t-row" text-anchor="middle">MuJoCo 模型</text>
-          <text x="860" y="750" class="t-sub" text-anchor="middle">仿真环境</text>
+          <text x="860" y="726" class="t-row" text-anchor="middle">MuJoCo 仿真环境</text>
         </g>
 
         <path class="edge e-call" data-flow="call" d="M670 520 V578 H420 V660" marker-end="url(#ar-ink)"/>
@@ -377,7 +374,6 @@
         <!-- ===================== genisys-core ===================== -->
         <rect x="1040" y="216" width="500" height="254" class="frame frame--lib"/>
         <text x="1064" y="246" class="t-frame">genisys-core 子模块</text>
-        <text x="1064" y="268" class="t-frame-sub">编译期链接进进程 · 不对外暴露</text>
 
         <g class="node" data-kind="lib">
           <rect x="1060" y="292" width="460" height="82" rx="8" class="box box--lib"/>
@@ -393,10 +389,9 @@
         <path class="edge e-build" data-flow="build" d="M980 450 H1036" marker-end="url(#ar-gray)"/>
         <text x="1008" y="442" class="t-label halo edge-label" data-flow="build" text-anchor="middle">链接</text>
 
-        <!-- ===================== 契约 ===================== -->
+        <!-- ===================== 协议 ===================== -->
         <rect x="1040" y="500" width="500" height="190" class="frame frame--amber"/>
-        <text x="1064" y="530" class="t-frame">契约 genisys_msgs</text>
-        <text x="1064" y="552" class="t-frame-sub">模块编译时依赖 · 9 个 srv + msg</text>
+        <text x="1064" y="530" class="t-frame">genisys_msgs</text>
 
         <g class="node" data-kind="contract">
           <rect x="1060" y="580" width="220" height="84" rx="8" class="box box--amber"/>
@@ -452,7 +447,7 @@
       <h3>real / sim 只换执行后端</h3>
       <p>
         真机用 ActuatorModule：500Hz 下发 CANFD、回读关节状态；仿真把 ActuatorModule 关掉，换官方
-        <code>libmujoco_sim_pkg.so</code> 的 MujocoSimModule。ControlModule、通道契约、Proxy 都不变。
+        <code>libmujoco_sim_pkg.so</code> 的 MujocoSimModule。ControlModule、通道协议、Proxy 都不变。
       </p>
     </article>
 
@@ -465,7 +460,7 @@
     </article>
 
     <article class="note note--contract">
-      <h3>契约与配置</h3>
+      <h3>协议与配置</h3>
       <p>
         <code>genisys_msgs</code> 提供 9 个 srv（含 ros2 gencode）与 JointState / Pose 类型，
         <code>src/protocols/pb</code> 提供 Pose / PoseStamped 的 protobuf。两层 cfg 决定插件、executor、通道后端，
