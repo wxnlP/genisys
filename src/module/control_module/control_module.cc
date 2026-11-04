@@ -307,13 +307,16 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
           params.target_torque = req.target_torque;
           params.closed_release = req.closed_release;
 
-          bool ret = gripper_controller_->ForceControl(params);
-          if (ret) {
-            rsp.error.code = 0;
+          int ret = gripper_controller_->ForceControl(params);
+          if (ret == 0) {
+            rsp.error.code = rsp.OK;
             rsp.error.msg = "GripperForce succeeded";
-          } else {
-            rsp.error.code = -1;
+          } else if (ret == -1) {
+            rsp.error.code = rsp.FAILED;
             rsp.error.msg = "GripperForce failed";
+          } else if (ret == -2) {
+            rsp.error.code = rsp.EMPTY;
+            rsp.error.msg = "GripperForce Empty (object not grasped)";
           }
 
           return aimrt::rpc::Status();
