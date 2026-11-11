@@ -53,7 +53,7 @@ payload = {
             "orientation": ORI
         },
     ],
-    "r": 0.1,   # 过渡半径 (rad, 关节空间)
+    "r": 0.05,  # TCP 过渡退让距离 (m)
     "v": 1.0,   # 关节速度 (rad/s)
     "a": 0.5    # 关节加速度 (rad/s^2)
 }
@@ -67,7 +67,7 @@ for i, wp in enumerate(payload["pose"]):
     o = wp["orientation"]
     print(f"  [{i}] pos=({p['x']:.2f}, {p['y']:.2f}, {p['z']:.2f}), "
           f"ori=({o['w']}, {o['x']}, {o['y']}, {o['z']})")
-print(f"Blend radius: {payload['r']} rad")
+print(f"Blend distance: {payload['r']} m (TCP)")
 print(f"Joint velocity: {payload['v']} rad/s, Joint acceleration: {payload['a']} rad/s^2")
 print(f"Sending to {URL} ...")
 

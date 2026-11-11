@@ -3,7 +3,7 @@
 MoveJMulti Demo — 多路径点关节空间运动
 
 向 GeniArm 发送 MoveJMulti RPC 请求，控制机械臂依次经过
-多个关节角度路径点，路径点之间以圆弧过渡。
+多个关节角度路径点，路径点之间做平滑过渡（r 为 TCP 侧的退让距离，单位 m）。
 
 用法:
     python3 movej_multi_demo.py
@@ -22,7 +22,7 @@ payload = {
         {"position": [0.5, 1.0, -1.5, 0.5, 0.2, 0.1]},   # 中间点1
         {"position": [1.0, 1.5, -2.0, 0.8, 0.4, 0.2]},   # 终点
     ],
-    "r": 0.1,   # 过渡半径 (rad)
+    "r": 0.05,  # TCP 过渡退让距离 (m)
     "v": 1.0,   # 速度 (rad/s)
     "a": 0.5    # 加速度 (rad/s^2)
 }
@@ -33,7 +33,7 @@ print("=" * 60)
 print("Waypoints:")
 for i, wp in enumerate(payload["position"]):
     print(f"  [{i}] {wp['position']}")
-print(f"Blend radius: {payload['r']} rad")
+print(f"Blend distance: {payload['r']} m (TCP)")
 print(f"Velocity: {payload['v']} rad/s, Acceleration: {payload['a']} rad/s^2")
 print(f"Sending to {URL} ...")
 
