@@ -34,6 +34,16 @@
 
 **不要读**（浪费 token，或不是源码）：`build/`、`.cache/`、`src/module/genisys-core/actuator/third_party/`、`src/install/linux/bin/model|meshes`、`monitor/ui/`、`monitor/proto/`、`**/__pycache__/`。`test/` 是 gitignore 的草稿区。
 
+### 协议版本
+
+- [`src/protocols/VERSION`](src/protocols/VERSION) 记录对外协议版本，采用一行 `MAJOR.MINOR.PATCH`（语义化版本），初始版本为 `1.0.0`，独立于 ROS 包版本。
+- 每次新增、删除或修改协议定义（如 `.proto`、`.msg`、`.srv`），或修改对外协议约定时，必须在同一提交更新版本。多类改动并存时按最高级别递增：
+  - **MAJOR**：不向后兼容的改动，例如删除或重命名现有字段、更改类型，或改变既有字段的含义。递增主版本，次版本和修订版本归零。
+  - **MINOR**：向后兼容的新增，例如新增 RPC 或新增不影响现有客户端的字段。递增次版本，修订版本归零。
+  - **PATCH**：向后兼容的协议修正，不引入新功能。仅递增修订版本。
+- 仅修改文档、构建或生成物且未改变协议时，不更新协议版本。
+- 下游项目同步协议时，必须同时复制 `VERSION`，重新生成类型支持，并核对调用方的字段、类型与语义。
+
 ## 3. 目录地图
 
 ```text

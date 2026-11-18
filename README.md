@@ -258,46 +258,6 @@ python -m monitor.main
 
 ## 通信架构
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────────┐
-│  HTTP Client │     │  echo_plugin │     │    ArmMonitor    │
-│  (curl/GUI)  │     │   (DEBUG)    │     │  (Data Capture)  │
-└──────┬───────┘     └──────┬───────┘     └────────┬─────────┘
-       │ RPC                │ sub (channel)        │ sub (zenoh)
-       ▼                    ▼                      ▼
-┌──────────────────────────────────────────────────────────┐
-│                   AimRT Runtime                          │
-│                                                          │
-│  ┌─ net_plugin ─────────────┐  ┌─ zenoh_plugin ────────┐ │
-│  │  HTTP : 50080            │  │  Zenoh Native         │ │
-│  └──────────────────────────┘  └───────────────────────┘ │
-│                                                          │
-│  ┌─ ControlModule ──────────────────────────────────┐    │
-│  │  MoveControlService (RPC)                        │    │
-│  │  ArmController · GripperController               │    │
-│  │  ControlLoop (500Hz) ------→ /genisys/joint_cmd  │    │
-│  │  PosePublishLoop (500Hz) --→ tcp_pose_expected   │    │
-│  │  │                      --→ tcp_pose             │    │
-│  │  │                      --→ flange_pose          │    │
-│  │  TaskPublishLoop (50Hz) --→ task_context         │    │
-│  │  JointStateCallback  ←--- /genisys/joint_state   │    │
-│  └──────────────────────┬───────────────────────────┘    │
-│                         │ channel (local / zenoh)        │
-│  ┌──────────────────────▼───────────────────────────┐    │
-│  │  ActuatorModule  / MujocoSimModule               │    │
-│  │  JointCmdCallback ←-- /genisys/joint_cmd         │    │
-│  │  Publish/SimLoop --→ /genisys/joint_state        │    │
-│  └──────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────────┘
-```
-
-ROS2 侧（换成 `_ros2` cfg 后多出来的一条缝，可选）：
-
-```
-/genisys/* (pb) ──ROS2ProxyModule(100Hz)──▶ /joint_states · /tcp_pose · /flange_pose ──▶ rviz2 / MoveIt2 / 自定义节点
-ControlModule 9 个 srv ──ros2 后端──▶ /genisys/srv/<方法>        （与 HTTP :50080 并存）
-```
-
 ### Channel 话题列表
 
 | Topic | 消息类型 | 说明 |
