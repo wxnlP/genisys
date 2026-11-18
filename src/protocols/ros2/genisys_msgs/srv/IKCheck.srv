@@ -1,13 +1,9 @@
-# 批量逆解查询服务
-# 请求：批量目标位姿
-# 响应：每个目标的逆解结果
-
-IKRequest[] request
+IKRequest[] request       # 逆解查询项
 ---
-uint8 OK = 0
-uint8 NO_SOLUTION = 1         # 无解
-uint8 INVALID_INPUT = 2       # 位姿非法 或 frame 未指定
-uint8 FK_VERIFY_WARN = 3      # FK 验证容差不过
-uint8 OTHER_ERRORS = 4        # 其他错误（如总线错误）
-IKResult[] results
-Error error
+uint8 OK = 0              # 逆解成功
+uint8 NO_SOLUTION = 1     # 无可用逆解
+uint8 INVALID_INPUT = 2   # 输入位姿或坐标系无效
+uint8 FK_VERIFY_WARN = 3  # 正解验证超出容差
+uint8 OTHER_ERRORS = 4    # 其他错误
+IKResult[] results        # 逐项逆解结果
+Error error               # 服务返回状态
