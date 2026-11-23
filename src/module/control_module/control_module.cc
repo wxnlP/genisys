@@ -452,8 +452,6 @@ void ControlModule::ControlLoop() {
 
     // 周期计时统计
     uint64_t dbg_cycle = 0;
-    int64_t cycle_max_us = 0;
-    int64_t get_cmd_sum_us = 0, build_msg_sum_us = 0, publish_sum_us = 0;
 
     while (ctx_ptr_->Running()) {
       auto t_start = std::chrono::steady_clock::now();
@@ -467,26 +465,29 @@ void ControlModule::ControlLoop() {
       header->set_frame_id("base_link");
       header->set_sequence_num(seq_count++);
 
-      {
+      if (arm_controller_->GetJointCommand(joint_cmd)) {
         std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
-        if (!arm_controller_->GetJointCommand(joint_cmd)) {
-          // 无规划轨迹 — 复用上一帧指令保持
-          if (last_arm_cmd_.has_value()) {
+        last_arm_cmd_ = joint_cmd;
+      } else {
+        bool has_cached_cmd;
+        {
+          std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
+          has_cached_cmd = last_arm_cmd_.has_value();
+          if (has_cached_cmd) {
             joint_cmd = *last_arm_cmd_;
-          } else {
-            ArmMotion::Joint6Dof current_joint;
-            if (arm_controller_->GetCurrentJoint(current_joint) != 0) {
-              next_loop_time += period;
-              std::this_thread::sleep_until(next_loop_time);
-              continue;
-            }
-            joint_cmd.position = current_joint;
-            joint_cmd.velocity = ArmMotion::Joint6Dof{};
-            joint_cmd.effort = ArmMotion::Joint6Dof{};
-            last_arm_cmd_ = joint_cmd;
           }
-        } else {
-          // 记录上一次指令
+        }
+        if (!has_cached_cmd) {
+          ArmMotion::Joint6Dof current_joint;
+          if (arm_controller_->GetCurrentJoint(current_joint) != 0) {
+            next_loop_time += period;
+            std::this_thread::sleep_until(next_loop_time);
+            continue;
+          }
+          joint_cmd.position = current_joint;
+          joint_cmd.velocity = ArmMotion::Joint6Dof{};
+          joint_cmd.effort = ArmMotion::Joint6Dof{};
+          std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
           last_arm_cmd_ = joint_cmd;
         }
       }
