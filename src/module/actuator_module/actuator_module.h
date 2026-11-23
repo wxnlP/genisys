@@ -55,8 +55,6 @@ class ActuatorModule : public aimrt::ModuleBase {
   double publish_frequecy_;
   std::vector<std::string> joint_names_;
 
-  std::promise<void> final_write_scheduled_sig_;
-
   /* SDK Interfaces */
   std::shared_ptr<ActuatorManager> actuator_manager_;
   std::shared_ptr<ArmCtrlBase> arm_actuator_;

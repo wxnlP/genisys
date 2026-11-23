@@ -350,22 +350,20 @@ bool ControlModule::Start() {
   try {
     aimrt::executor::CreateTimer(pose_publish_executor_, pose_publish_period_,
                                  [this, ctx = ctx_ptr_, seq = uint64_t{0}, pose_warn = WarnThrottle{}, fk_warn = WarnThrottle{}](aimrt::executor::TimerBase& timer) mutable {
-                                   if (!ctx->Running()) {
-                                     timer.Cancel();
-                                     return;
-                                   }
+                                   const bool stopping = !ctx->Running();
+                                   if (stopping) timer.Cancel();
                                    ctx->LetMe();
                                    PublishPoseOnce(seq, pose_warn, fk_warn);
+                                   if (stopping) final_pose_published_sig_.set_value();
                                  });
 
     aimrt::executor::CreateTimer(task_publish_executor_, task_publish_period_,
                                  [this, ctx = ctx_ptr_](aimrt::executor::TimerBase& timer) {
-                                   if (!ctx->Running()) {
-                                     timer.Cancel();
-                                     return;
-                                   }
+                                   const bool stopping = !ctx->Running();
+                                   if (stopping) timer.Cancel();
                                    ctx->LetMe();
                                    PublishTaskOnce();
+                                   if (stopping) final_task_published_sig_.set_value();
                                  });
     cycle_control_executor_.Execute([this]() {
       ctx_ptr_->LetMe();
@@ -385,7 +383,7 @@ void ControlModule::Shutdown() {
     ctx_ptr_->StopRunning();
 
     final_pose_published_sig_.get_future().wait();
-    final_pose_published_sig_.get_future().wait();
+    final_task_published_sig_.get_future().wait();
 
     if (arm_controller_) {
       arm_controller_->StopSampleThread();
@@ -438,10 +436,6 @@ void ControlModule::PublishTaskOnce() {
     }
   } catch (const std::exception& e) {
     AIMRT_ERROR("ControlModule::PublishTaskOnce failed: {}", e.what());
-  }
-
-  if (!ctx_ptr_->Running()) {
-    final_task_published_sig_.set_value();
   }
 }
 
@@ -647,10 +641,6 @@ void ControlModule::PublishPoseOnce(uint64_t& seq, WarnThrottle& pose_warn, Warn
     pub_flange_pose_.Publish(flange_pose_msg);
   } catch (const std::exception& e) {
     AIMRT_ERROR("ControlModule::PublishPoseOnce failed: {}", e.what());
-  }
-
-  if (!ctx_ptr_->Running()) {
-    final_pose_published_sig_.set_value();
   }
 }
 

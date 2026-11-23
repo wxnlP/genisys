@@ -2,7 +2,6 @@
 #include <fmt/ranges.h>  // 容器元素格式化
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
-#include "common/warn_throttle.h"
 #include "util/time_util.h"
 #include "yaml-cpp/yaml.h"
 
@@ -69,8 +68,8 @@ bool ActuatorModule::Start() {
     if (gripper_actuator_) {
       gripper_actuator_->Enable();
     }
-    
-    pub_executor_.Execute([this] () {
+
+    pub_executor_.Execute([this]() {
       ctx_ptr_->LetMe();
       PublishLoop();
     });
@@ -85,8 +84,11 @@ bool ActuatorModule::Start() {
 void ActuatorModule::Shutdown() {
   try {
     ctx_ptr_->StopRunning();
-    
-    final_write_scheduled_sig_.get_future().wait();
+
+    std::packaged_task<void()> drained([] {});
+    auto drained_future = drained.get_future();
+    write_executor_.Execute(std::move(drained));
+    drained_future.get();
 
     // 失能各执行器
     if (arm_actuator_) {
@@ -122,7 +124,7 @@ void ActuatorModule::PublishLoop() {
     // 告警节流
     WarnThrottle arm_state_warn;
     WarnThrottle gripper_state_warn;
-    
+
     while (ctx_ptr_->Running()) {
       joint_state_msg.Clear();
       if (!arm_actuator_->GetJointState(joint_state)) {
@@ -219,10 +221,6 @@ void ActuatorModule::WriteCommand(const JointCommandArray& msg) {
     }
   } catch (const std::exception& e) {
     AIMRT_ERROR("ActuatorModule::WriteCommand failed: {}", e.what());
-  }
-
-  if (!ctx_ptr_->Running()) {
-    final_write_scheduled_sig_.set_value();
   }
 }
 
