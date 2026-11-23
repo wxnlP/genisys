@@ -3,9 +3,9 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <thread>
 #include <utility>
 
+#include "aimrt_module_cpp_interface/executor/timer.h"
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "aimrt_module_ros2_interface/channel/ros2_channel.h"
 #include "std_msgs/msg/header.hpp"
@@ -129,9 +129,21 @@ bool Ros2ProxyModule::Initialize(aimrt::CoreRef core) {
 
 bool Ros2ProxyModule::Start() {
   try {
-    publish_executor_.Execute([this]() {
-      ctx_ptr_->LetMe();
-      PublishLoop();
+    const double period_ns = kNanoSecondsPerSecond / publish_frequency_;
+    AIMRT_CHECK_ERROR_THROW(period_ns >= 1 && period_ns < static_cast<double>(std::chrono::nanoseconds::max().count()),
+                            "publish_frequency outside timer range");
+    const auto period = std::chrono::nanoseconds(static_cast<std::chrono::nanoseconds::rep>(period_ns));
+    aimrt::executor::CreateTimer(publish_executor_, period, [this, ctx = ctx_ptr_](aimrt::executor::TimerBase& timer) {
+      if (!ctx->Running()) {
+        timer.Cancel();
+        return;
+      }
+      ctx->LetMe();
+      try {
+        PublishOnce();
+      } catch (const std::exception& e) {
+        AIMRT_ERROR("ROS2ProxyModule::PublishOnce failed: {}", e.what());
+      }
     });
   } catch (const std::exception& e) {
     AIMRT_ERROR("Start failed, {}", e.what());
@@ -178,21 +190,12 @@ void Ros2ProxyModule::AddPoseBridge(const std::string& sub_topic, const std::str
   pose_bridges_.push_back(std::move(bridge));
 }
 
-void Ros2ProxyModule::PublishLoop() {
-  const auto period = std::chrono::nanoseconds(
-      static_cast<int64_t>(1.0 / publish_frequency_ * 1e9));
-  auto next_loop_time = std::chrono::steady_clock::now();
-
-  while (ctx_ptr_->Running()) {
-    for (auto& bridge : joint_state_bridges_) {
-      PublishLatest(*bridge, mutex_, ToRosJointState);
-    }
-    for (auto& bridge : pose_bridges_) {
-      PublishLatest(*bridge, mutex_, ToRosPoseStamped);
-    }
-
-    next_loop_time += period;
-    std::this_thread::sleep_until(next_loop_time);
+void Ros2ProxyModule::PublishOnce() {
+  for (auto& bridge : joint_state_bridges_) {
+    PublishLatest(*bridge, mutex_, ToRosJointState);
+  }
+  for (auto& bridge : pose_bridges_) {
+    PublishLatest(*bridge, mutex_, ToRosPoseStamped);
   }
 }
 

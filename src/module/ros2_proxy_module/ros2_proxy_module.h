@@ -54,7 +54,7 @@ class Ros2ProxyModule : public aimrt::ModuleBase {
   void AddJointStateBridge(const std::string& sub_topic, const std::string& pub_topic);
   void AddPoseBridge(const std::string& sub_topic, const std::string& pub_topic);
 
-  void PublishLoop();
+  void PublishOnce();
 
   aimrt::CoreRef core_;
   std::shared_ptr<aimrt::context::Context> ctx_ptr_;
