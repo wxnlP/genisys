@@ -6,7 +6,7 @@
   </option>
 
   <visual>
-    <global realtime="1"/>
+    <global realtime="1" offwidth="1280" offheight="800"/>
     <quality shadowsize="16384" numslices="28" offsamples="4" />
     <headlight diffuse="1 1 1" specular="0.5 0.5 0.5" active="1" />
   </visual>
@@ -82,6 +82,7 @@
                     <inertial pos="-0.000668646627 0.014742944345 0.039069750043" mass="0.58636" fullinertia="0.001144557757 0.000607268913 0.001102219282 0.000000395633 -0.000008036936 0.000024856077"/>
                     <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_base_link_mat" type="mesh" mesh="gripper_base_link" />
                     <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_base_link" />
+                    <camera name="gemini305" mode="fixed" pos="0 0.0964 0.0660" xyaxes="-1 0 0  0 0.939693 0.342020" fovy="65" resolution="1280 800"/>
                     <body name="gripper_right_link" pos="0.009 -0.019 0.077" quat="0.70710678 0 0 0.70710678">
                       <joint name="gripper_right_joint" type="slide" axis="0 -1 0" limited="true" range="0 0.045" frictionloss="0.05" armature="0.001"/>
                       <inertial pos="1.84160000e-02 -5.43660000e-03 2.00140000e-02" mass="0.044239" fullinertia="1.30500000e-05 1.44680000e-05 6.49340000e-06 -2.69420000e-08 -1.23290000e-07 -1.06890000e-06"/>

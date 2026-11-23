@@ -92,7 +92,11 @@ aimrt:
       - name: work_executor
         type: asio_thread
         options:
-          thread_num: 5
+          thread_num: 4
+      - name: camera_executor
+        type: asio_thread
+        options:
+          thread_num: 3
       - name: control_executor
         type: asio_thread
         options:
@@ -135,6 +139,15 @@ aimrt:
         enable_filters: []
       - topic_name: "/genisys/task_context"
         enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/genisys/camera/color/image_raw"
+        enable_backends: [zenoh]
+        enable_filters: []
+      - topic_name: "/genisys/camera/depth/image_raw"
+        enable_backends: [zenoh]
+        enable_filters: []
+      - topic_name: "/genisys/camera/depth/camera_info"
+        enable_backends: [zenoh]
         enable_filters: []
     sub_topics_options:
       # 外部 servo 指令入口：从 zenoh 订阅
@@ -215,6 +228,17 @@ MujocoSimModule:
             bind_joint: wrist3_joint
           - name: geniarm_gripper
             bind_joint: gripper_right_joint
+  camera_options:
+    - type: camera_sensor
+      frequency: 30
+      executor: camera_executor
+      color_topic: /genisys/camera/color/image_raw
+      depth_topic: /genisys/camera/depth/image_raw
+      info_topic: /genisys/camera/depth/camera_info
+      options:
+        bind_camera: gemini305
+        width: 848
+        height: 530
 ControlModule:
   config_file: control_module/geniarm_body_sim_gripper_gravity_cfg.yaml
   topic_pub_joint_cmd: /genisys/joint_cmd
