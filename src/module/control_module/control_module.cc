@@ -2,11 +2,10 @@
 #include <fmt/ranges.h>  // 容器元素格式化
 #include <chrono>
 #include <ranges>
-#include <stdexcept>
 #include <thread>
+#include "aimrt_module_cpp_interface/executor/timer.h"
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "aimrt_module_ros2_interface/channel/ros2_channel.h"
-#include "aimrt_module_cpp_interface/executor/timer.h"
 #include "util/time_util.h"
 #include "yaml-cpp/yaml.h"
 
@@ -59,6 +58,11 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     pose_publish_executor_ = ctx_ptr_->CreateExecutor(pose_publish_executor_name_);
 
     task_publish_executor_ = ctx_ptr_->CreateExecutor(task_publish_executor_name_);
+
+    AIMRT_CHECK_ERROR_THROW(pose_publish_executor_.SupportTimerSchedule(),
+                            "'pose_publish_executor' do not support time schedule.");
+    AIMRT_CHECK_ERROR_THROW(task_publish_executor_.SupportTimerSchedule(),
+                            "'task_publish_executor' do not support time schedule.");
 
     pub_joint_cmd_ = ctx_ptr_->CreatePublisher<JointCommandArray>(topic_pub_joint_cmd_);
 
@@ -345,25 +349,24 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 bool ControlModule::Start() {
   try {
     aimrt::executor::CreateTimer(pose_publish_executor_, pose_publish_period_,
-        [this, ctx = ctx_ptr_, seq = uint64_t{0}, pose_warn = WarnThrottle{}, fk_warn = WarnThrottle{}]
-        (aimrt::executor::TimerBase& timer) mutable {
-          if (!ctx->Running()) {
-            timer.Cancel();
-            return;
-          }
-          ctx->LetMe();
-          PublishPoseOnce(seq, pose_warn, fk_warn);
-        });
+                                 [this, ctx = ctx_ptr_, seq = uint64_t{0}, pose_warn = WarnThrottle{}, fk_warn = WarnThrottle{}](aimrt::executor::TimerBase& timer) mutable {
+                                   if (!ctx->Running()) {
+                                     timer.Cancel();
+                                     return;
+                                   }
+                                   ctx->LetMe();
+                                   PublishPoseOnce(seq, pose_warn, fk_warn);
+                                 });
 
     aimrt::executor::CreateTimer(task_publish_executor_, task_publish_period_,
-        [this, ctx = ctx_ptr_](aimrt::executor::TimerBase& timer) {
-          if (!ctx->Running()) {
-            timer.Cancel();
-            return;
-          }
-          ctx->LetMe();
-          PublishTaskOnce();
-        });
+                                 [this, ctx = ctx_ptr_](aimrt::executor::TimerBase& timer) {
+                                   if (!ctx->Running()) {
+                                     timer.Cancel();
+                                     return;
+                                   }
+                                   ctx->LetMe();
+                                   PublishTaskOnce();
+                                 });
     cycle_control_executor_.Execute([this]() {
       ctx_ptr_->LetMe();
       ControlLoop();
@@ -648,7 +651,7 @@ void ControlModule::PublishPoseOnce(uint64_t& seq, WarnThrottle& pose_warn, Warn
 
   if (!ctx_ptr_->Running()) {
     final_pose_published_sig_.set_value();
-  } 
+  }
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {
@@ -804,7 +807,7 @@ void ControlModule::IKCheckHandler(aimrt::rpc::ContextRef ctx_ref,
       // -2: 没有通过限位的分支；
       result.status = genisys_msgs::srv::IKCheck_Response::NO_SOLUTION;
       result.solved = false;
-    } else if (ret == -3 ){
+    } else if (ret == -3) {
       // -3: 选中的解过不了 FK 反代
       result.status = genisys_msgs::srv::IKCheck_Response::FK_VERIFY_WARN;
       result.solved = false;

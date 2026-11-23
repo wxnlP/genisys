@@ -92,6 +92,8 @@ bool Ros2ProxyModule::Initialize(aimrt::CoreRef core) {
     AIMRT_CHECK_ERROR_THROW(publish_frequency_ > 0.0, "publish_frequency must be positive");
 
     publish_executor_ = ctx_ptr_->CreateExecutor(publish_executor_name_);
+    AIMRT_CHECK_ERROR_THROW(publish_executor_.SupportTimerSchedule(),
+                          "'publish_executor' do not support time schedule.");
 
     const auto bridges_node = cfg_node["bridges"];
     AIMRT_CHECK_ERROR_THROW(bridges_node && bridges_node.IsSequence(),
