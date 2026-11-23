@@ -38,7 +38,6 @@ cmake -B build \
     -DCMAKE_INSTALL_PREFIX=./build/install \
     -DAIMRT_BUILD_WITH_ROS2=ON \
     -DAIMRT_BUILD_WITH_PROTOBUF=ON \
-    -DAIMRT_BUILD_ROS2_PLUGIN=OFF \
     -DAIMRT_BUILD_PROTOCOLS=ON \
     -DAIMRT_BUILD_NET_PLUGIN=ON \
     -DAIMRT_BUILD_ZENOH_PLUGIN=ON \
@@ -48,7 +47,9 @@ cmake -B build \
     -DGENISYS_CORE_BUILD_EXAMPLES=ON \
     -DGENISYS_CORE_BUILD_ARM=geniarm \
     -DGENISYS_BUILD_MUJOCO_SIM=OFF \
+    -DGENISYS_BUILD_MUJOCO_ROS2=OFF \
+    -DGENISYS_BUILD_MUJOCO_CAMERA=OFF \
     -DGENISYS_BUILD_ROS2_PROXY=OFF \
-    $@
+    "$@"
 
 cmake --build build --config Release --target install --parallel $(nproc)
