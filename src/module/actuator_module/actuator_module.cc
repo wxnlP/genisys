@@ -2,7 +2,6 @@
 #include <fmt/ranges.h>  // 容器元素格式化
 #include <thread>
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
-#include "common/warn_throttle.h"
 #include "util/time_util.h"
 #include "yaml-cpp/yaml.h"
 
@@ -44,6 +43,7 @@ bool ActuatorModule::Initialize(aimrt::CoreRef core) {
     pub_executor_ = ctx_ptr_->CreateExecutor(pub_executor_name_);
 
     write_executor_ = ctx_ptr_->CreateExecutor(write_executor_name_);
+    AIMRT_CHECK_ERROR_THROW(write_executor_.ThreadSafe(), "Write executor must serialize commands");
 
     pub_joint_state_ = ctx_ptr_->CreatePublisher<JointStateArray>(topic_pub_joint_state_);
 
@@ -68,14 +68,10 @@ bool ActuatorModule::Start() {
     if (gripper_actuator_) {
       gripper_actuator_->Enable();
     }
-    
-    pub_executor_.Execute([this] () {
+
+    pub_executor_.Execute([this]() {
       ctx_ptr_->LetMe();
       PublishLoop();
-    });
-    write_executor_.Execute([this] () {
-      ctx_ptr_->LetMe();
-      WriteLoop();
     });
   } catch (const std::exception& e) {
     AIMRT_ERROR("Start failed, {}", e.what());
@@ -88,7 +84,11 @@ bool ActuatorModule::Start() {
 void ActuatorModule::Shutdown() {
   try {
     ctx_ptr_->StopRunning();
-    write_sem_.release();
+
+    std::packaged_task<void()> drained([] {});
+    auto drained_future = drained.get_future();
+    write_executor_.Execute(std::move(drained));
+    drained_future.get();
 
     // 失能各执行器
     if (arm_actuator_) {
@@ -124,7 +124,7 @@ void ActuatorModule::PublishLoop() {
     // 告警节流
     WarnThrottle arm_state_warn;
     WarnThrottle gripper_state_warn;
-    
+
     while (ctx_ptr_->Running()) {
       joint_state_msg.Clear();
       if (!arm_actuator_->GetJointState(joint_state)) {
@@ -185,45 +185,43 @@ void ActuatorModule::PublishLoop() {
   AIMRT_INFO("成功退出 ActuatorModule::PublishLoop");
 }
 
-void ActuatorModule::WriteLoop() {
+void ActuatorModule::WriteCommand(const JointCommandArray& msg) {
   try {
     ArmCtrlBase::JointCommand joint_cmd;
-    GripperCtrlBase::GripperCommand gripper_cmd;
-    WarnThrottle arm_tx_warn;
-    WarnThrottle gripper_tx_warn;
-    while (ctx_ptr_->Running()) {
-      if (!write_sem_.try_acquire_for(std::chrono::milliseconds(100))) {
-        continue;
+    for (int i = 0; i < 6; ++i) {
+      const auto& joint = msg.joints(i);
+      joint_cmd.position[i] = joint.position();
+      joint_cmd.velocity[i] = joint.velocity();
+      joint_cmd.effort[i] = joint.effort();
+      joint_cmd.stiffness[i] = joint.stiffness();
+      joint_cmd.damping[i] = joint.damping();
+    }
+    if (!arm_actuator_->SetJointState(joint_cmd)) {
+      if (arm_tx_warn_.ShouldLog(kWarnInterval)) {
+        AIMRT_WARN("关节指令下发失败（累计 {} 次）", arm_tx_warn_.count());
       }
-      if (!ctx_ptr_->Running()) {
-        break;
-      }
-      {
-        std::lock_guard<std::mutex> lock(cached_cmd_lock);
-        joint_cmd = cached_joint_cmd_;
-        gripper_cmd = cached_gripper_cmd_;
-      }
-      if (!arm_actuator_->SetJointState(joint_cmd)) {
-        if (arm_tx_warn.ShouldLog(kWarnInterval)) {
-          AIMRT_WARN("关节指令下发失败（累计 {} 次）", arm_tx_warn.count());
+    } else {
+      arm_tx_warn_.Reset();
+    }
+    if (gripper_actuator_) {
+      const auto& joint = msg.joints(6);
+      GripperCtrlBase::GripperCommand gripper_cmd;
+      gripper_cmd.position = joint.position();
+      gripper_cmd.velocity = joint.velocity();
+      gripper_cmd.effort = joint.effort();
+      gripper_cmd.stiffness = joint.stiffness();
+      gripper_cmd.damping = joint.damping();
+      if (!gripper_actuator_->SendCommand(gripper_cmd)) {
+        if (gripper_tx_warn_.ShouldLog(kWarnInterval)) {
+          AIMRT_WARN("夹爪指令下发失败（累计 {} 次）", gripper_tx_warn_.count());
         }
       } else {
-        arm_tx_warn.Reset();
-      }
-      if (gripper_actuator_) {
-        if (!gripper_actuator_->SendCommand(gripper_cmd)) {
-          if (gripper_tx_warn.ShouldLog(kWarnInterval)) {
-            AIMRT_WARN("夹爪指令下发失败（累计 {} 次）", gripper_tx_warn.count());
-          }
-        } else {
-          gripper_tx_warn.Reset();
-        }
+        gripper_tx_warn_.Reset();
       }
     }
   } catch (const std::exception& e) {
-    AIMRT_ERROR("ActuatorModule::WriteLoop crashed: {}", e.what());
+    AIMRT_ERROR("ActuatorModule::WriteCommand failed: {}", e.what());
   }
-  AIMRT_INFO("成功退出 ActuatorModule::WriteLoop");
 }
 
 void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandArray>& msg) {
@@ -232,32 +230,19 @@ void ActuatorModule::JointCmdCallback(const std::shared_ptr<const JointCommandAr
   }
   AIMRT_DEBUG("Received joint command message with {} joints.", msg->joints_size());
   int n = msg->joints_size();
-  if (n < 6) {
-    AIMRT_WARN("joint_cmd 关节数 {} < 6，丢弃", n);
+  const int required_joints = gripper_actuator_ ? 7 : 6;
+  if (n < required_joints) {
+    AIMRT_WARN("joint_cmd 关节数 {} < {}，丢弃", n, required_joints);
     return;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(cached_cmd_lock);
-
-    for (int i = 0; i < 6; ++i) {
-      cached_joint_cmd_.position[i] = msg->joints(i).position();
-      cached_joint_cmd_.velocity[i] = msg->joints(i).velocity();
-      cached_joint_cmd_.effort[i] = msg->joints(i).effort();
-      cached_joint_cmd_.stiffness[i] = msg->joints(i).stiffness();
-      cached_joint_cmd_.damping[i] = msg->joints(i).damping();
+  write_executor_.Execute([this, ctx = ctx_ptr_, msg] {
+    if (!ctx->Running()) {
+      return;
     }
-
-    if (gripper_actuator_ && n > 6) {
-      cached_gripper_cmd_.position = msg->joints(6).position();
-      cached_gripper_cmd_.velocity = msg->joints(6).velocity();
-      cached_gripper_cmd_.effort = msg->joints(6).effort();
-      cached_gripper_cmd_.stiffness = msg->joints(6).stiffness();
-      cached_gripper_cmd_.damping = msg->joints(6).damping();
-    }
-  }
-
-  write_sem_.release();
+    ctx->LetMe();
+    WriteCommand(*msg);
+  });
 }
 
 }  // namespace genisys::actuator_module

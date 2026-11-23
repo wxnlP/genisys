@@ -89,19 +89,25 @@ aimrt:
     executors:
       - name: gui_executor
         type: simple_thread
+      - name: sim_executor
+        type: asio_thread
       - name: work_executor
         type: asio_thread
         options:
-          thread_num: 5
+          thread_num: 1
+      - name: camera_executor
+        type: asio_thread
+        options:
+          thread_num: 1
       - name: control_executor
         type: asio_thread
         options:
           thread_bind_cpu: [7]
           thread_sched_policy: SCHED_FIFO:80
-      - name: pose_pub_executor
+      - name: publish_pool
         type: asio_thread
-      - name: task_pub_executor
-        type: asio_thread
+        options:
+          thread_num: 2
       - name: storage_executor
         type: asio_thread
         options:
@@ -173,7 +179,7 @@ aimrt:
 # Module custom configuration
 MujocoSimModule:
   simulation_model_path: ./cfg/model/geniarm_v1.1.5_high.xml
-  sim_executor: work_executor
+  sim_executor: sim_executor
   gui_executor: gui_executor
   subscriber_options:
     - topic: /genisys/joint_cmd
@@ -226,9 +232,9 @@ ControlModule:
   topic_sub_servoj_pose_cmd: /genisys/servoj_pose_cmd
   topic_sub_servol_cmd: /genisys/servol_cmd
   control_executor_name: control_executor
-  pose_publish_executor_name: pose_pub_executor
+  pose_publish_executor_name: publish_pool
   control_frequency: 500
-  pose_publish_frequency: 500
+  pose_publish_frequency: 100
   topic_pub_task_context: /genisys/task_context
-  task_publish_executor_name: task_pub_executor
+  task_publish_executor_name: publish_pool
   task_publish_frequency: 50

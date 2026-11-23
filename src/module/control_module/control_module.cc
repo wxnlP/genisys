@@ -1,12 +1,11 @@
 #include "control_module/control_module.h"
 #include <fmt/ranges.h>  // 容器元素格式化
 #include <chrono>
-#include <cmath>
 #include <ranges>
 #include <thread>
+#include "aimrt_module_cpp_interface/executor/timer.h"
 #include "aimrt_module_protobuf_interface/channel/protobuf_channel.h"
 #include "aimrt_module_ros2_interface/channel/ros2_channel.h"
-#include "common/warn_throttle.h"
 #include "util/time_util.h"
 #include "yaml-cpp/yaml.h"
 
@@ -34,8 +33,8 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
       topic_pub_tcp_pose_ = cfg_node["topic_pub_tcp_pose"].as<std::string>();
       topic_pub_flange_pose_ = cfg_node["topic_pub_flange_pose"].as<std::string>();
       control_frequency_ = cfg_node["control_frequency"].as<double>();
-      pose_publish_frequency_ = cfg_node["pose_publish_frequency"].as<double>();
-      task_publish_frequency_ = cfg_node["task_publish_frequency"].as<double>();
+      pose_publish_period_ = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / cfg_node["pose_publish_frequency"].as<double>() * 1000000000));
+      task_publish_period_ = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / cfg_node["task_publish_frequency"].as<double>() * 1000000000));
       topic_pub_task_context_ = cfg_node["topic_pub_task_context"].as<std::string>();
       task_publish_executor_name_ = cfg_node["task_publish_executor_name"].as<std::string>();
       topic_sub_servoj_cmd_ = cfg_node["topic_sub_servoj_cmd"].as<std::string>();
@@ -59,6 +58,11 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
     pose_publish_executor_ = ctx_ptr_->CreateExecutor(pose_publish_executor_name_);
 
     task_publish_executor_ = ctx_ptr_->CreateExecutor(task_publish_executor_name_);
+
+    AIMRT_CHECK_ERROR_THROW(pose_publish_executor_.SupportTimerSchedule(),
+                            "'pose_publish_executor' do not support time schedule.");
+    AIMRT_CHECK_ERROR_THROW(task_publish_executor_.SupportTimerSchedule(),
+                            "'task_publish_executor' do not support time schedule.");
 
     pub_joint_cmd_ = ctx_ptr_->CreatePublisher<JointCommandArray>(topic_pub_joint_cmd_);
 
@@ -344,20 +348,29 @@ bool ControlModule::Initialize(aimrt::CoreRef core) {
 
 bool ControlModule::Start() {
   try {
+    aimrt::executor::CreateTimer(pose_publish_executor_, pose_publish_period_,
+                                 [this, ctx = ctx_ptr_, seq = uint64_t{0}, pose_warn = WarnThrottle{}, fk_warn = WarnThrottle{}](aimrt::executor::TimerBase& timer) mutable {
+                                   const bool stopping = !ctx->Running();
+                                   if (stopping) timer.Cancel();
+                                   ctx->LetMe();
+                                   PublishPoseOnce(seq, pose_warn, fk_warn);
+                                   if (stopping) final_pose_published_sig_.set_value();
+                                 });
+
+    aimrt::executor::CreateTimer(task_publish_executor_, task_publish_period_,
+                                 [this, ctx = ctx_ptr_](aimrt::executor::TimerBase& timer) {
+                                   const bool stopping = !ctx->Running();
+                                   if (stopping) timer.Cancel();
+                                   ctx->LetMe();
+                                   PublishTaskOnce();
+                                   if (stopping) final_task_published_sig_.set_value();
+                                 });
     cycle_control_executor_.Execute([this]() {
       ctx_ptr_->LetMe();
       ControlLoop();
     });
-    pose_publish_executor_.Execute([this]() {
-      ctx_ptr_->LetMe();
-      PosePublishLoop();
-    });
-    task_publish_executor_.Execute([this]() {
-      ctx_ptr_->LetMe();
-      TaskPublishLoop();
-    });
-
   } catch (const std::exception& e) {
+    ctx_ptr_->StopRunning();
     AIMRT_ERROR("control_module Start failed, {}", e.what());
     return false;
   }
@@ -369,6 +382,9 @@ void ControlModule::Shutdown() {
   try {
     ctx_ptr_->StopRunning();
 
+    final_pose_published_sig_.get_future().wait();
+    final_task_published_sig_.get_future().wait();
+
     if (arm_controller_) {
       arm_controller_->StopSampleThread();
     }
@@ -378,60 +394,49 @@ void ControlModule::Shutdown() {
   AIMRT_INFO("control_module Shutdown succeeded.");
 }
 
-void ControlModule::TaskPublishLoop() {
+void ControlModule::PublishTaskOnce() {
   try {
-    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / task_publish_frequency_ * 1000000000));
-    auto next_loop_time = std::chrono::steady_clock::now();
-
     std::vector<ArmController::TaskContext> history;
     std::vector<ArmController::TaskContext> pending;
 
-    while (ctx_ptr_->Running()) {
-      pending.clear();
-
-      if (arm_controller_->GetHistoryTaskContext(history)) {
-        std::ranges::sort(history, {}, &ArmController::TaskContext::id);
-        for (const auto& ctx : history) {
-          if (ctx.id <= last_finished_task_id_) {
-            continue;
-          }
-          pending.push_back(ctx);
-          last_finished_task_id_ = ctx.id;
+    if (arm_controller_->GetHistoryTaskContext(history)) {
+      std::ranges::sort(history, {}, &ArmController::TaskContext::id);
+      for (const auto& ctx : history) {
+        if (ctx.id <= last_finished_task_id_) {
+          continue;
         }
+        pending.push_back(ctx);
+        last_finished_task_id_ = ctx.id;
       }
+    }
 
-      ArmController::TaskContext current;
-      if (arm_controller_->GetCurrentTaskContext(current) && current.id != last_running_task_id_) {
-        pending.push_back(current);
-        last_running_task_id_ = current.id;
-      }
+    ArmController::TaskContext current;
+    if (arm_controller_->GetCurrentTaskContext(current) && current.id != last_running_task_id_) {
+      pending.push_back(current);
+      last_running_task_id_ = current.id;
+    }
 
-      for (const auto& ctx : pending) {
-        auto time_ns = aimrt::common::util::GetCurTimestampNs();
+    for (const auto& ctx : pending) {
+      auto time_ns = aimrt::common::util::GetCurTimestampNs();
 
-        TaskContextMsg msg;
-        msg.header.stamp.sec = static_cast<int32_t>(time_ns / 1000000000);
-        msg.header.stamp.nanosec = static_cast<uint32_t>(time_ns % 1000000000);
-        msg.header.frame_id = "base_link";
-        msg.id = ctx.id;
-        msg.duration_ms = ctx.duration_ms;
-        const int64_t end_ns = ctx.end_timestamp.time_since_epoch().count();
-        msg.end_timestamp.sec = static_cast<int32_t>(end_ns / 1000000000);
-        msg.end_timestamp.nanosec = static_cast<uint32_t>(end_ns % 1000000000);
-        msg.state = static_cast<int8_t>(ctx.state);
-        msg.code = ctx.code;
+      TaskContextMsg msg;
+      msg.header.stamp.sec = static_cast<int32_t>(time_ns / 1000000000);
+      msg.header.stamp.nanosec = static_cast<uint32_t>(time_ns % 1000000000);
+      msg.header.frame_id = "base_link";
+      msg.id = ctx.id;
+      msg.duration_ms = ctx.duration_ms;
+      const int64_t end_ns = ctx.end_timestamp.time_since_epoch().count();
+      msg.end_timestamp.sec = static_cast<int32_t>(end_ns / 1000000000);
+      msg.end_timestamp.nanosec = static_cast<uint32_t>(end_ns % 1000000000);
+      msg.state = static_cast<int8_t>(ctx.state);
+      msg.code = ctx.code;
 
-        ctx_ptr_->LetMe();
-        pub_task_context_.Publish(msg);
-      }
-
-      next_loop_time += period;
-      std::this_thread::sleep_until(next_loop_time);
+      ctx_ptr_->LetMe();
+      pub_task_context_.Publish(msg);
     }
   } catch (const std::exception& e) {
-    AIMRT_ERROR("ControlModule::TaskPublishLoop crashed: {}", e.what());
+    AIMRT_ERROR("ControlModule::PublishTaskOnce failed: {}", e.what());
   }
-  AIMRT_INFO("成功退出 ControlModule::TaskPublishLoop");
 }
 
 void ControlModule::ControlLoop() {
@@ -452,8 +457,6 @@ void ControlModule::ControlLoop() {
 
     // 周期计时统计
     uint64_t dbg_cycle = 0;
-    int64_t cycle_max_us = 0;
-    int64_t get_cmd_sum_us = 0, build_msg_sum_us = 0, publish_sum_us = 0;
 
     while (ctx_ptr_->Running()) {
       auto t_start = std::chrono::steady_clock::now();
@@ -467,26 +470,29 @@ void ControlModule::ControlLoop() {
       header->set_frame_id("base_link");
       header->set_sequence_num(seq_count++);
 
-      {
+      if (arm_controller_->GetJointCommand(joint_cmd)) {
         std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
-        if (!arm_controller_->GetJointCommand(joint_cmd)) {
-          // 无规划轨迹 — 复用上一帧指令保持
-          if (last_arm_cmd_.has_value()) {
+        last_arm_cmd_ = joint_cmd;
+      } else {
+        bool has_cached_cmd;
+        {
+          std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
+          has_cached_cmd = last_arm_cmd_.has_value();
+          if (has_cached_cmd) {
             joint_cmd = *last_arm_cmd_;
-          } else {
-            ArmMotion::Joint6Dof current_joint;
-            if (arm_controller_->GetCurrentJoint(current_joint) != 0) {
-              next_loop_time += period;
-              std::this_thread::sleep_until(next_loop_time);
-              continue;
-            }
-            joint_cmd.position = current_joint;
-            joint_cmd.velocity = ArmMotion::Joint6Dof{};
-            joint_cmd.effort = ArmMotion::Joint6Dof{};
-            last_arm_cmd_ = joint_cmd;
           }
-        } else {
-          // 记录上一次指令
+        }
+        if (!has_cached_cmd) {
+          ArmMotion::Joint6Dof current_joint;
+          if (arm_controller_->GetCurrentJoint(current_joint) != 0) {
+            next_loop_time += period;
+            std::this_thread::sleep_until(next_loop_time);
+            continue;
+          }
+          joint_cmd.position = current_joint;
+          joint_cmd.velocity = ArmMotion::Joint6Dof{};
+          joint_cmd.effort = ArmMotion::Joint6Dof{};
+          std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
           last_arm_cmd_ = joint_cmd;
         }
       }
@@ -571,26 +577,12 @@ void ControlModule::ControlLoop() {
   AIMRT_INFO("成功退出 ControlModule::ControlLoop");
 }
 
-void ControlModule::PosePublishLoop() {
+void ControlModule::PublishPoseOnce(uint64_t& seq, WarnThrottle& pose_warn, WarnThrottle& fk_warn) {
   try {
-    // 计算周期
-    auto period = std::chrono::nanoseconds(static_cast<uint64_t>(1.0 / pose_publish_frequency_ * 1000000000));
-    // 记录下一次循环时间
-    auto next_loop_time = std::chrono::steady_clock::now();
-    // 序列
-    uint64_t seq_count = 0;
-
-    Pose tcp_pose_expected_msg;
-    Pose tcp_pose_msg;
-    Pose flange_pose_msg;
     EndEffectorPoses end_effector_poses;
     ArmMotion::Joint6Dof joint_pos_cmd;
     ArmMotion::Pose6Dof tcp_pose_expected;
-    // 告警节流
-    WarnThrottle pose_warn;
-    WarnThrottle fk_warn;
-
-    auto fill_pose_msg = [this](Pose& msg, const ArmMotion::Pose6Dof& source_pose, uint64_t& seq, const auto& time_ns) {
+    auto fill_pose_msg = [](Pose& msg, const ArmMotion::Pose6Dof& source_pose, uint64_t& seq, const auto& time_ns) {
       auto* header = msg.mutable_header();
       header->set_time_stamp(time_ns);
       header->set_frame_id("base_link");
@@ -610,57 +602,46 @@ void ControlModule::PosePublishLoop() {
       pos->set_z(source_pose.z);
     };
 
-    while (ctx_ptr_->Running()) {
-      // 获取期望和当前笛卡尔位姿
-      if (arm_controller_->GetEndEffectorPoses(end_effector_poses) != 0) {
-        if (pose_warn.ShouldLog(kWarnInterval)) {
-          AIMRT_WARN("读取机械臂位姿失败（累计 {} 次）", pose_warn.count());
-        }
-        next_loop_time += period;
-        std::this_thread::sleep_until(next_loop_time);
-        continue;
+    // 获取期望和当前笛卡尔位姿
+    if (arm_controller_->GetEndEffectorPoses(end_effector_poses) != 0) {
+      if (pose_warn.ShouldLog(kWarnInterval)) {
+        AIMRT_WARN("读取机械臂位姿失败（累计 {} 次）", pose_warn.count());
       }
-      pose_warn.Reset();
-      {
-        std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
-        if (last_arm_cmd_.has_value()) {
-          joint_pos_cmd = last_arm_cmd_->position;
-        }
-      }
-      if (arm_controller_->JointToTCPPose(joint_pos_cmd, tcp_pose_expected) != 0) {
-        if (fk_warn.ShouldLog(kWarnInterval)) {
-          AIMRT_WARN("期望位姿正解失败（累计 {} 次）", fk_warn.count());
-        }
-        next_loop_time += period;
-        std::this_thread::sleep_until(next_loop_time);
-        continue;
-      }
-      fk_warn.Reset();
-
-      // 打包msg
-      tcp_pose_expected_msg.Clear();
-      tcp_pose_msg.Clear();
-      flange_pose_msg.Clear();
-
-      // header 时间戳统一为 system_clock
-      auto time_ns = aimrt::common::util::GetCurTimestampNs();
-
-      fill_pose_msg(tcp_pose_expected_msg, tcp_pose_expected, seq_count, time_ns);
-      fill_pose_msg(tcp_pose_msg, end_effector_poses.tcp, seq_count, time_ns);
-      fill_pose_msg(flange_pose_msg, end_effector_poses.flange, seq_count, time_ns);
-
-      ctx_ptr_->LetMe();
-      pub_tcp_pose_expected_.Publish(tcp_pose_expected_msg);
-      pub_tcp_pose_.Publish(tcp_pose_msg);
-      pub_flange_pose_.Publish(flange_pose_msg);
-
-      next_loop_time += period;
-      std::this_thread::sleep_until(next_loop_time);
+      return;
     }
+    pose_warn.Reset();
+    {
+      std::lock_guard<std::mutex> lock(last_arm_cmd_mutex_);
+      if (!last_arm_cmd_) return;
+      joint_pos_cmd = last_arm_cmd_->position;
+    }
+    if (arm_controller_->JointToTCPPose(joint_pos_cmd, tcp_pose_expected) != 0) {
+      if (fk_warn.ShouldLog(kWarnInterval)) {
+        AIMRT_WARN("期望位姿正解失败（累计 {} 次）", fk_warn.count());
+      }
+      return;
+    }
+    fk_warn.Reset();
+
+    // 打包msg
+    Pose tcp_pose_expected_msg;
+    Pose tcp_pose_msg;
+    Pose flange_pose_msg;
+
+    // header 时间戳统一为 system_clock
+    auto time_ns = aimrt::common::util::GetCurTimestampNs();
+
+    fill_pose_msg(tcp_pose_expected_msg, tcp_pose_expected, seq, time_ns);
+    fill_pose_msg(tcp_pose_msg, end_effector_poses.tcp, seq, time_ns);
+    fill_pose_msg(flange_pose_msg, end_effector_poses.flange, seq, time_ns);
+
+    ctx_ptr_->LetMe();
+    pub_tcp_pose_expected_.Publish(tcp_pose_expected_msg);
+    pub_tcp_pose_.Publish(tcp_pose_msg);
+    pub_flange_pose_.Publish(flange_pose_msg);
   } catch (const std::exception& e) {
-    AIMRT_ERROR("ControlModule::PosePublishLoop crashed: {}", e.what());
+    AIMRT_ERROR("ControlModule::PublishPoseOnce failed: {}", e.what());
   }
-  AIMRT_INFO("成功退出 ControlModule::PosePublishLoop");
 }
 
 void ControlModule::JointStateCallback(const std::shared_ptr<const JointStateArray>& msg) {
@@ -816,7 +797,7 @@ void ControlModule::IKCheckHandler(aimrt::rpc::ContextRef ctx_ref,
       // -2: 没有通过限位的分支；
       result.status = genisys_msgs::srv::IKCheck_Response::NO_SOLUTION;
       result.solved = false;
-    } else if (ret == -3 ){
+    } else if (ret == -3) {
       // -3: 选中的解过不了 FK 反代
       result.status = genisys_msgs::srv::IKCheck_Response::FK_VERIFY_WARN;
       result.solved = false;

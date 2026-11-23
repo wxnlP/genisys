@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <future>
 #include <mutex>
@@ -10,6 +11,7 @@
 #include "aimrt_module_cpp_interface/context/context.h"
 #include "aimrt_module_cpp_interface/module_base.h"
 #include "arm_manager.h"
+#include "common/warn_throttle.h"
 #include "joint_command.pb.h"
 #include "joint_state.pb.h"
 #include "pose.pb.h"
@@ -57,8 +59,8 @@ class ControlModule : public aimrt::ModuleBase {
 
   auto GetLogger() { return core_.GetLogger(); }
   void ControlLoop();
-  void PosePublishLoop();
-  void TaskPublishLoop();
+  void PublishPoseOnce(uint64_t& seq, WarnThrottle& pose_warn, WarnThrottle& fk_warn);
+  void PublishTaskOnce();
   void JointStateCallback(const std::shared_ptr<const JointStateArray>& msg);
   void ServoJCommandCallback(const std::shared_ptr<const ServoJCommand>& msg);
   void ServoJPoseCommandCallback(const std::shared_ptr<const ServoJPoseCommand>& msg);
@@ -99,8 +101,8 @@ class ControlModule : public aimrt::ModuleBase {
   std::string pose_publish_executor_name_;
   std::string task_publish_executor_name_;
   double control_frequency_;
-  double pose_publish_frequency_;
-  double task_publish_frequency_;
+  std::chrono::nanoseconds pose_publish_period_{};
+  std::chrono::nanoseconds task_publish_period_{};
   std::vector<std::string> joint_names_;
 
   uint64_t last_running_task_id_{0};
@@ -114,6 +116,9 @@ class ControlModule : public aimrt::ModuleBase {
   std::mutex last_arm_cmd_mutex_;
   std::optional<ArmMotion::JointCommand> last_arm_cmd_;
   std::optional<GripperController::GripperCommand> last_gripper_cmd_;
+
+  std::promise<void> final_pose_published_sig_;
+  std::promise<void> final_task_published_sig_;
 };
 
 }  // namespace genisys::control_module
