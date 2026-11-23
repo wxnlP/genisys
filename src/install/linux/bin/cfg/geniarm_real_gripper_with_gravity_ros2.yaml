@@ -154,7 +154,7 @@ aimrt:
         enable_backends: [local, zenoh]
         enable_filters: []
       - topic_name: "/genisys/task_context"
-        enable_backends: [local, zenoh]
+        enable_backends: [local, ros2]
         enable_filters: []
       # 对外 ROS2 话题（ROS2ProxyModule 发布）：只走 ros2
       - topic_name: "/joint_states"
