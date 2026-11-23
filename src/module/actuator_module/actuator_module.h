@@ -1,10 +1,11 @@
 #pragma once
 
-#include <mutex>
-#include <semaphore>
+#include <memory>
 #include <string>
 #include <vector>
+#include <future>
 #include "actuator_manager.h"
+#include "common/warn_throttle.h"
 #include "aimrt_module_cpp_interface/context/context.h"
 #include "aimrt_module_cpp_interface/module_base.h"
 #include "joint_command.pb.h"
@@ -33,7 +34,7 @@ class ActuatorModule : public aimrt::ModuleBase {
  private:
   auto GetLogger() { return core_.GetLogger(); }
   void PublishLoop();
-  void WriteLoop();
+  void WriteCommand(const JointCommandArray& msg);
   void JointCmdCallback(const std::shared_ptr<const JointCommandArray>& msg);
 
  private:
@@ -44,8 +45,8 @@ class ActuatorModule : public aimrt::ModuleBase {
   aimrt::executor::ExecutorRef pub_executor_;
   aimrt::executor::ExecutorRef write_executor_;
 
-  std::binary_semaphore write_sem_{0};
-  std::mutex cached_cmd_lock;
+  WarnThrottle arm_tx_warn_;
+  WarnThrottle gripper_tx_warn_;
 
   std::string topic_sub_joint_cmd_;
   std::string topic_pub_joint_state_;
@@ -54,13 +55,12 @@ class ActuatorModule : public aimrt::ModuleBase {
   double publish_frequecy_;
   std::vector<std::string> joint_names_;
 
+  std::promise<void> final_write_scheduled_sig_;
+
   /* SDK Interfaces */
   std::shared_ptr<ActuatorManager> actuator_manager_;
   std::shared_ptr<ArmCtrlBase> arm_actuator_;
   std::shared_ptr<GripperCtrlBase> gripper_actuator_;
-
-  ArmCtrlBase::JointCommand cached_joint_cmd_;
-  GripperCtrlBase::GripperCommand cached_gripper_cmd_;
 };
 
 }  // namespace genisys::actuator_module
