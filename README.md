@@ -1,16 +1,17 @@
-# Genisys —— 基于 AimRT 的六轴机械臂控制系统
+# **Genisys** —— 基于 AimRT 的六轴机械臂控制系统
 
 ## 项目简介
 
 本项目是一套基于 **AimRT** 框架的六自由度协作机械臂实时控制系统，支持本体 + 夹爪一体式控制。系统提供基础的通信和算法能力，配合 **ArmMonitor** 可视化工具做轨迹调试和录制。
 
-系统同时原生兼容 **ROS2**：内置的 `ROS2ProxyModule` 把内部 protobuf 话题桥接为标准 ROS2 Message 话题，RPC 也通过 `ros2` 后端暴露为 ROS2 服务。也就是说，ROS2 节点不需要任何适配，直接用 `ros2 topic` / `ros2 service` 就能和 genisys 通信，rviz2、MoveIt2 等生态工具可直接接入。详见 [ROS2ProxyModule](#ros2proxymodule)。
-
-> [genisys文档](https://tonmoon.top/genisys/index.html)
+系统同时原生兼容 **ROS2**：内置的 `ROS2ProxyModule` 把内部 protobuf 话题桥接为标准 ROS2 Message 话题，RPC 也通过 `ros2` 后端暴露为 ROS2 服务。ROS2 节点可以直接用 `ros2 topic` / `ros2 service` 与 genisys 通信，rviz2、MoveIt2 等生态工具可直接接入。详见 [ROS2ProxyModule](#ros2proxymodule)。
 
 > [!WARNING]
 > 当前仓库仍在持续迭代，接口尚未完全稳定，后续可能会引入不兼容的破坏性更新。
-> 如果你希望将自己的机械臂接入本控制程序，欢迎通过 GitHub Issue 留言或发送邮件至 2661006892@qq.com 咨询。
+> 如果你希望将自己的机械臂接入本控制程序或了解使用方法，欢迎通过 GitHub Issue 留言或发送邮件至 2661006892@qq.com 咨询。
+>
+> - [genisys架构](https://tonmoon.top/genisys/index.html)
+> - [更新日志](CHANGELOG.md)
 
 ### 支持的机械臂构型
 
@@ -110,7 +111,24 @@ echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-re
 ./build.sh
 ```
 
+### CMake Options
+
+genisys 提供上层封装的 CMake Option 切换底层所需的插件，用户无需自己去管理 AimRT/AimRTMujocoSim 的 CMake Option。
+
+| CMake Option 名称             | 类型   | 默认值  | 作用                                                 |
+| ----------------------------- | ------ | ------- | ---------------------------------------------------- |
+| `GENISYS_CORE_BUILD_EXAMPLES` | BOOL   | ON      | 是否编译 genisis-core 的 example，含电机标零         |
+| `GENISYS_CORE_BUILD_ARM`      | STRING | geniarm | 选择 genisis-core 中适配的机械臂，目前仅支持 geniarm |
+| `GENISYS_BUILD_MUJOCO_SIM`    | BOOL   | OFF     | 是否编译 MujocoSim 仿真模块                          |
+| `GENISYS_BUILD_MUJOCO_ROS2`   | BOOL   | OFF     | 是否编译 MujocoSim 仿真模块的 ROS Message 支持       |
+| `GENISYS_BUILD_MUJOCO_CAMERA` | BOOL   | OFF     | 是否编译 MujocoSim 仿真模块的相机支持                |
+| `GENISYS_BUILD_ROS2_PROXY`    | BOOL   | OFF     | 是否编译 genisys 提供的 ROS2Proxy 桥接模块           |
+
 ### 运行
+
+genisys 默认提供 6 个配置文件，其中含夹爪的仿真文件是支持相机的，因此需要设置`GENISYS_BUILD_MUJOCO_CAMERA=ON`；带 ros2 后缀的仿真文件需要设置`GENISYS_BUILD_MUJOCO_ROS2=ON`；如果想要体验完整的 ros2 生态，需要设置`GENISYS_BUILD_ROS2_PROXY=ON`。
+
+因此，在运行对应配置文件时，需要简单`build.sh`中相关功能的 CMake Option 是否打开，然后重新编译。
 
 ```bash
 # 交互式选择配置文件
@@ -122,10 +140,6 @@ echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-re
 ./pkg_start.sh geniarm_sim_gripper_with_gravity.yaml        # 仿真 + 夹爪
 ./pkg_start.sh geniarm_sim_gripper_with_gravity_ros2.yaml   # 仿真 + 夹爪 + ROS2 桥接
 ```
-
-> 切换机械臂构型需替换 yaml 配置文件。
-
----
 
 ## 模块说明
 
@@ -154,15 +168,15 @@ echo "$(id -un)   -   rtprio   90" | sudo tee /etc/security/limits.d/99-robot-re
 | `GeniArmCtrl` | 六轴机械臂控制器 (CANFD) |
 | `GeniArmGripper` | 夹爪控制器 (CANFD) |
 
-### SimModule
+### MujocoSimModule
 
-基于 **MuJoCo** 物理引擎的仿真环境，可在无硬件条件下离线验证控制算法。当前提供 GeniArm 仿真配置，替换 yaml 配置即可仿真其他构型。
+MujocoSimModule 使用 AimRT 官方提供的仿真组件[aimrt_mujoco_sim](https://github.com/AimRT/aimrt_mujoco_sim)，但官方未提供相机支持，因此 genisys 使用自开发 [camera_feat ](https://github.com/wxnlP/aimrt_mujoco_sim/tree/wxnlP/camera_feat) 分支，目前版本 tag 为 `v1.0.2-camera.1`。
+
+仿真配置与使用详见 [aimrt_mujoco_sim 文档](https://github.com/wxnlP/aimrt_mujoco_sim/blob/main/document/index.md)。
 
 ### ROS2ProxyModule
 
-AimRT 的 `ros2_plugin` 本身就兼容 ROS2：srv、servo 这类接口可以纯 ROS2 直达 ControlModule，不需要额外组件。而 Channel 内部话题使用 protobuf，ROS2 生态无法直接消费（否则要写 `RosMsgWrapper.msg` 之类的转义包装）——ROS2ProxyModule 补的就是这一环：把内部 `pb` 话题转成标准 ROS2 消息并按 100Hz 发布；RPC 则由 `ros2` 后端直接暴露成 ROS2 服务，不经过 Proxy。
-
-ROS2 节点可以直接订阅这些标准话题、调用服务；rviz2 可用 JointState / PoseStamped 显示状态与位姿。完整 MoveIt2 控制还需使用方配置 robot_description / controller 接口。
+AimRT 的 `ros2_plugin` 提供了 ROS2 后端以兼容 ROS 生态，但对于 protobuf 协议需要使用 `RosMsgWrapper.msg` 转义。因此，ROS2ProxyModule 作为一个单独的 AimRT Module 负责将 genisys 的 protobuf 协议转为标准 ROS2 后端 + ROS Message，ROS2 节点可以直接订阅话题、调用服务。
 
 话题映射：
 
@@ -173,12 +187,10 @@ ROS2 节点可以直接订阅这些标准话题、调用服务；rviz2 可用 Jo
 | `/genisys/flange_pose` | `/flange_pose` | `geometry_msgs/msg/PoseStamped` |
 | `/genisys/tcp_pose_expected` | `/tcp_pose_expected`（默认 `enable: false`） | `geometry_msgs/msg/PoseStamped` |
 
-- 服务：`genisys_msgs` 的 9 个 srv 以 `/genisys/srv/<方法>` 出现在 ROS2 服务侧，和 HTTP RPC 并存、两个后端都能调。
-- 频率：内部状态 500Hz，桥接后按 `publish_frequency`（默认 100Hz）进 DDS。
+- 服务：`genisys_msgs` 的 9 个 srv 以 `/genisys/srv/<方法>` 出现在 ROS2 服务侧；
+- 频率：内部状态 500Hz，桥接后按 `publish_frequency`（默认 100Hz）进 DDS；
 
-⚠：ROS2ProxyModule 依赖 AimRT 的 [ros2_plugin](https://docs.aimrt.org/tutorials/plugins/ros2_plugin.html) ，因此使用前需要做如下配置：
-
-- 在`build.sh`中设置`-DGENISYS_BUILD_ROS2_PROXY=ON`；
+- 配置：ROS2ProxyModule 依赖 AimRT 的 [ros2_plugin](https://docs.aimrt.org/tutorials/plugins/ros2_plugin.html) ，因此需要在`build.sh`中设置`GENISYS_BUILD_ROS2_PROXY=ON`。
 
 genisys 提供仿真和真机两种配置文件使用 ROS2ProxyModule：
 
@@ -262,11 +274,11 @@ python -m monitor.main
 
 | Topic | 消息类型 | 说明 |
 |:---|:---|:---|
-| `/genisys/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` (protobuf) | 关节控制指令 (MIT) |
-| `/genisys/joint_state` | `aimrt.protocols.sensor.JointStateArray` (protobuf) | 关节状态反馈 |
-| `/genisys/tcp_pose_expected` | `genisys.protocols.PoseStamped` (protobuf) | **期望 TCP 位姿** |
-| `/genisys/tcp_pose` | `genisys.protocols.PoseStamped` (protobuf) | **当前 TCP 位姿** |
-| `/genisys/flange_pose` | `genisys.protocols.PoseStamped` (protobuf) | **当前法兰位姿** |
+| `/genisys/joint_cmd` | `aimrt.protocols.sensor.JointCommandArray` (Protobuf) | 关节控制指令 (MIT) |
+| `/genisys/joint_state` | `aimrt.protocols.sensor.JointStateArray` (Protobuf) | 关节状态反馈 |
+| `/genisys/tcp_pose_expected` | `genisys.protocols.PoseStamped` (Protobuf) | 期望 TCP 位姿 |
+| `/genisys/tcp_pose` | `genisys.protocols.PoseStamped` (Protobuf) | 当前 TCP 位姿 |
+| `/genisys/flange_pose` | `genisys.protocols.PoseStamped` (Protobuf) | 当前法兰位姿 |
 | `/genisys/servoj_cmd` | `genisys_msgs/msg/ServoJCommand` (ROS2 Message) | 关节空间伺服指令 |
 | `/genisys/servoj_pose_cmd` | `genisys_msgs/msg/ServoJPoseCommand` (ROS2 Message) | 笛卡尔位姿伺服指令 |
 | `/genisys/servol_cmd` | `genisys_msgs/msg/ServoLCommand` (ROS2 Message) | 笛卡尔直线伺服指令 |
@@ -327,7 +339,7 @@ python -m monitor.main
 | `Go Home` | [`examples/go_home.py`](examples/go_home.py) | 一键回原点 (`MoveJ`) |
 | `GripperPos / GripperForce` | [`examples/gripper_demo.py`](examples/gripper_demo.py) | 夹爪测试：`--pos pos v a e` 位置控制，`--force target switch v a release` 力控抓取 |
 
-依赖: `pip install requests`
+依赖：`pip install requests`
 
 ```bash
 # 启动控制系统后，在另一个终端运行
