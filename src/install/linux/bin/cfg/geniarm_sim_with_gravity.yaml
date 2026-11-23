@@ -90,7 +90,7 @@ aimrt:
       - name: gui_executor
         type: simple_thread
       - name: sim_executor
-        type: simple_thread
+        type: asio_thread
       - name: work_executor
         type: asio_thread
         options:
