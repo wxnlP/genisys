@@ -1,0 +1,358 @@
+aimrt:
+  log:
+    core_lvl: INFO # Trace/Debug/Info/Warn/Error/Fatal/Off
+    backends:
+      - type: console
+      - type: rotate_file # 文件
+        options:
+          path: ./log
+          filename: geniarm_sim.log
+          max_file_size_m: 4
+          max_file_num: 10
+  module:
+    pkgs:
+      - path: ./libarm_control_pkg.so
+        disable_modules: ['ActuatorModule']
+      - path: ./libmujoco_sim_pkg.so # 官方仿真组件
+        disable_modules: []
+      - path: ./libros2_proxy_pkg.so
+        disable_modules: []
+    modules:
+      - name: MujocoSimModule # 官方仿真组件
+        log_lvl: INFO
+      - name: ControlModule
+        log_lvl: INFO
+      - name: ROS2ProxyModule
+        log_lvl: INFO
+  plugin:
+    plugins:
+      - name: ros2_plugin
+        path: ./libaimrt_ros2_plugin.so
+        options:
+          node_name: genisys
+          executor_type: MultiThreaded
+          executor_thread_num: 2
+          auto_initialize_logging: false  # 避免依赖可写的 ~/.ros/log
+      # - name: echo_plugin
+      #   path: ./libaimrt_echo_plugin.so
+      #   options:
+      #     type_support_pkgs:
+      #       - path: ./libactuator_pb_ts.so
+      #     topic_meta_list:
+      #       - topic_name: /genisys/joint_cmd
+      #         msg_type: pb:aimrt.protocols.sensor.JointCommandArray
+      #         echo_type: json
+      - name: net_plugin
+        path: ./libaimrt_net_plugin.so
+        options:
+          thread_num: 2
+          http_options:
+            listen_ip: 127.0.0.1
+            listen_port: 50080
+      - name: zenoh_plugin
+        path: ./libaimrt_zenoh_plugin.so
+        options:
+          native_cfg_path: ./cfg/zenoh_native_config_sim.json5
+      - name: record_playback_plugin
+        path: ./libaimrt_record_playback_plugin.so
+        options:
+          timer_executor: storage_executor
+          type_support_pkgs:
+            - path: ./libsensor_pb_ts.so
+          record_actions:
+            - name: record_joint_state
+              options:
+                bag_path: ./bag
+                mode: signal
+                max_preparation_duration_s: 10
+                executor: record_thread
+                storage_policy:
+                  max_bag_size_m: 2048            # MB
+                  msg_write_interval: 1000        # message count period
+                  msg_write_interval_time: 1000   # ms
+                  compression_mode: zstd          # comression mode
+                  compression_level: default      # comression level
+                extra_attributes:
+                  platform: x86_64
+                  os: ubuntu-22.04
+                topic_meta_list:
+                  - topic_name: /genisys/joint_state
+                    msg_type: pb:aimrt.protocols.sensor.JointStateArray
+                    serialization_type: pb 
+                    record_enabled: true
+                    sample_freq: 0
+      # - name: opentelemetry_plugin
+      #   path: ./libaimrt_opentelemetry_plugin.so
+      #   options:
+      #     node_name: genisys_node
+      #     trace_otlp_http_exporter_url: http://localhost:4318/v1/traces
+      #     force_trace: true
+      #     attributes:
+      #       - key: sn
+      #         val: wxnlP
+  executor:
+    executors:
+      - name: gui_executor
+        type: simple_thread
+      - name: sim_executor
+        type: asio_thread
+      - name: work_executor
+        type: asio_thread
+        options:
+          thread_num: 1
+      - name: camera_executor
+        type: asio_thread
+        options:
+          thread_num: 1
+      - name: control_executor
+        type: asio_thread
+        options:
+          thread_bind_cpu: [7]
+          thread_sched_policy: SCHED_FIFO:80
+      - name: publish_pool
+        type: asio_thread
+        options:
+          thread_num: 2
+      - name: storage_executor
+        type: asio_thread
+        options:
+          thread_num: 2
+      - name: record_thread
+        type: simple_thread
+  channel:
+    backends:
+      - type: local # 官方支持local后端
+      - type: zenoh
+        options:
+          pub_topics_options:
+            - topic_name: "(.*)"
+              shm_enabled: false
+      - type: ros2
+        options:
+          pub_topics_options:
+            - topic_name: "(.*)"
+              use_serialized: false
+              qos:
+                history: keep_last
+                depth: 1
+                reliability: best_effort
+                durability: volatile
+                lifespan: -1
+                deadline: -1
+                liveliness: automatic
+                liveliness_lease_duration: -1
+          sub_topics_options:
+            - topic_name: "(.*)"
+              use_serialized: false
+              qos:
+                history: keep_last
+                depth: 10
+                reliability: reliable
+                durability: volatile
+                lifespan: -1
+                deadline: -1
+                liveliness: automatic
+                liveliness_lease_duration: -1
+    pub_topics_options:
+      # 内部话题（ControlModule / MujocoSimModule 之间）：local + zenoh
+      - topic_name: "/genisys/joint_cmd"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/genisys/joint_state"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/genisys/tcp_pose"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/genisys/tcp_pose_expected"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/genisys/flange_pose"
+        enable_backends: [local, zenoh]
+        enable_filters: []
+      - topic_name: "/genisys/task_context"
+        enable_backends: [local, ros2]
+        enable_filters: []
+      - topic_name: "/genisys/camera/color/image_raw"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/genisys/camera/depth/image_raw"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/genisys/camera/depth/camera_info"
+        enable_backends: [ros2]
+        enable_filters: []
+      # 对外 ROS2 话题（ROS2ProxyModule 发布）：只走 ros2
+      - topic_name: "/joint_states"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/tcp_pose"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/tcp_pose_expected"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/flange_pose"
+        enable_backends: [ros2]
+        enable_filters: []
+    sub_topics_options:
+      # 外部 servo 指令入口：从 ROS2 订阅
+      - topic_name: "/genisys/servoj_cmd"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/genisys/servoj_pose_cmd"
+        enable_backends: [ros2]
+        enable_filters: []
+      - topic_name: "/genisys/servol_cmd"
+        enable_backends: [ros2]
+        enable_filters: []
+      # 进程内话题（ControlModule / MujocoSimModule / ROS2ProxyModule 互订）：local
+      - topic_name: "/genisys/joint_cmd"
+        enable_backends: [local]
+        enable_filters: []
+      - topic_name: "/genisys/joint_state"
+        enable_backends: [local]
+        enable_filters: []
+      - topic_name: "/genisys/tcp_pose"
+        enable_backends: [local]
+        enable_filters: []
+      - topic_name: "/genisys/tcp_pose_expected"
+        enable_backends: [local]
+        enable_filters: []
+      - topic_name: "/genisys/flange_pose"
+        enable_backends: [local]
+        enable_filters: []
+  rpc:
+    backends:
+      - type: http
+      - type: ros2
+        options:
+          clients_options:
+            - func_name: "(.*)/(.*)/(.*)/(.*)"
+              qos:
+                history: keep_last
+                depth: 10
+                reliability: reliable
+                durability: volatile
+                lifespan: -1
+                deadline: -1
+                liveliness: automatic
+                liveliness_lease_duration: -1
+              remapping_rule: "/genisys/srv/{4}"
+          servers_options:
+            - func_name: "(.*)/(.*)/(.*)/(.*)"
+              qos:
+                history: keep_last
+                depth: 10
+                reliability: reliable
+                durability: volatile
+                lifespan: -1
+                deadline: -1
+                liveliness: automatic
+                liveliness_lease_duration: -1
+              remapping_rule: "/genisys/srv/{4}"
+    clients_options:
+      - func_name: "(.*)"
+        enable_backends: []
+        enable_filters: []
+    servers_options:
+      - func_name: ".*record_playback_plugin.*"
+        enable_backends: [http]
+        enable_filters: []
+      - func_name: "(.*)"
+        enable_backends: [http, ros2]
+        enable_filters: []
+
+# Module custom configuration
+MujocoSimModule:
+  simulation_model_path: ./cfg/model/geniarm_v1.1.5_pitaya_row.xml
+  sim_executor: sim_executor
+  gui_executor: gui_executor
+  subscriber_options:
+    - topic: /genisys/joint_cmd
+      type: joint_actuator
+      options:
+        joints:
+          - name: shoulder_joint
+            bind_joint: shoulder_joint
+          - name: upper_arm_joint
+            bind_joint: upper_arm_joint
+          - name: elbow_joint
+            bind_joint: elbow_joint
+          - name: wrist1_joint
+            bind_joint: wrist1_joint
+          - name: wrist2_joint
+            bind_joint: wrist2_joint
+          - name: wrist3_joint
+            bind_joint: wrist3_joint
+          - name: geniarm_gripper
+            bind_joint: gripper_right_joint
+  publisher_options:
+    - topic: /genisys/joint_state
+      frequency: 500
+      executor: work_executor
+      type: joint_sensor
+      options:
+        joints:
+          - name: shoulder_joint
+            bind_joint: shoulder_joint
+          - name: upper_arm_joint
+            bind_joint: upper_arm_joint
+          - name: elbow_joint
+            bind_joint: elbow_joint
+          - name: wrist1_joint
+            bind_joint: wrist1_joint
+          - name: wrist2_joint
+            bind_joint: wrist2_joint
+          - name: wrist3_joint
+            bind_joint: wrist3_joint
+          - name: geniarm_gripper
+            bind_joint: gripper_right_joint
+  camera_options:
+    - type: camera_sensor_ros2
+      frequency: 30
+      executor: camera_executor
+      color_topic: /genisys/camera/color/image_raw
+      depth_topic: /genisys/camera/depth/image_raw
+      info_topic: /genisys/camera/depth/camera_info
+      options:
+        bind_camera: gemini305
+        width: 848
+        height: 530
+ControlModule:
+  config_file: control_module/geniarm_body_sim_gripper_gravity_cfg.yaml
+  topic_pub_joint_cmd: /genisys/joint_cmd
+  topic_sub_joint_state: /genisys/joint_state
+  topic_pub_tcp_pose_expected: /genisys/tcp_pose_expected
+  topic_pub_tcp_pose: /genisys/tcp_pose
+  topic_pub_flange_pose: /genisys/flange_pose
+  topic_sub_servoj_cmd: /genisys/servoj_cmd
+  topic_sub_servoj_pose_cmd: /genisys/servoj_pose_cmd
+  topic_sub_servol_cmd: /genisys/servol_cmd
+  control_executor_name: control_executor
+  pose_publish_executor_name: publish_pool
+  control_frequency: 500
+  pose_publish_frequency: 100
+  topic_pub_task_context: /genisys/task_context
+  task_publish_executor_name: publish_pool
+  task_publish_frequency: 50
+ROS2ProxyModule:
+  publish_executor_name: publish_pool
+  publish_frequency: 100  # 从 500Hz 状态降到 100Hz 再进 DDS
+  bridges:
+    - type: joint_state
+      sub_topic: /genisys/joint_state
+      pub_topic: /joint_states
+      enable: true
+    - type: pose_stamped
+      sub_topic: /genisys/tcp_pose
+      pub_topic: /tcp_pose
+      enable: true
+    - type: pose_stamped
+      sub_topic: /genisys/tcp_pose_expected
+      pub_topic: /tcp_pose_expected
+      enable: false
+    - type: pose_stamped
+      sub_topic: /genisys/flange_pose
+      pub_topic: /flange_pose
+      enable: true
