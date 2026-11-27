@@ -1,0 +1,1541 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="Geniarm v1.1.5 - Pitaya row">
+  <!--Orchard from fruit_tree_resource/pitaya_row.xml; original picker replaced by Geniarm.-->
+  <!--Short row: retain plants 1–5 and their fruit on the robot side of the original row.-->
+  <!--Robot-facing side only. Fruit spacing and pitch vary by plant; fruit_6 retains the verified contact pose.-->
+  <!--Canopy infill (seed 19327): branching and rib attachment based on UF/IFAS HS303 and doi:10.3390/agronomy13010238. Extra shoots are separated outside the common crown; fruit connects via short peduncles.-->
+  <!--Fruit attachment: INTACT cladode + berry BURIED into it (no peduncle, no notch, no see-through gap).
+      A pitaya is fused to the three-winged cladode, so the berry must penetrate the stem, not touch it
+      tangentially -- a tangent contact leaves a crescent void that reads as a gap in the render.
+      Removed the harvest leftovers that used to model a cut berry:
+        row_scar_<id> (10) / row_chip_<id> (7) / row_flesh_<id> (7)  = 24 geoms + 24 mesh assets
+        (the .obj files stay in the asset folder, now unreferenced)
+      Seating is computed, not eyeballed: for each berry take the 60 nearest vertices of its PARENT
+      cladode mesh, fit the local tangent plane (PCA), and push the berry along that plane's normal
+      until its pedicel-scar pole sits 12 mm behind the plane. Result: every berry's base crosses the
+      stem surface in a closed loop, so no background can be seen between fruit and stem from any view.
+      Typical axial/normal shift: 9-21 mm (fruit_2 20.7, fruit_6 20.4, fruit_7 16.2, fruit_11 16.4,
+      fruit_16 15.7, fruit_17 18.7, fruit_22 15.7, fruit_46 10.5, fruit_47 20.3, fruit_48 9.8,
+      fruit_49 14.8, fruit_50 12.5, fruit_51 8.7, fruit_52 9.3 mm). fruit_base_<id>, the ball-joint
+      pivot, is moved to the buried pole; welds (attachment_<id>) still derive from qpos0.
+      Joint: ball, range 0-0.10 rad (5.73 deg), stiffness 60 N*m/rad, damping 1.0, armature 2e-3,
+      identical for all 14 berries -> seated rigidly; compliance comes from the branch joints.
+      The cut_<id> / cut_<id>_upper_* / cut_<id>_lower_* sites are kept (invisible, group 4) but no
+      longer describe this junction; re-derive them when the cutting interaction is implemented.-->
+  <compiler angle="radian" autolimits="true" />
+  <option timestep="0.001" gravity="0 0 -9.81" iterations="120" solver="Newton" integrator="implicitfast">
+    <flag energy="enable" />
+  </option>
+  <visual>
+    <global offwidth="1500" offheight="1100" azimuth="256" elevation="-12" />
+    <quality shadowsize="4096" />
+    <headlight ambient=".32 .32 .30" diffuse=".52 .50 .48" specular=".13 .13 .13" />
+  </visual>
+  <statistic center="-1.15 -.25 .83" extent="2.3" />
+  <asset>
+    <mesh name="base_link" file="../meshes/geniarm_v1.1.5/base_link.STL" />
+    <mesh name="shoulder_link" file="../meshes/geniarm_v1.1.5/shoulder_link.STL" />
+    <mesh name="upper_arm_link" file="../meshes/geniarm_v1.1.5/upper_arm_link.STL" />
+    <mesh name="elbow_link" file="../meshes/geniarm_v1.1.5/elbow_link.STL" />
+    <mesh name="wrist1_link" file="../meshes/geniarm_v1.1.5/wrist1_link.STL" />
+    <mesh name="wrist2_link" file="../meshes/geniarm_v1.1.5/wrist2_link.STL" />
+    <mesh name="wrist3_link" file="../meshes/geniarm_v1.1.5/wrist3_link.STL" />
+    <mesh name="gripper_base_link" file="../meshes/geniarm_v1.1.5/gripper_base_link.STL" />
+    <mesh name="gripper_right_link" file="../meshes/geniarm_v1.1.5/gripper_right_link.STL" />
+    <mesh name="gripper_left_link" file="../meshes/geniarm_v1.1.5/gripper_left_link.STL" />
+    <material name="base_link_mat" rgba="1 1 1 1" specular="0" />
+    <material name="shoulder_link_mat" rgba="0.7529 0.7529 0.7529 1" specular="0" />
+    <material name="upper_arm_link_mat" rgba="0.7529 0.7529 0.7529 1" specular="0" />
+    <material name="elbow_link_mat" rgba="0.7529 0.7529 0.7529 1" specular="0" />
+    <material name="wrist1_link_mat" rgba="0.7529 0.7529 0.7529 1" specular="0" />
+    <material name="wrist2_link_mat" rgba="0.7529 0.7529 0.7529 1" specular="0" />
+    <material name="wrist3_link_mat" rgba="0.6275 0.6275 0.6275 1" specular="0" />
+    <material name="gripper_base_link_mat" rgba="0.6275 0.6275 0.6275 1" specular="0" />
+    <material name="gripper_right_link_mat" rgba="1 1 1 1" specular="0" />
+    <material name="gripper_left_link_mat" rgba="1 1 1 1" specular="0" />
+    <texture type="skybox" builtin="gradient" rgb1=".42 .60 .66" rgb2=".86 .84 .75" width="256" height="1536" />
+    <texture name="soil" type="2d" file="pitaya_row_assets/assets/soil.png" />
+    <material name="soil" texture="soil" texrepeat="2 2" texuniform="true" specular=".02" />
+    <texture name="concrete" type="2d" file="pitaya_row_assets/assets/concrete.png" />
+    <material name="concrete" texture="concrete" texrepeat="1 2" texuniform="true" specular=".02" />
+    <texture type="2d" name="bract_color" file="pitaya_row_assets/assets/bract_color.png" />
+    <material name="bract_skin" texture="bract_color" specular=".10" shininess=".20" />
+    <material name="bed_soil" texture="soil" texuniform="true" texrepeat="1 1" rgba=".72 .71 .65 1" specular=".02" />
+    <mesh name="row_p1_front_1_arch" file="pitaya_row_assets/row_assets/row_p1_front_1_arch.obj" />
+    <mesh name="row_p1_front_1_branch" file="pitaya_row_assets/row_assets/row_p1_front_1_branch.obj" />
+    <mesh name="row_p1_front_2_arch" file="pitaya_row_assets/row_assets/row_p1_front_2_arch.obj" />
+    <mesh name="row_p1_front_2_branch" file="pitaya_row_assets/row_assets/row_p1_front_2_branch.obj" />
+    <mesh name="row_p1_front_3_arch" file="pitaya_row_assets/row_assets/row_p1_front_3_arch.obj" />
+    <mesh name="row_bracts_2" file="pitaya_row_assets/assets/bracts.obj" scale="0.8624091 0.8624091 1.039658" />
+    <mesh name="row_p1_front_3_branch" file="pitaya_row_assets/row_assets/row_p1_front_3_branch.obj" />
+    <mesh name="row_p2_front_1_arch" file="pitaya_row_assets/row_assets/row_p2_front_1_arch.obj" />
+    <mesh name="row_bracts_6" file="pitaya_row_assets/assets/bracts.obj" scale="0.8689175 0.8689175 0.9580064" />
+    <mesh name="row_p2_front_1_branch" file="pitaya_row_assets/row_assets/row_p2_front_1_branch.obj" />
+    <mesh name="row_p2_front_2_arch" file="pitaya_row_assets/row_assets/row_p2_front_2_arch.obj" />
+    <mesh name="row_bracts_7" file="pitaya_row_assets/assets/bracts.obj" scale="0.8340087 0.8340087 0.9994004" />
+    <mesh name="row_p2_front_2_branch" file="pitaya_row_assets/row_assets/row_p2_front_2_branch.obj" />
+    <mesh name="row_p2_front_3_arch" file="pitaya_row_assets/row_assets/row_p2_front_3_arch.obj" />
+    <mesh name="row_p2_front_3_branch" file="pitaya_row_assets/row_assets/row_p2_front_3_branch.obj" />
+    <mesh name="row_p3_front_1_arch" file="pitaya_row_assets/row_assets/row_p3_front_1_arch.obj" />
+    <mesh name="row_p3_front_1_branch" file="pitaya_row_assets/row_assets/row_p3_front_1_branch.obj" />
+    <mesh name="row_p3_front_2_arch" file="pitaya_row_assets/row_assets/row_p3_front_2_arch.obj" />
+    <mesh name="row_bracts_11" file="pitaya_row_assets/assets/bracts.obj" scale="0.8627273 0.8627273 0.9529361" />
+    <mesh name="row_p3_front_2_branch" file="pitaya_row_assets/row_assets/row_p3_front_2_branch.obj" />
+    <mesh name="row_p3_front_3_arch" file="pitaya_row_assets/row_assets/row_p3_front_3_arch.obj" />
+    <mesh name="row_p3_front_3_branch" file="pitaya_row_assets/row_assets/row_p3_front_3_branch.obj" />
+    <mesh name="row_p3_front_4_arch" file="pitaya_row_assets/row_assets/row_p3_front_4_arch.obj" />
+    <mesh name="row_p3_front_4_branch" file="pitaya_row_assets/row_assets/row_p3_front_4_branch.obj" />
+    <mesh name="row_p3_front_5_arch" file="pitaya_row_assets/row_assets/row_p3_front_5_arch.obj" />
+    <mesh name="row_p3_front_5_branch" file="pitaya_row_assets/row_assets/row_p3_front_5_branch.obj" />
+    <mesh name="row_p4_front_1_arch" file="pitaya_row_assets/row_assets/row_p4_front_1_arch.obj" />
+    <mesh name="row_bracts_16" file="pitaya_row_assets/assets/bracts.obj" scale="0.9749685 0.9749685 1.037419" />
+    <mesh name="row_p4_front_1_branch" file="pitaya_row_assets/row_assets/row_p4_front_1_branch.obj" />
+    <mesh name="row_p4_front_2_arch" file="pitaya_row_assets/row_assets/row_p4_front_2_arch.obj" />
+    <mesh name="row_p4_front_2_branch" file="pitaya_row_assets/row_assets/row_p4_front_2_branch.obj" />
+    <mesh name="row_p4_front_3_arch" file="pitaya_row_assets/row_assets/row_p4_front_3_arch.obj" />
+    <mesh name="row_bracts_17" file="pitaya_row_assets/assets/bracts.obj" scale="0.829159 0.829159 1.098003" />
+    <mesh name="row_p4_front_3_branch" file="pitaya_row_assets/row_assets/row_p4_front_3_branch.obj" />
+    <mesh name="row_p4_front_4_arch" file="pitaya_row_assets/row_assets/row_p4_front_4_arch.obj" />
+    <mesh name="row_p4_front_4_branch" file="pitaya_row_assets/row_assets/row_p4_front_4_branch.obj" />
+    <mesh name="row_p5_front_1_arch" file="pitaya_row_assets/row_assets/row_p5_front_1_arch.obj" />
+    <mesh name="row_p5_front_1_branch" file="pitaya_row_assets/row_assets/row_p5_front_1_branch.obj" />
+    <mesh name="row_p5_front_2_arch" file="pitaya_row_assets/row_assets/row_p5_front_2_arch.obj" />
+    <mesh name="row_p5_front_2_branch" file="pitaya_row_assets/row_assets/row_p5_front_2_branch.obj" />
+    <mesh name="row_p5_front_3_arch" file="pitaya_row_assets/row_assets/row_p5_front_3_arch.obj" />
+    <mesh name="row_p5_front_3_branch" file="pitaya_row_assets/row_assets/row_p5_front_3_branch.obj" />
+    <mesh name="row_p5_front_4_arch" file="pitaya_row_assets/row_assets/row_p5_front_4_arch.obj" />
+    <mesh name="row_p5_front_4_branch" file="pitaya_row_assets/row_assets/row_p5_front_4_branch.obj" />
+    <mesh name="row_p5_front_5_arch" file="pitaya_row_assets/row_assets/row_p5_front_5_arch.obj" />
+    <mesh name="row_p5_front_5_branch" file="pitaya_row_assets/row_assets/row_p5_front_5_branch.obj" />
+    <mesh name="row_p5_front_6_arch" file="pitaya_row_assets/row_assets/row_p5_front_6_arch.obj" />
+    <mesh name="row_bracts_22" file="pitaya_row_assets/assets/bracts.obj" scale="0.9774496 0.9774496 1.014697" />
+    <mesh name="row_p5_front_6_branch" file="pitaya_row_assets/row_assets/row_p5_front_6_branch.obj" />
+    <mesh name="pitaya_infill_p1_1" file="pitaya_row_assets/infill/pitaya_infill_p1_1.obj" />
+    <mesh name="row_bracts_46" file="pitaya_row_assets/assets/bracts.obj" scale="1.012517 1.012517 0.9197795" />
+    <mesh name="pitaya_infill_p1_2" file="pitaya_row_assets/infill/pitaya_infill_p1_2.obj" />
+    <mesh name="row_bracts_47" file="pitaya_row_assets/assets/bracts.obj" scale="0.8091563 0.8091563 0.9113045" />
+    <mesh name="pitaya_infill_p2_1" file="pitaya_row_assets/infill/pitaya_infill_p2_1.obj" />
+    <mesh name="row_bracts_48" file="pitaya_row_assets/assets/bracts.obj" scale="0.8305023 0.8305023 1.040159" />
+    <mesh name="pitaya_infill_p3_1" file="pitaya_row_assets/infill/pitaya_infill_p3_1.obj" />
+    <mesh name="row_bracts_49" file="pitaya_row_assets/assets/bracts.obj" scale="0.8250726 0.8250726 0.8672343" />
+    <mesh name="pitaya_infill_p3_2" file="pitaya_row_assets/infill/pitaya_infill_p3_2.obj" />
+    <mesh name="row_bracts_50" file="pitaya_row_assets/assets/bracts.obj" scale="1.044263 1.044263 0.9491655" />
+    <mesh name="pitaya_infill_p4_1" file="pitaya_row_assets/infill/pitaya_infill_p4_1.obj" />
+    <mesh name="row_bracts_51" file="pitaya_row_assets/assets/bracts.obj" scale="0.8914086 0.8914086 1.088029" />
+    <mesh name="pitaya_infill_p5_1" file="pitaya_row_assets/infill/pitaya_infill_p5_1.obj" />
+    <mesh name="row_bracts_52" file="pitaya_row_assets/assets/bracts.obj" scale="0.904952 0.904952 1.047497" />
+    <mesh name="pitaya_infill_p1_3" file="pitaya_row_assets/infill/pitaya_infill_p1_3.obj" />
+    <mesh name="pitaya_infill_p1_4" file="pitaya_row_assets/infill/pitaya_infill_p1_4.obj" />
+    <mesh name="pitaya_infill_p2_2" file="pitaya_row_assets/infill/pitaya_infill_p2_2.obj" />
+    <mesh name="pitaya_infill_p2_3" file="pitaya_row_assets/infill/pitaya_infill_p2_3.obj" />
+    <mesh name="pitaya_infill_p3_3" file="pitaya_row_assets/infill/pitaya_infill_p3_3.obj" />
+    <mesh name="pitaya_infill_p4_2" file="pitaya_row_assets/infill/pitaya_infill_p4_2.obj" />
+    <mesh name="pitaya_infill_p5_2" file="pitaya_row_assets/infill/pitaya_infill_p5_2.obj" />
+  </asset>
+  <worldbody>
+    <!-- 0.72 m pedestal on the negative-Y side of the row, beside fruit_6.
+         Static reach check: with the fingers closed and fruits at their initial positions,
+         the first six qpos values below (radians, in model order) put the fingers in contact with skin_6:
+         0.00293886 1.36848657 -0.21689877 -1.15157513 0.00295356 -1.55257469 -->
+    <body name="pitaya_pedestal" pos="-1.87 -1.29 0" euler="0 0 1.57079632679">
+      <geom name="pitaya_pedestal_collision" type="box" pos="0 0 0.36" size="0.14 0.14 0.36" rgba=".24 .30 .35 1" />
+      <body name="base_link" pos="0 0 0.72">
+        <inertial pos="-0.001712 -2.9e-05 0.040108" mass="1.27" fullinertia="0.00341534 0.00267588 0.00341499 -4.7e-07 -3.212e-05 -1.9e-07" />
+        <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="base_link_mat" type="mesh" mesh="base_link" />
+        <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="base_link" />
+        <body name="shoulder_link" pos="0 0 0.1459" quat="1 0 0 0">
+          <joint name="shoulder_joint" type="hinge" axis="0 0 1" limited="true" range="-2.61 2.61" frictionloss="0.8" armature="0.032" />
+          <inertial pos="0.00461 0.000543 -0.029142" mass="0.215" fullinertia="0.00030957 0.0002074 0.00028536 -1.79e-06 -4.071e-05 -3.4e-06" />
+          <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="shoulder_link_mat" type="mesh" mesh="shoulder_link" />
+          <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="shoulder_link" />
+          <body name="upper_arm_link" pos="0.02 0 0" quat="2.5973435e-06 2.597353e-06 -0.70710808 -0.70710548">
+            <joint name="upper_arm_joint" type="hinge" axis="0 0 1" limited="true" range="0.0 3.7" frictionloss="1.0" armature="0.032" />
+            <inertial pos="0.13 -4.5e-05 0" mass="1.111" fullinertia="0.00058895 0.01612706 0.01598478 0 -0.00020503 0" />
+            <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="upper_arm_link_mat" type="mesh" mesh="upper_arm_link" />
+            <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="upper_arm_link" />
+            <body name="elbow_link" pos="0.26 0 0" quat="0.11633232 0 0 0.99321035">
+              <joint name="elbow_joint" type="hinge" axis="0 0 1" limited="true" range="-3.7 0.0" frictionloss="0.8" armature="0.032" />
+              <inertial pos="0.17121 -0.012609 0.000759" mass="0.682" fullinertia="0.00062101 0.00615984 0.00618878 -0.00077041 -6.785e-05 -6.1e-06" />
+              <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="elbow_link_mat" type="mesh" mesh="elbow_link" />
+              <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="elbow_link" />
+              <body name="wrist1_link" pos="0.24668 0 0" quat="0.99321108 0 0 0.11632604">
+                <joint name="wrist1_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.3" armature="0.0018" />
+                <inertial pos="0.062018 -0.059388 -0.000649" mass="0.441" fullinertia="0.00045629 0.000537479 0.000684587 0.00025559 -5.589e-06 4.932e-06" />
+                <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist1_link_mat" type="mesh" mesh="wrist1_link" />
+                <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist1_link" />
+                <body name="wrist2_link" pos="0.075 0 0" quat="0.49999816 -0.50000184 0.5 0.5">
+                  <joint name="wrist2_joint" type="hinge" axis="0 0 1" limited="true" range="-1.5708 1.5708" frictionloss="0.3" armature="0.0018" />
+                  <inertial pos="0.000374 -0.002002 -0.003453" mass="0.378" fullinertia="0.000211771 0.00021701 0.000161552 6e-09 -7.8e-08 4.265e-06" />
+                  <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist2_link_mat" type="mesh" mesh="wrist2_link" />
+                  <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist2_link" />
+                  <body name="wrist3_link" pos="0 -0.0335 0" quat="2.5973435e-06 -2.597353e-06 -0.70710808 0.70710548">
+                    <!-- v1.1.5: d6 = 0.0335 (was 0.031); wrist3 axis kept 0 0 1 -->
+                    <joint name="wrist3_joint" type="hinge" axis="0 0 1" limited="true" range="-3.14159 3.14159" frictionloss="0.2" armature="0.0018" />
+                    <inertial pos="-0.00062904 0 -0.0031029" mass="0.0087849" fullinertia="7.8e-07 6.4e-07 1.36e-06 0 0 0" />
+                    <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="wrist3_link_mat" type="mesh" mesh="wrist3_link" />
+                    <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="wrist3_link" />
+                    <body name="gripper_base_link" pos="0 0 0" quat="1 0 0 0">
+                      <inertial pos="-0.000668646627 0.014742944345 0.039069750043" mass="0.58636" fullinertia="0.001144557757 0.000607268913 0.001102219282 0.000000395633 -0.000008036936 0.000024856077" />
+                      <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_base_link_mat" type="mesh" mesh="gripper_base_link" />
+                      <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_base_link" />
+                      <camera name="gemini305" mode="fixed" pos="0 0.0964 0.0660" xyaxes="-1 0 0  0 0.939693 0.342020" fovy="65" resolution="1280 800" />
+                      <body name="gripper_right_link" pos="0.009 -0.019 0.077" quat="0.70710678 0 0 0.70710678">
+                        <joint name="gripper_right_joint" type="slide" axis="0 -1 0" limited="true" range="0 0.045" frictionloss="0.05" armature="0.001" />
+                        <inertial pos="1.84160000e-02 -5.43660000e-03 2.00140000e-02" mass="0.044239" fullinertia="1.30500000e-05 1.44680000e-05 6.49340000e-06 -2.69420000e-08 -1.23290000e-07 -1.06890000e-06" />
+                        <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_right_link_mat" type="mesh" mesh="gripper_right_link" />
+                        <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_right_link" />
+                      </body>
+                      <body name="gripper_left_link" pos="-0.009 0.019 0.077" quat="0.70710678 0 0 0.70710678">
+                        <joint name="gripper_left_joint" type="slide" axis="0 1 0" limited="true" range="0 0.045" frictionloss="0.05" armature="0.001" />
+                        <inertial pos="-1.82700000e-02 5.17110000e-03 2.54190000e-02" mass="0.035401" fullinertia="1.28300000e-05 1.40510000e-05 5.94360000e-06 -2.69420000e-08 1.23290000e-07 1.06890000e-06" />
+                        <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="gripper_left_link_mat" type="mesh" mesh="gripper_left_link" />
+                        <geom pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="gripper_left_link" />
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+    <light pos="-2 -3 5" dir=".12 .15 -1" directional="true" diffuse=".82 .78 .70" />
+    <geom name="soil" type="plane" size="0 0 .1" material="soil" />
+    <body name="crate" pos=".65 0 0">
+      <geom type="box" name="crate_floor" pos="0 0 0.05246" size="0.403 0.552 0.02196" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="-0.38285 -0.5208 0.13786" size="0.02015 0.0312 0.13542" rgba=".36 .23 .13 1" />
+      <geom type="box" pos="-0.38285 0.5208 0.13786" size="0.02015 0.0312 0.13542" rgba=".36 .23 .13 1" />
+      <geom type="box" pos="0.38285 -0.5208 0.13786" size="0.02015 0.0312 0.13542" rgba=".36 .23 .13 1" />
+      <geom type="box" pos="0.38285 0.5208 0.13786" size="0.02015 0.0312 0.13542" rgba=".36 .23 .13 1" />
+      <geom type="box" pos="-0.3937 0 0.10614" size="0.0124 0.5472 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0 -0.5376 0.10614" size="0.3875 0.0192 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0.3937 0 0.10614" size="0.0124 0.5472 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0 0.5376 0.10614" size="0.3875 0.0192 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="-0.3937 0 0.1708" size="0.0124 0.5472 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0 -0.5376 0.1708" size="0.3875 0.0192 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0.3937 0 0.1708" size="0.0124 0.5472 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0 0.5376 0.1708" size="0.3875 0.0192 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="-0.3937 0 0.24034" size="0.0124 0.5472 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0 -0.5376 0.24034" size="0.3875 0.0192 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0.3937 0 0.24034" size="0.0124 0.5472 0.02562" rgba=".47 .30 .15 1" />
+      <geom type="box" pos="0 0.5376 0.24034" size="0.3875 0.0192 0.02562" rgba=".47 .30 .15 1" />
+    </body>
+    <body name="trellis">
+      <geom name="post_1" type="box" pos="-2.5 0 0.691" size="0.05 0.05 0.691" material="concrete" />
+      <geom type="box" pos="-2.5 0 1.376" size=".060 .042 .008" rgba=".35 .38 .37 1" />
+      <geom name="post_2" type="box" pos="0 0 0.691" size="0.05 0.05 0.691" material="concrete" />
+      <geom type="box" pos="0 0 1.376" size=".060 .042 .008" rgba=".35 .38 .37 1" />
+      <geom type="capsule" fromto="-2.62 0 1.4 0 0 1.4" size="0.018" name="continuous_top_rail" rgba=".52 .56 .55 1" />
+      <geom name="raised_bed" type="box" pos="-1.33 0 .023" size="1.33 .31 .023" material="bed_soil" />
+      <geom type="capsule" fromto="-2.278614 0 0.044 -2.278614 0 1.4" size="0.011" rgba=".58 .46 .24 1" />
+      <geom type="capsule" fromto="-2.247614 0.006 0.044 -2.243195 0.008 0.5596958" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.243195 0.008 0.5596958 -2.238776 0.01 1.075392" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.238776 0.01 1.075392 -2.234357 0.012 1.591087" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.222614 0 0.49 -2.227705 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.227705 0.0145 0.49 -2.241614 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.241614 0.02511474 0.49 -2.260614 0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.260614 0.029 0.49 -2.279614 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.279614 0.02511474 0.49 -2.293523 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.293523 0.0145 0.49 -2.298614 3.551476e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.298614 3.551476e-18 0.49 -2.293523 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.293523 -0.0145 0.49 -2.279614 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.279614 -0.02511474 0.49 -2.260614 -0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.260614 -0.029 0.49 -2.241614 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.241614 -0.02511474 0.49 -2.227705 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.227705 -0.0145 0.49 -2.222614 -7.102951e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.222614 0 1.03 -2.227705 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.227705 0.0145 1.03 -2.241614 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.241614 0.02511474 1.03 -2.260614 0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.260614 0.029 1.03 -2.279614 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.279614 0.02511474 1.03 -2.293523 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.293523 0.0145 1.03 -2.298614 3.551476e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.298614 3.551476e-18 1.03 -2.293523 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.293523 -0.0145 1.03 -2.279614 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.279614 -0.02511474 1.03 -2.260614 -0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.260614 -0.029 1.03 -2.241614 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.241614 -0.02511474 1.03 -2.227705 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.227705 -0.0145 1.03 -2.222614 -7.102951e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.222614 0 1.38 -2.227705 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.227705 0.0145 1.38 -2.241614 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.241614 0.02511474 1.38 -2.260614 0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.260614 0.029 1.38 -2.279614 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.279614 0.02511474 1.38 -2.293523 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.293523 0.0145 1.38 -2.298614 3.551476e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.298614 3.551476e-18 1.38 -2.293523 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.293523 -0.0145 1.38 -2.279614 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.279614 -0.02511474 1.38 -2.260614 -0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.260614 -0.029 1.38 -2.241614 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.241614 -0.02511474 1.38 -2.227705 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.227705 -0.0145 1.38 -2.222614 -7.102951e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-2.234357 0.012 1.582245 -2.26998 -0.02425847 1.649325" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.26998 -0.02425847 1.649325 -2.303074 -0.03994057 1.666925" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.303074 -0.03994057 1.666925 -2.311174 -0.07540629 1.656111" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p1_front_1_arch" pos="-2.311174 -0.07540629 1.656111">
+        <joint name="row_p1_front_1_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p1_front_1_arch" rgba=".15 .37 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.0134274 -0.05074174 -0.009986447" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.0134274 -0.05074174 -0.009986447 -0.06176268 -0.06937887 -0.01725663" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.06176268 -0.06937887 -0.01725663 -0.1125123 -0.07607004 -0.03727681" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.1125123 -0.07607004 -0.03727681 -0.1331829 -0.0909739 -0.08551326" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p1_front_1_branch" pos="-0.1331829 -0.0909739 -0.08551326">
+          <joint name="row_p1_front_1_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.02560545 -0.02597826 -0.06393342" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02560545 -0.02597826 -0.06393342 -0.05317311 -0.04728887 -0.1381184" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.05317311 -0.04728887 -0.1381184 -0.082283 -0.06399562 -0.2199325" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.082283 -0.06399562 -0.2199325 -0.1125151 -0.07616227 -0.3067533" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1125151 -0.07616227 -0.3067533 -0.1434495 -0.08385259 -0.3959581" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1434495 -0.08385259 -0.3959581 -0.1746661 -0.08713035 -0.4849244" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1746661 -0.08713035 -0.4849244 -0.2057449 -0.08605932 -0.5710299" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.2057449 -0.08605932 -0.5710299 -0.236266 -0.08070327 -0.651652" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.236266 -0.08070327 -0.651652 -0.2658094 -0.07112597 -0.7241681" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p1_front_1_branch" rgba=".15 .37 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-2.234357 0.012 1.567244 -2.266523 -0.08353674 1.641532" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.266523 -0.08353674 1.641532 -2.309759 -0.2094158 1.656801" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.309759 -0.2094158 1.656801 -2.326737 -0.3045403 1.643193" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p1_front_2_arch" pos="-2.326737 -0.3045403 1.643193">
+        <joint name="row_p1_front_2_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p1_front_2_arch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.00393324 -0.08835974 -0.01537625" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.00393324 -0.08835974 -0.01537625 -0.0009994876 -0.1888539 -0.034504" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.0009994876 -0.1888539 -0.034504 -0.007677434 -0.2772862 -0.06638175" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.007677434 -0.2772862 -0.06638175 -0.00897985 -0.3294603 -0.120008" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p1_front_2_branch" pos="-0.00897985 -0.3294603 -0.120008">
+          <joint name="row_p1_front_2_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.01355689 -0.02340934 -0.08050415" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01355689 -0.02340934 -0.08050415 0.01305785 -0.03783525 -0.173917" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01305785 -0.03783525 -0.173917 0.002493017 -0.04457458 -0.2769363" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.002493017 -0.04457458 -0.2769363 -0.01414745 -0.0449242 -0.3862598" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.01414745 -0.0449242 -0.3862598 -0.03287342 -0.04018094 -0.4985853" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.03287342 -0.04018094 -0.4985853 -0.04969474 -0.03164166 -0.6106107" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.04969474 -0.03164166 -0.6106107 -0.06062127 -0.02060322 -0.7190336" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.06062127 -0.02060322 -0.7190336 -0.06166286 -0.008362467 -0.8205519" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.06166286 -0.008362467 -0.8205519 -0.04882937 0.003783753 -0.9118633" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_1" pos="-0.03427781 -0.06396178 -0.5202046" xyaxes="0.06549123 -0.9978531 0 0.9978531 0.06549123 -0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_0" pos="-0.04256351 -0.06500953 -0.5191737" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_1" pos="-0.0260906 -0.06392838 -0.5191737" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_2" pos="-0.03957807 -0.067261 -0.5141673" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_3" pos="-0.02723933 -0.06645119 -0.5141673" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_4" pos="-0.03597414 -0.06988017 -0.5083257" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_5" pos="-0.02859634 -0.06939595 -0.5083257" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_6" pos="-0.03313552 -0.07194069 -0.5037296" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_7" pos="-0.02969194 -0.07171468 -0.5037296" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_8" pos="-0.03064573 -0.07428408 -0.4986017" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_9" pos="-0.03023024 -0.07425681 -0.4986017" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_10" pos="-0.04256351 -0.06500953 -0.5191737" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_upper_11" pos="-0.0260906 -0.06392838 -0.5191737" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_0" pos="-0.04304575 -0.06463074 -0.5203959" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_1" pos="-0.02592896 -0.06350733 -0.5203959" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_2" pos="-0.04113597 -0.06804118 -0.5276286" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_3" pos="-0.02932091 -0.06726574 -0.5276286" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_4" pos="-0.03935379 -0.07112892 -0.5341842" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_5" pos="-0.03241596 -0.07067358 -0.5341842" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_6" pos="-0.03935379 -0.07112892 -0.5341842" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_7" pos="-0.03241596 -0.07067358 -0.5341842" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_8" pos="-0.03693438 -0.07447981 -0.5413636" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_9" pos="-0.03619119 -0.07443103 -0.5413636" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_10" pos="-0.04304575 -0.06463074 -0.5203959" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_1_lower_11" pos="-0.02592896 -0.06350733 -0.5203959" size=".0005" rgba="0 0 0 0" group="4" />
+          <geom type="mesh" mesh="row_p1_front_2_branch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-2.234357 0.012 1.56075 -2.220182 -0.06845425 1.649503" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.220182 -0.06845425 1.649503 -2.202562 -0.1663977 1.684833" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-2.202562 -0.1663977 1.684833 -2.191089 -0.2467013 1.68136" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p1_front_3_arch" pos="-2.191089 -0.2467013 1.68136">
+        <joint name="row_p1_front_3_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p1_front_3_arch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.006799782 -0.07919723 -0.005437631" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.006799782 -0.07919723 -0.005437631 0.01353293 -0.1589135 -0.00270042" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.01353293 -0.1589135 -0.00270042 0.01920934 -0.2264881 -0.01271321" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.01920934 -0.2264881 -0.01271321 0.02283888 -0.2692605 -0.05640084" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p1_front_3_branch" pos="0.02283888 -0.2692605 -0.05640084">
+          <joint name="row_p1_front_3_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.006292733 -0.02221711 -0.07033881" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.006292733 -0.02221711 -0.07033881 0.009696918 -0.03344785 -0.1519563" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.009696918 -0.03344785 -0.1519563 0.01105002 -0.03556135 -0.2419673" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01105002 -0.03556135 -0.2419673 0.0111895 -0.03042673 -0.3374864" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.0111895 -0.03042673 -0.3374864 0.01095284 -0.01991309 -0.4356285" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01095284 -0.01991309 -0.4356285 0.01117748 -0.005889578 -0.5335083" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01117748 -0.005889578 -0.5335083 0.01270091 0.009774701 -0.6282405" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01270091 0.009774701 -0.6282405 0.01636059 0.02521062 -0.71694" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01636059 0.02521062 -0.71694 0.02299397 0.03854907 -0.7967214" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_2" pos="0.009623249 -0.03053204 -0.5225559" xyaxes="-0.06531492 -0.9978647 0 0.9978647 -0.06531492 0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_0" pos="0.001186997 -0.03021978 -0.5220651" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_1" pos="0.01804473 -0.03132319 -0.5220651" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_2" pos="0.001596848 -0.03404457 -0.5142959" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_3" pos="0.01706365 -0.03505695 -0.5142959" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_4" pos="0.002691113 -0.0420259 -0.4981156" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_5" pos="0.01464706 -0.04280847 -0.4981156" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_6" pos="0.004588402 -0.04751213 -0.4871469" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_7" pos="0.01174742 -0.04798072 -0.4871469" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_8" pos="0.006415367 -0.0509486 -0.4803618" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_9" pos="0.009236905 -0.05113329 -0.4803618" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_10" pos="0.001186997 -0.03021978 -0.5220651" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_upper_11" pos="0.01804473 -0.03132319 -0.5220651" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_0" pos="0.001111181 -0.03027012 -0.5231598" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_1" pos="0.01813449 -0.03138438 -0.5231598" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_2" pos="0.002021213 -0.0328197 -0.5282535" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_3" pos="0.0169653 -0.03379786 -0.5282535" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_4" pos="0.003672905 -0.0365274 -0.5356169" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_5" pos="0.01502039 -0.03727015 -0.5356169" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_6" pos="0.005475897 -0.03933751 -0.5411239" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_7" pos="0.01307645 -0.039835 -0.5411239" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_8" pos="0.007907693 -0.04214937 -0.5465503" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_9" pos="0.01058341 -0.04232451 -0.5465503" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_10" pos="0.001065817 -0.03058674 -0.5238136" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_2_lower_11" pos="0.01813802 -0.0317042 -0.5238136" size=".0005" rgba="0 0 0 0" group="4" />
+          <body name="fruit_base_2" pos="0.009358 -0.021869 -0.520267">
+            <joint name="fruit_base_2_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+          <geom type="mesh" mesh="row_p1_front_3_branch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-1.747528 0 0.044 -1.747528 0 1.4" size="0.011" rgba=".58 .46 .24 1" />
+      <geom type="capsule" fromto="-1.716528 0.006 0.044 -1.708286 0.008 0.558816" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.708286 0.008 0.558816 -1.700043 0.01 1.073632" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.700043 0.01 1.073632 -1.691801 0.012 1.588448" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.691528 0 0.49 -1.696619 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.696619 0.0145 0.49 -1.710528 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.710528 0.02511474 0.49 -1.729528 0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.729528 0.029 0.49 -1.748528 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.748528 0.02511474 0.49 -1.762437 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.762437 0.0145 0.49 -1.767528 3.551476e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.767528 3.551476e-18 0.49 -1.762437 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.762437 -0.0145 0.49 -1.748528 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.748528 -0.02511474 0.49 -1.729528 -0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.729528 -0.029 0.49 -1.710528 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.710528 -0.02511474 0.49 -1.696619 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.696619 -0.0145 0.49 -1.691528 -7.102951e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.691528 0 1.03 -1.696619 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.696619 0.0145 1.03 -1.710528 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.710528 0.02511474 1.03 -1.729528 0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.729528 0.029 1.03 -1.748528 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.748528 0.02511474 1.03 -1.762437 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.762437 0.0145 1.03 -1.767528 3.551476e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.767528 3.551476e-18 1.03 -1.762437 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.762437 -0.0145 1.03 -1.748528 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.748528 -0.02511474 1.03 -1.729528 -0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.729528 -0.029 1.03 -1.710528 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.710528 -0.02511474 1.03 -1.696619 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.696619 -0.0145 1.03 -1.691528 -7.102951e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.691528 0 1.38 -1.696619 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.696619 0.0145 1.38 -1.710528 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.710528 0.02511474 1.38 -1.729528 0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.729528 0.029 1.38 -1.748528 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.748528 0.02511474 1.38 -1.762437 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.762437 0.0145 1.38 -1.767528 3.551476e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.767528 3.551476e-18 1.38 -1.762437 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.762437 -0.0145 1.38 -1.748528 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.748528 -0.02511474 1.38 -1.729528 -0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.729528 -0.029 1.38 -1.710528 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.710528 -0.02511474 1.38 -1.696619 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.696619 -0.0145 1.38 -1.691528 -7.102951e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.691801 0.012 1.556522 -1.70266 -0.08424981 1.649881" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.70266 -0.08424981 1.649881 -1.723875 -0.2111904 1.692101" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.723875 -0.2111904 1.692101 -1.743775 -0.3061083 1.692176" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p2_front_1_arch" pos="-1.743775 -0.3061083 1.692176">
+        <joint name="row_p2_front_1_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p2_front_1_arch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.003416273 -0.08775798 -0.01315701" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.003416273 -0.08775798 -0.01315701 0.01334642 -0.1891095 -0.02740242" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.01334642 -0.1891095 -0.02740242 0.0332279 -0.2786794 -0.05439784" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.0332279 -0.2786794 -0.05439784 0.03916797 -0.3310923 -0.1058048" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p2_front_1_branch" pos="0.03916797 -0.3310923 -0.1058048">
+          <joint name="row_p2_front_1_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.02514409 -0.02755475 -0.0860802" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02514409 -0.02755475 -0.0860802 -0.04799944 -0.05309037 -0.1859632" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.04799944 -0.05309037 -0.1859632 -0.06933006 -0.07591392 -0.296118" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.06933006 -0.07591392 -0.296118 -0.08989998 -0.09533244 -0.4130138" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.08989998 -0.09533244 -0.4130138 -0.1104732 -0.110653 -0.5331195" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1104732 -0.110653 -0.5331195 -0.1318138 -0.1211826 -0.6529041" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1318138 -0.1211826 -0.6529041 -0.1546858 -0.1262284 -0.7688369" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1546858 -0.1262284 -0.7688369 -0.1798531 -0.1250973 -0.8773868" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1798531 -0.1250973 -0.8773868 -0.2080799 -0.1170965 -0.9750228" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_6" pos="-0.1439293 -0.1474983 -0.6681138" xyaxes="-0.3186782 -0.947863 0 0.947863 -0.3186782 0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_0" pos="-0.1497292 -0.147468 -0.6643835" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_1" pos="-0.13829 -0.151314 -0.6643835" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_2" pos="-0.1497292 -0.147468 -0.6643835" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_3" pos="-0.13829 -0.151314 -0.6643835" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_4" pos="-0.1497292 -0.147468 -0.6643835" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_5" pos="-0.13829 -0.151314 -0.6643835" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_6" pos="-0.1458664 -0.1522324 -0.6576492" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_7" pos="-0.1423198 -0.1534248 -0.6576492" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_8" pos="-0.1458664 -0.1522324 -0.6576492" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_9" pos="-0.1423198 -0.1534248 -0.6576492" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_10" pos="-0.1497292 -0.147468 -0.6643835" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_upper_11" pos="-0.13829 -0.151314 -0.6643835" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_0" pos="-0.151875 -0.1448399 -0.6681392" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_1" pos="-0.1360928 -0.150146 -0.6681392" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_2" pos="-0.1521741 -0.147577 -0.6736531" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_3" pos="-0.1386606 -0.1521204 -0.6736531" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_4" pos="-0.1526612 -0.1526352 -0.6838" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_5" pos="-0.14431 -0.1554429 -0.6838" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_6" pos="-0.1527623 -0.1549718 -0.6884063" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_7" pos="-0.1468808 -0.1569492 -0.6884063" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_8" pos="-0.1520856 -0.1577461 -0.6933549" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_9" pos="-0.1505921 -0.1582482 -0.6933549" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_10" pos="-0.151875 -0.1448399 -0.6681392" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_6_lower_11" pos="-0.1360928 -0.150146 -0.6681392" size=".0005" rgba="0 0 0 0" group="4" />
+          <body name="fruit_base_6" pos="-0.141783 -0.136951 -0.672314">
+            <joint name="fruit_base_6_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+          <geom type="mesh" mesh="row_p2_front_1_branch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-1.691801 0.012 1.571305 -1.657851 -0.08245074 1.652604" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.657851 -0.08245074 1.652604 -1.621876 -0.2063361 1.687914" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.621876 -0.2063361 1.687914 -1.600954 -0.300456 1.685784" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p2_front_2_arch" pos="-1.600954 -0.300456 1.685784">
+        <joint name="row_p2_front_2_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p2_front_2_arch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.02099641 -0.08777127 -0.004146821" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.02099641 -0.08777127 -0.004146821 0.05500973 -0.186778 0.001430173" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.05500973 -0.186778 0.001430173 0.08745859 -0.273698 -0.005742834" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.08745859 -0.273698 -0.005742834 0.1037616 -0.3252093 -0.04813965" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p2_front_2_branch" pos="0.1037616 -0.3252093 -0.04813965">
+          <joint name="row_p2_front_2_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.01325608 -0.02338568 -0.06261805" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01325608 -0.02338568 -0.06261805 0.0326719 -0.03774819 -0.1352768" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.0326719 -0.03774819 -0.1352768 0.05659452 -0.04439573 -0.2154077" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.05659452 -0.04439573 -0.2154077 0.08337101 -0.04463652 -0.3004421" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.08337101 -0.04463652 -0.3004421 0.1113484 -0.03977876 -0.3878116" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1113484 -0.03977876 -0.3878116 0.1388738 -0.03113066 -0.4749476" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1388738 -0.03113066 -0.4749476 0.1642943 -0.02000042 -0.5592816" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1642943 -0.02000042 -0.5592816 0.1859569 -0.007696263 -0.6382449" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1859569 -0.007696263 -0.6382449 0.2022087 0.004473615 -0.7092691" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_7" pos="0.08440131 -0.06655984 -0.3009202" xyaxes="0.04694381 -0.9988975 0 0.9988975 0.04694381 -0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_0" pos="0.07596536 -0.06702309 -0.3007834" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_1" pos="0.09302356 -0.06622143 -0.3007834" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_2" pos="0.07707634 -0.06980452 -0.2949809" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_3" pos="0.08885363 -0.06925103 -0.2949809" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_4" pos="0.07826591 -0.07263496 -0.2890704" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_5" pos="0.08379524 -0.07237511 -0.2890704" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_6" pos="0.07877639 -0.07399621 -0.2862338" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_7" pos="0.08136718 -0.07387445 -0.2862338" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_8" pos="0.07886907 -0.07530197 -0.283551" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_9" pos="0.07960124 -0.07526756 -0.283551" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_10" pos="0.07596536 -0.06702309 -0.3007834" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_upper_11" pos="0.09302356 -0.06622143 -0.3007834" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_0" pos="0.07606859 -0.06707093 -0.3011649" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_1" pos="0.09314601 -0.06626837 -0.3011649" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_2" pos="0.07994296 -0.06978843 -0.3071025" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_3" pos="0.09319909 -0.06916545 -0.3071025" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_4" pos="0.08404532 -0.07235454 -0.312752" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_5" pos="0.09299679 -0.07193386 -0.312752" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_6" pos="0.08600986 -0.07357843 -0.3154473" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_7" pos="0.09272498 -0.07326285 -0.3154473" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_8" pos="0.09034256 -0.07565694 -0.3201205" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_9" pos="0.09175005 -0.07559079 -0.3201205" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_10" pos="0.07606859 -0.06707093 -0.3011649" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_7_lower_11" pos="0.09337274 -0.06678919 -0.3022533" size=".0005" rgba="0 0 0 0" group="4" />
+          <body name="fruit_base_7" pos="0.083272 -0.056194 -0.296252">
+            <joint name="fruit_base_7_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+          <geom type="mesh" mesh="row_p2_front_2_branch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-1.691801 0.012 1.563516 -1.651855 -0.0177842 1.645992" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.651855 -0.0177842 1.645992 -1.6065 -0.02149799 1.675329" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.6065 -0.02149799 1.675329 -1.579257 -0.05068312 1.669183" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p2_front_3_arch" pos="-1.579257 -0.05068312 1.669183">
+        <joint name="row_p2_front_3_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p2_front_3_arch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.02165295 -0.0469015 -0.02037865" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.02165295 -0.0469015 -0.02037865 0.05293081 -0.05663074 -0.05051169" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.05293081 -0.05663074 -0.05051169 0.08210727 -0.05435501 -0.09339473" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.08210727 -0.05435501 -0.09339473 0.097456 -0.06524161 -0.1520234" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p2_front_3_branch" pos="0.097456 -0.06524161 -0.1520234">
+          <joint name="row_p2_front_3_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.01414031 -0.02395445 -0.06301154" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01414031 -0.02395445 -0.06301154 0.04198994 -0.03984127 -0.1361269" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.04198994 -0.03984127 -0.1361269 0.07979348 -0.04869566 -0.2167613" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.07979348 -0.04869566 -0.2167613 0.1237956 -0.0515528 -0.3023301" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1237956 -0.0515528 -0.3023301 0.1702408 -0.0494479 -0.3902486" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1702408 -0.0494479 -0.3902486 0.2153738 -0.04341616 -0.4779322" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2153738 -0.04341616 -0.4779322 0.2554392 -0.03449277 -0.5627961" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2554392 -0.03449277 -0.5627961 0.2866815 -0.02371292 -0.6422556" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2866815 -0.02371292 -0.6422556 0.3053455 -0.01211182 -0.7137262" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p2_front_3_branch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-1.255672 0 0.044 -1.255672 0 1.4" size="0.011" rgba=".58 .46 .24 1" />
+      <geom type="capsule" fromto="-1.224672 0.006 0.044 -1.216564 0.008 0.5534139" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.216564 0.008 0.5534139 -1.208455 0.01 1.062828" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.208455 0.01 1.062828 -1.200347 0.012 1.572242" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.199672 0 0.49 -1.204763 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.204763 0.0145 0.49 -1.218672 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.218672 0.02511474 0.49 -1.237672 0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.237672 0.029 0.49 -1.256672 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.256672 0.02511474 0.49 -1.270581 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.270581 0.0145 0.49 -1.275672 3.551476e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.275672 3.551476e-18 0.49 -1.270581 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.270581 -0.0145 0.49 -1.256672 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.256672 -0.02511474 0.49 -1.237672 -0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.237672 -0.029 0.49 -1.218672 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.218672 -0.02511474 0.49 -1.204763 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.204763 -0.0145 0.49 -1.199672 -7.102951e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.199672 0 1.03 -1.204763 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.204763 0.0145 1.03 -1.218672 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.218672 0.02511474 1.03 -1.237672 0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.237672 0.029 1.03 -1.256672 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.256672 0.02511474 1.03 -1.270581 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.270581 0.0145 1.03 -1.275672 3.551476e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.275672 3.551476e-18 1.03 -1.270581 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.270581 -0.0145 1.03 -1.256672 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.256672 -0.02511474 1.03 -1.237672 -0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.237672 -0.029 1.03 -1.218672 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.218672 -0.02511474 1.03 -1.204763 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.204763 -0.0145 1.03 -1.199672 -7.102951e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.199672 0 1.38 -1.204763 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.204763 0.0145 1.38 -1.218672 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.218672 0.02511474 1.38 -1.237672 0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.237672 0.029 1.38 -1.256672 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.256672 0.02511474 1.38 -1.270581 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.270581 0.0145 1.38 -1.275672 3.551476e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.275672 3.551476e-18 1.38 -1.270581 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.270581 -0.0145 1.38 -1.256672 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.256672 -0.02511474 1.38 -1.237672 -0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.237672 -0.029 1.38 -1.218672 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.218672 -0.02511474 1.38 -1.204763 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.204763 -0.0145 1.38 -1.199672 -7.102951e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-1.200347 0.012 1.570931 -1.245787 -0.03810445 1.653906" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.245787 -0.03810445 1.653906 -1.298201 -0.07966635 1.708914" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.298201 -0.07966635 1.708914 -1.319926 -0.1295586 1.719016" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p3_front_1_arch" pos="-1.319926 -0.1295586 1.719016">
+        <joint name="row_p3_front_1_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p3_front_1_arch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.01029447 -0.06008921 -0.01624011" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.01029447 -0.06008921 -0.01624011 -0.04270298 -0.09791389 -0.03726836" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.04270298 -0.09791389 -0.03726836 -0.07636533 -0.1236157 -0.0710466" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.07636533 -0.1236157 -0.0710466 -0.09042133 -0.1473365 -0.1255367" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p3_front_1_branch" pos="-0.09042133 -0.1473365 -0.1255367">
+          <joint name="row_p3_front_1_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.03038973 -0.02228673 -0.06365752" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.03038973 -0.02228673 -0.06365752 -0.06327604 -0.03370406 -0.1375224" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.06327604 -0.03370406 -0.1375224 -0.09811365 -0.03608768 -0.2189834" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.09811365 -0.03608768 -0.2189834 -0.1343573 -0.0312733 -0.3054295" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1343573 -0.0312733 -0.3054295 -0.1714617 -0.02109663 -0.3942493" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1714617 -0.02109663 -0.3942493 -0.2088815 -0.007393367 -0.4828318" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.2088815 -0.007393367 -0.4828318 -0.2460716 0.008000787 -0.5685657" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.2460716 0.008000787 -0.5685657 -0.2824866 0.02325013 -0.6488398" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.2824866 0.02325013 -0.6488398 -0.3175812 0.03651895 -0.7210431" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p3_front_1_branch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-1.200347 0.012 1.535157 -1.259046 -0.06626649 1.636784" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.259046 -0.06626649 1.636784 -1.314102 -0.1601642 1.688956" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.314102 -0.1601642 1.688956 -1.340661 -0.2383406 1.69386" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p3_front_2_arch" pos="-1.340661 -0.2383406 1.69386">
+        <joint name="row_p3_front_2_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p3_front_2_arch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.03887421 -0.07789398 -0.01920365" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.03887421 -0.07789398 -0.01920365 -0.1180337 -0.1545994 -0.04675168" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.1180337 -0.1545994 -0.04675168 -0.1963758 -0.2191448 -0.0870497" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.1963758 -0.2191448 -0.0870497 -0.2327976 -0.2605586 -0.1445034" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p3_front_2_branch" pos="-0.2327976 -0.2605586 -0.1445034">
+          <joint name="row_p3_front_2_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.002967381 -0.02647711 -0.0778071" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.002967381 -0.02647711 -0.0778071 0.009970699 -0.04912466 -0.1680904" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.009970699 -0.04912466 -0.1680904 0.03436072 -0.06776696 -0.2676584" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.03436072 -0.06776696 -0.2676584 0.06574915 -0.08222833 -0.3733194" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.06574915 -0.08222833 -0.3733194 0.09968249 -0.0923331 -0.4818818" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.09968249 -0.0923331 -0.4818818 0.1317072 -0.09790559 -0.5901541" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1317072 -0.09790559 -0.5901541 0.1573698 -0.09877011 -0.6949446" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1573698 -0.09877011 -0.6949446 0.1722167 -0.09475099 -0.7930618" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1722167 -0.09475099 -0.7930618 0.1717944 -0.08567255 -0.8813142" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_11" pos="0.1583011 -0.1172428 -0.7133149" xyaxes="-0.1273947 -0.9918521 0 0.9918521 -0.1273947 0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_0" pos="0.1503995 -0.1166926 -0.7123701" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_1" pos="0.1658383 -0.1186755 -0.7123701" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_2" pos="0.1476327 -0.1212797 -0.7023205" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_3" pos="0.1626757 -0.1232118 -0.7023205" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_4" pos="0.1468165 -0.1242017 -0.6961659" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_5" pos="0.1604461 -0.1259524 -0.6961659" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_6" pos="0.1470911 -0.1305069 -0.6834173" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_7" pos="0.1529429 -0.1312585 -0.6834173" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_8" pos="0.1477196 -0.1337689 -0.6769489" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_9" pos="0.1483685 -0.1338523 -0.6769489" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_10" pos="0.1468729 -0.1233196 -0.6979743" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_upper_11" pos="0.1658383 -0.1186755 -0.7123701" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_0" pos="0.1508194 -0.1164828 -0.7137236" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_1" pos="0.1662533 -0.1184652 -0.7137236" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_2" pos="0.1525439 -0.1211048 -0.7226712" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_3" pos="0.1670118 -0.1229631 -0.7226712" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_4" pos="0.1545762 -0.1249444 -0.7299474" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_5" pos="0.1664079 -0.1264641 -0.7299474" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_6" pos="0.156352 -0.1271424 -0.7339527" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_7" pos="0.1652914 -0.1282905 -0.7339527" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_8" pos="0.1599797 -0.1311422 -0.7411382" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_9" pos="0.1632884 -0.1315672 -0.7411382" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_10" pos="0.1508194 -0.1164828 -0.7137236" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_11_lower_11" pos="0.1667559 -0.1253743 -0.7276406" size=".0005" rgba="0 0 0 0" group="4" />
+          <body name="fruit_base_11" pos="0.166009 -0.108399 -0.717886">
+            <joint name="fruit_base_11_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+          <geom type="mesh" mesh="row_p3_front_2_branch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-1.200347 0.012 1.571726 -1.15183 -0.06892039 1.647534" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.15183 -0.06892039 1.647534 -1.098656 -0.1677366 1.690065" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.098656 -0.1677366 1.690065 -1.076231 -0.2485313 1.693529" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p3_front_3_arch" pos="-1.076231 -0.2485313 1.693529">
+        <joint name="row_p3_front_3_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p3_front_3_arch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.01603257 -0.0795181 -0.01076465" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.01603257 -0.0795181 -0.01076465 0.05881944 -0.159881 -0.01974688" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.05881944 -0.159881 -0.01974688 0.1025717 -0.2280948 -0.04147912" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.1025717 -0.2280948 -0.04147912 0.1215005 -0.2711653 -0.09049377" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p3_front_3_branch" pos="0.1215005 -0.2711653 -0.09049377">
+          <joint name="row_p3_front_3_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.01258962 -0.02756802 -0.08415389" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.01258962 -0.02756802 -0.08415389 -0.01948849 -0.05313921 -0.1818017" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.01948849 -0.05313921 -0.1818017 -0.02234746 -0.07601424 -0.2894915" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02234746 -0.07601424 -0.2894915 -0.02281738 -0.09549381 -0.4037713" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02281738 -0.09549381 -0.4037713 -0.02254913 -0.1108786 -0.5211893" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02254913 -0.1108786 -0.5211893 -0.02319354 -0.1214693 -0.6382934" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02319354 -0.1214693 -0.6382934 -0.02640148 -0.1265665 -0.7516318" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02640148 -0.1265665 -0.7516318 -0.03382381 -0.125471 -0.8577526" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.03382381 -0.125471 -0.8577526 -0.04711138 -0.1174835 -0.9532037" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_12" pos="-0.03153814 -0.1527576 -0.7505632" xyaxes="-0.1924562 -0.9813056 0 0.9813056 -0.1924562 0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_0" pos="-0.03992141 -0.1511186 -0.7505528" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_1" pos="-0.02320951 -0.1543962 -0.7505528" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_2" pos="-0.03817648 -0.1536793 -0.7460899" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_3" pos="-0.02557 -0.1561518 -0.7460899" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_4" pos="-0.03465698 -0.158839 -0.7370989" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_5" pos="-0.03040268 -0.1596734 -0.7370989" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_6" pos="-0.03465698 -0.158839 -0.7370989" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_7" pos="-0.03040268 -0.1596734 -0.7370989" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_8" pos="-0.03465698 -0.158839 -0.7370989" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_9" pos="-0.03040268 -0.1596734 -0.7370989" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_10" pos="-0.03992141 -0.1511186 -0.7505528" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_upper_11" pos="-0.02320951 -0.1543962 -0.7505528" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_0" pos="-0.03982351 -0.1512981 -0.7508961" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_1" pos="-0.02331599 -0.1545356 -0.7508961" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_2" pos="-0.0384047 -0.1539263 -0.7556233" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_3" pos="-0.02586836 -0.1563849 -0.7556233" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_4" pos="-0.03641791 -0.1575552 -0.7621397" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_5" pos="-0.02948721 -0.1589145 -0.7621397" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_6" pos="-0.03497176 -0.1601229 -0.7667345" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_7" pos="-0.03204242 -0.1606974 -0.7667345" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_8" pos="-0.03404242 -0.1619854 -0.7701145" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_9" pos="-0.03380341 -0.1620322 -0.7701145" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_10" pos="-0.03982351 -0.1512981 -0.7508961" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_12_lower_11" pos="-0.02331599 -0.1545356 -0.7508961" size=".0005" rgba="0 0 0 0" group="4" />
+          <geom type="mesh" mesh="row_p3_front_3_branch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-1.200347 0.012 1.521142 -1.185776 -0.02057376 1.620282" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.185776 -0.02057376 1.620282 -1.174521 -0.02963216 1.653154" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.174521 -0.02963216 1.653154 -1.171166 -0.06218089 1.646228" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p3_front_4_arch" pos="-1.171166 -0.06218089 1.646228">
+        <joint name="row_p3_front_4_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p3_front_4_arch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.0105285 -0.04930616 -0.02137067" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.0105285 -0.04930616 -0.02137067 0.03704708 -0.06296409 -0.05368615" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.03704708 -0.06296409 -0.05368615 0.06399675 -0.06444214 -0.09875163" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.06399675 -0.06444214 -0.09875163 0.07581852 -0.07720868 -0.1583723" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p3_front_4_branch" pos="0.07581852 -0.07720868 -0.1583723">
+          <joint name="row_p3_front_4_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.03046583 -0.02756808 -0.07503595" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.03046583 -0.02756808 -0.07503595 0.05297657 -0.05313943 -0.1621038" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.05297657 -0.05313943 -0.1621038 0.06990406 -0.0760147 -0.2581255" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.06990406 -0.0760147 -0.2581255 0.08362017 -0.09549455 -0.3600233" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.08362017 -0.09549455 -0.3600233 0.09649672 -0.1108796 -0.4647192" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.09649672 -0.1108796 -0.4647192 0.1109056 -0.1214706 -0.5691353" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1109056 -0.1214706 -0.5691353 0.1292186 -0.1265681 -0.6701936" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1292186 -0.1265681 -0.6701936 0.1538076 -0.1254728 -0.7648164" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1538076 -0.1254728 -0.7648164 0.1870445 -0.1174853 -0.8499255" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p3_front_4_branch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-1.200347 0.012 1.531666 -1.153529 -0.01810876 1.639857" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.153529 -0.01810876 1.639857 -1.094438 -0.02221059 1.700561" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-1.094438 -0.02221059 1.700561 -1.056914 -0.05096876 1.709702" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p3_front_5_arch" pos="-1.056914 -0.05096876 1.709702">
+        <joint name="row_p3_front_5_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p3_front_5_arch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.02000293 -0.04624782 -0.01604727" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.02000293 -0.04624782 -0.01604727 0.03956376 -0.05632144 -0.03665125" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.03956376 -0.05632144 -0.03665125 0.05598435 -0.05461908 -0.07000524" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.05598435 -0.05461908 -0.07000524 0.06656654 -0.06553892 -0.1243025" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p3_front_5_branch" pos="0.06656654 -0.06553892 -0.1243025">
+          <joint name="row_p3_front_5_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.01788696 -0.02662607 -0.05808982" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01788696 -0.02662607 -0.05808982 0.04394326 -0.04967283 -0.1254942" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.04394326 -0.04967283 -0.1254942 0.07597824 -0.06889309 -0.1998304" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.07597824 -0.06889309 -0.1998304 0.1118012 -0.08403968 -0.2787156" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1118012 -0.08403968 -0.2787156 0.1492215 -0.09486542 -0.359767" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1492215 -0.09486542 -0.359767 0.1860484 -0.1011231 -0.4406017" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1860484 -0.1011231 -0.4406017 0.2200912 -0.1025656 -0.5188371" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2200912 -0.1025656 -0.5188371 0.2491593 -0.09894569 -0.5920902" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2491593 -0.09894569 -0.5920902 0.271062 -0.09001621 -0.6579783" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p3_front_5_branch" rgba=".21 .44 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.7815858 0 0.044 -0.7815858 0 1.4" size="0.011" rgba=".58 .46 .24 1" />
+      <geom type="capsule" fromto="-0.7505858 0.006 0.044 -0.7476563 0.008 0.5449023" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.7476563 0.008 0.5449023 -0.7447268 0.01 1.045805" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.7447268 0.01 1.045805 -0.7417972 0.012 1.546707" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.7255858 0 0.49 -0.7306768 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7306768 0.0145 0.49 -0.7445858 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7445858 0.02511474 0.49 -0.7635858 0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7635858 0.029 0.49 -0.7825858 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7825858 0.02511474 0.49 -0.7964948 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7964948 0.0145 0.49 -0.8015858 3.551476e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.8015858 3.551476e-18 0.49 -0.7964948 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7964948 -0.0145 0.49 -0.7825858 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7825858 -0.02511474 0.49 -0.7635858 -0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7635858 -0.029 0.49 -0.7445858 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7445858 -0.02511474 0.49 -0.7306768 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7306768 -0.0145 0.49 -0.7255858 -7.102951e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7255858 0 1.03 -0.7306768 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7306768 0.0145 1.03 -0.7445858 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7445858 0.02511474 1.03 -0.7635858 0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7635858 0.029 1.03 -0.7825858 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7825858 0.02511474 1.03 -0.7964948 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7964948 0.0145 1.03 -0.8015858 3.551476e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.8015858 3.551476e-18 1.03 -0.7964948 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7964948 -0.0145 1.03 -0.7825858 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7825858 -0.02511474 1.03 -0.7635858 -0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7635858 -0.029 1.03 -0.7445858 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7445858 -0.02511474 1.03 -0.7306768 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7306768 -0.0145 1.03 -0.7255858 -7.102951e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7255858 0 1.38 -0.7306768 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7306768 0.0145 1.38 -0.7445858 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7445858 0.02511474 1.38 -0.7635858 0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7635858 0.029 1.38 -0.7825858 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7825858 0.02511474 1.38 -0.7964948 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7964948 0.0145 1.38 -0.8015858 3.551476e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.8015858 3.551476e-18 1.38 -0.7964948 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7964948 -0.0145 1.38 -0.7825858 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7825858 -0.02511474 1.38 -0.7635858 -0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7635858 -0.029 1.38 -0.7445858 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7445858 -0.02511474 1.38 -0.7306768 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7306768 -0.0145 1.38 -0.7255858 -7.102951e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.7417972 0.012 1.507562 -0.7635603 -0.06168922 1.617422" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.7635603 -0.06168922 1.617422 -0.792248 -0.1467135 1.682725" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.792248 -0.1467135 1.682725 -0.7979797 -0.2190079 1.694488" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p4_front_1_arch" pos="-0.7979797 -0.2190079 1.694488">
+        <joint name="row_p4_front_1_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p4_front_1_arch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.0092252 -0.07353437 -0.01264367" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.0092252 -0.07353437 -0.01264367 0.004684616 -0.1437434 -0.02575974" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.004684616 -0.1437434 -0.02575974 -0.003046368 -0.2021899 -0.05162581" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.003046368 -0.2021899 -0.05162581 -0.003392363 -0.2404368 -0.1025195" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p4_front_1_branch" pos="-0.003392363 -0.2404368 -0.1025195">
+          <joint name="row_p4_front_1_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.02127216 -0.02381977 -0.05882769" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.02127216 -0.02381977 -0.05882769 0.03348821 -0.03934564 -0.1270883" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.03348821 -0.03934564 -0.1270883 0.03928145 -0.04767746 -0.2023687" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.03928145 -0.04767746 -0.2023687 0.04128517 -0.04991508 -0.2822559" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.04128517 -0.04991508 -0.2822559 0.04213266 -0.04715832 -0.3643368" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.04213266 -0.04715832 -0.3643368 0.04445722 -0.04050704 -0.4461984" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.04445722 -0.04050704 -0.4461984 0.05089214 -0.03106108 -0.5254275" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.05089214 -0.03106108 -0.5254275 0.0640707 -0.01992029 -0.599611" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.0640707 -0.01992029 -0.599611 0.08662621 -0.008184507 -0.6663361" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_16" pos="0.04494391 -0.0692579 -0.2823511" xyaxes="0.1858567 -0.9825769 0 0.9825769 0.1858567 -0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_0" pos="0.03738286 -0.07072192 -0.282283" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_1" pos="0.05250793 -0.06786098 -0.282283" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_2" pos="0.03846337 -0.07408539 -0.2750963" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_3" pos="0.05250183 -0.07142998 -0.2750963" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_4" pos="0.04023455 -0.07701597 -0.2685185" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_5" pos="0.05173858 -0.07483996 -0.2685185" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_6" pos="0.04370436 -0.0804096 -0.2603607" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_7" pos="0.04949427 -0.07931442 -0.2603607" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_8" pos="0.04689275 -0.08328897 -0.2533461" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_9" pos="0.04734207 -0.08320399 -0.2533461" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_10" pos="0.03752684 -0.0725085 -0.2786295" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_upper_11" pos="0.05290582 -0.06959953 -0.2786295" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_0" pos="0.03738614 -0.07070348 -0.2823834" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_1" pos="0.0525058 -0.06784356 -0.2823834" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_2" pos="0.03936633 -0.07322658 -0.2882201" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_3" pos="0.05175711 -0.07088284 -0.2882201" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_4" pos="0.04384008 -0.07739331 -0.2983176" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_5" pos="0.0494662 -0.07632912 -0.2983176" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_6" pos="0.0455606 -0.08004692 -0.3043182" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_7" pos="0.0490651 -0.07938403 -0.3043182" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_8" pos="0.04790785 -0.08321587 -0.3115957" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_9" pos="0.04833795 -0.08313452 -0.3115957" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_10" pos="0.03738614 -0.07070348 -0.2823834" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_16_lower_11" pos="0.0525058 -0.06784356 -0.2823834" size=".0005" rgba="0 0 0 0" group="4" />
+          <body name="fruit_base_16" pos="0.044360 -0.059783 -0.275718">
+            <joint name="fruit_base_16_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+          <geom type="mesh" mesh="row_p4_front_1_branch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.7417972 0.012 1.540341 -0.7607135 -0.01889677 1.627286" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.7607135 -0.01889677 1.627286 -0.7883518 -0.02450594 1.684371" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.7883518 -0.02450594 1.684371 -0.8104468 -0.05420575 1.695072" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p4_front_2_arch" pos="-0.8104468 -0.05420575 1.695072">
+        <joint name="row_p4_front_2_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p4_front_2_arch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.009259151 -0.04691737 -0.01251055" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.009259151 -0.04691737 -0.01251055 -0.006593524 -0.05809962 -0.02533376" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.006593524 -0.05809962 -0.02533376 -0.0009687567 -0.05745906 -0.05090697" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.0009687567 -0.05745906 -0.05090697 -0.00135049 -0.06890803 -0.1016675" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p4_front_2_branch" pos="-0.00135049 -0.06890803 -0.1016675">
+          <joint name="row_p4_front_2_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.008286776 -0.02217129 -0.08797217" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.008286776 -0.02217129 -0.08797217 -0.01329845 -0.03327925 -0.1900505" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.01329845 -0.03327925 -0.1900505 -0.01599029 -0.03521498 -0.3026264" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.01599029 -0.03521498 -0.3026264 -0.01731758 -0.0298696 -0.4220914" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.01731758 -0.0298696 -0.4220914 -0.01823561 -0.01913422 -0.5448369" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.01823561 -0.01913422 -0.5448369 -0.01969965 -0.004899945 -0.6672544" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.01969965 -0.004899945 -0.6672544 -0.02266498 0.0109421 -0.7857352" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02266498 0.0109421 -0.7857352 -0.02808688 0.02650081 -0.8966709" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02808688 0.02650081 -0.8966709 -0.03692063 0.03988507 -0.9964529" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p4_front_2_branch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.7417972 0.012 1.539092 -0.670884 -0.07497117 1.621005" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.670884 -0.07497117 1.621005 -0.5839088 -0.1846473 1.667438" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.5839088 -0.1846473 1.667438 -0.5327334 -0.2701721 1.672275" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p4_front_3_arch" pos="-0.5327334 -0.2701721 1.672275">
+        <joint name="row_p4_front_3_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p4_front_3_arch" rgba=".12 .34 .15 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.02815138 -0.08180717 -0.01001943" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.02815138 -0.08180717 -0.01001943 0.06480292 -0.1703384 -0.01736217" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.06480292 -0.1703384 -0.01736217 0.09820685 -0.2471227 -0.03745492" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.09820685 -0.2471227 -0.03745492 0.1166154 -0.2936894 -0.08572434" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p4_front_3_branch" pos="0.1166154 -0.2936894 -0.08572434">
+          <joint name="row_p4_front_3_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.02579031 -0.02434174 -0.07674384" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02579031 -0.02434174 -0.07674384 -0.04199815 -0.0412665 -0.1657934" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.04199815 -0.0412665 -0.1657934 -0.05142622 -0.05162357 -0.2640007" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.05142622 -0.05162357 -0.2640007 -0.05687722 -0.05626226 -0.3682178" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.05687722 -0.05626226 -0.3682178 -0.06115385 -0.05603185 -0.4752967" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.06115385 -0.05603185 -0.4752967 -0.06705881 -0.05178164 -0.5820894" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.06705881 -0.05178164 -0.5820894 -0.07739481 -0.04436094 -0.6854479" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.07739481 -0.04436094 -0.6854479 -0.09496455 -0.03461903 -0.7822243" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.09496455 -0.03461903 -0.7822243 -0.1225707 -0.02340522 -0.8692706" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_17" pos="-0.06314921 -0.07063964 -0.5482036" xyaxes="0.09271455 -0.9956927 0 0.9956927 0.09271455 -0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_0" pos="-0.07023609 -0.07135234 -0.5480958" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_1" pos="-0.05607515 -0.07003373 -0.5480958" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_2" pos="-0.06974208 -0.07380351 -0.5429987" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_3" pos="-0.05564237 -0.0724906 -0.5429987" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_4" pos="-0.06606715 -0.07840471 -0.5329084" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_5" pos="-0.05751938 -0.07760878 -0.5329084" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_6" pos="-0.06392578 -0.0807181 -0.5277794" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_7" pos="-0.05884902 -0.08024537 -0.5277794" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_8" pos="-0.06189729 -0.08253882 -0.5236774" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_9" pos="-0.06022304 -0.08238292 -0.5236774" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_10" pos="-0.07023609 -0.07135234 -0.5480958" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_upper_11" pos="-0.05564237 -0.0724906 -0.5429987" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_0" pos="-0.07020836 -0.07161725 -0.5488574" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_1" pos="-0.05613105 -0.07030644 -0.5488574" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_2" pos="-0.07002898 -0.07287728 -0.5514634" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_3" pos="-0.05630355 -0.07159922 -0.5514634" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_4" pos="-0.06845931 -0.07433975 -0.5547469" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_5" pos="-0.05788129 -0.07335477 -0.5547469" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_6" pos="-0.06538582 -0.07716531 -0.5610985" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_7" pos="-0.06096923 -0.07675406 -0.5610985" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_8" pos="-0.06351546 -0.07886132 -0.5649159" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_9" pos="-0.06282621 -0.07879714 -0.5649159" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_10" pos="-0.07020836 -0.07161725 -0.5488574" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_17_lower_11" pos="-0.05613105 -0.07030644 -0.5488574" size=".0005" rgba="0 0 0 0" group="4" />
+          <body name="fruit_base_17" pos="-0.059685 -0.060791 -0.548062">
+            <joint name="fruit_base_17_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+          <geom type="mesh" mesh="row_p4_front_3_branch" rgba=".12 .34 .15 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.7417972 0.012 1.536682 -0.6974412 -0.02361678 1.626869" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.6974412 -0.02361678 1.626869 -0.647224 -0.03825265 1.686143" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.647224 -0.03825265 1.686143 -0.6272219 -0.07358593 1.697647" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p4_front_4_arch" pos="-0.6272219 -0.07358593 1.697647">
+        <joint name="row_p4_front_4_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p4_front_4_arch" rgba=".12 .34 .15 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.01048121 -0.05092014 -0.008854479" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.01048121 -0.05092014 -0.008854479 0.04481544 -0.06874186 -0.01363433" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.04481544 -0.06874186 -0.01363433 0.08059812 -0.07446246 -0.03116419" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.08059812 -0.07446246 -0.03116419 0.09542466 -0.08907923 -0.07826867" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p4_front_4_branch" pos="0.09542466 -0.08907923 -0.07826867">
+          <joint name="row_p4_front_4_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.03971239 -0.02205697 -0.08895416" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.03971239 -0.02205697 -0.08895416 0.07564387 -0.03285855 -0.192172" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.07564387 -0.03285855 -0.192172 0.1090475 -0.03435073 -0.3060045" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1090475 -0.03435073 -0.3060045 0.1411763 -0.02847947 -0.4268031" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1411763 -0.02847947 -0.4268031 0.1732832 -0.01719079 -0.5509187" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1732832 -0.01719079 -0.5509187 0.2066215 -0.002430646 -0.6747027" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2066215 -0.002430646 -0.6747027 0.242444 0.01385496 -0.7945061" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.242444 0.01385496 -0.7945061 0.2820039 0.02972005 -0.9066801" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2820039 0.02972005 -0.9066801 0.3265541 0.04321863 -1.007576" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p4_front_4_branch" rgba=".12 .34 .15 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.2215894 0 0.044 -0.2215894 0 1.4" size="0.011" rgba=".58 .46 .24 1" />
+      <geom type="capsule" fromto="-0.1905894 0.006 0.044 -0.1955937 0.008 0.545805" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.1955937 0.008 0.545805 -0.200598 0.01 1.04761" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.200598 0.01 1.04761 -0.2056022 0.012 1.549415" size="0.015" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.1655894 0 0.49 -0.1706804 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1706804 0.0145 0.49 -0.1845894 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1845894 0.02511474 0.49 -0.2035894 0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2035894 0.029 0.49 -0.2225894 0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2225894 0.02511474 0.49 -0.2364984 0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2364984 0.0145 0.49 -0.2415894 3.551476e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2415894 3.551476e-18 0.49 -0.2364984 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2364984 -0.0145 0.49 -0.2225894 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2225894 -0.02511474 0.49 -0.2035894 -0.029 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2035894 -0.029 0.49 -0.1845894 -0.02511474 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1845894 -0.02511474 0.49 -0.1706804 -0.0145 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1706804 -0.0145 0.49 -0.1655894 -7.102951e-18 0.49" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1655894 0 1.03 -0.1706804 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1706804 0.0145 1.03 -0.1845894 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1845894 0.02511474 1.03 -0.2035894 0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2035894 0.029 1.03 -0.2225894 0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2225894 0.02511474 1.03 -0.2364984 0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2364984 0.0145 1.03 -0.2415894 3.551476e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2415894 3.551476e-18 1.03 -0.2364984 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2364984 -0.0145 1.03 -0.2225894 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2225894 -0.02511474 1.03 -0.2035894 -0.029 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2035894 -0.029 1.03 -0.1845894 -0.02511474 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1845894 -0.02511474 1.03 -0.1706804 -0.0145 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1706804 -0.0145 1.03 -0.1655894 -7.102951e-18 1.03" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1655894 0 1.38 -0.1706804 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1706804 0.0145 1.38 -0.1845894 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1845894 0.02511474 1.38 -0.2035894 0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2035894 0.029 1.38 -0.2225894 0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2225894 0.02511474 1.38 -0.2364984 0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2364984 0.0145 1.38 -0.2415894 3.551476e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2415894 3.551476e-18 1.38 -0.2364984 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2364984 -0.0145 1.38 -0.2225894 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2225894 -0.02511474 1.38 -0.2035894 -0.029 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2035894 -0.029 1.38 -0.1845894 -0.02511474 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1845894 -0.02511474 1.38 -0.1706804 -0.0145 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.1706804 -0.0145 1.38 -0.1655894 -7.102951e-18 1.38" size="0.0026" rgba=".47 .39 .24 1" contype="0" conaffinity="0" />
+      <geom type="capsule" fromto="-0.2056022 0.012 1.536556 -0.2580264 -0.04118956 1.620213" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.2580264 -0.04118956 1.620213 -0.3248158 -0.08853928 1.664391" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.3248158 -0.08853928 1.664391 -0.358446 -0.1417207 1.667476" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p5_front_1_arch" pos="-0.358446 -0.1417207 1.667476">
+        <joint name="row_p5_front_1_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p5_front_1_arch" rgba=".12 .34 .15 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.009681538 -0.06225728 -0.008836659" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.009681538 -0.06225728 -0.008836659 -0.02906927 -0.1043676 -0.01357731" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.02906927 -0.1043676 -0.01357731 -0.04821144 -0.1342928 -0.03106796" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.04821144 -0.1342928 -0.03106796 -0.05715628 -0.159995 -0.07815462" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p5_front_1_branch" pos="-0.05715628 -0.159995 -0.07815462">
+          <joint name="row_p5_front_1_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.006779607 -0.02582287 -0.08868844" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.006779607 -0.02582287 -0.08868844 -0.02677806 -0.04671704 -0.1915979" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.02677806 -0.04671704 -0.1915979 -0.05634015 -0.06282088 -0.3050904" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.05634015 -0.06282088 -0.3050904 -0.0918107 -0.07427274 -0.4255281" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.0918107 -0.07427274 -0.4255281 -0.1295345 -0.08121098 -0.549273" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1295345 -0.08121098 -0.549273 -0.1658564 -0.08377395 -0.6726872" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1658564 -0.08377395 -0.6726872 -0.1971211 -0.08210001 -0.7921327" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1971211 -0.08210001 -0.7921327 -0.2196736 -0.07632752 -0.9039717" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.2196736 -0.07632752 -0.9039717 -0.2298585 -0.06659483 -1.004566" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p5_front_1_branch" rgba=".12 .34 .15 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.2056022 0.012 1.537853 -0.2403097 -0.03525619 1.621504" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.2403097 -0.03525619 1.621504 -0.2867755 -0.07157865 1.667028" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.2867755 -0.07157865 1.667028 -0.3114345 -0.1187982 1.670971" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p5_front_2_arch" pos="-0.3114345 -0.1187982 1.670971">
+        <joint name="row_p5_front_2_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p5_front_2_arch" rgba=".12 .34 .15 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.004745692 -0.05850289 -0.008543441" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.004745692 -0.05850289 -0.008543441 -0.01112679 -0.09242113 -0.01263901" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.01112679 -0.09242113 -0.01263901 -0.01698642 -0.114163 -0.02948458" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.01698642 -0.114163 -0.02948458 -0.02016771 -0.1361369 -0.07627802" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p5_front_2_branch" pos="-0.02016771 -0.1361369 -0.07627802">
+          <joint name="row_p5_front_2_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 -0.03344193 -0.02728276 -0.09063621" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.03344193 -0.02728276 -0.09063621 -0.06084267 -0.05208943 -0.1958058" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.06084267 -0.05208943 -0.1958058 -0.08405479 -0.07385763 -0.3117908" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.08405479 -0.07385763 -0.3117908 -0.1049309 -0.09202497 -0.4348735" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1049309 -0.09202497 -0.4348735 -0.1253234 -0.1060291 -0.5613361" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1253234 -0.1060291 -0.5613361 -0.1470851 -0.1153075 -0.6874607" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1470851 -0.1153075 -0.6874607 -0.1720684 -0.1192979 -0.8095295" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.1720684 -0.1192979 -0.8095295 -0.2021259 -0.1174379 -0.9238246" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="-0.2021259 -0.1174379 -0.9238246 -0.2391102 -0.1091651 -1.026628" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p5_front_2_branch" rgba=".12 .34 .15 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.2056022 0.012 1.501313 -0.2423659 -0.06061964 1.608117" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.2423659 -0.06061964 1.608117 -0.2787095 -0.1437263 1.658359" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.2787095 -0.1437263 1.658359 -0.2873477 -0.2151918 1.661094" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p5_front_3_arch" pos="-0.2873477 -0.2151918 1.661094">
+        <joint name="row_p5_front_3_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p5_front_3_arch" rgba=".15 .37 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.009454379 -0.07313795 -0.01313441" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.009454379 -0.07313795 -0.01313441 -0.05288089 -0.1419041 -0.02733012" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.05288089 -0.1419041 -0.02733012 -0.09921402 -0.1988344 -0.05427582" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.09921402 -0.1988344 -0.05427582 -0.1173882 -0.2364649 -0.1056602" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p5_front_3_branch" pos="-0.1173882 -0.2364649 -0.1056602">
+          <joint name="row_p5_front_3_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.007186164 -0.02513908 -0.0466472" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.007186164 -0.02513908 -0.0466472 0.02360985 -0.04420069 -0.1007742" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.02360985 -0.04420069 -0.1007742 0.04672896 -0.05765141 -0.1604675" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.04672896 -0.05765141 -0.1604675 0.07400138 -0.06595783 -0.2238138" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.07400138 -0.06595783 -0.2238138 0.102885 -0.06958651 -0.2888995" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.102885 -0.06958651 -0.2888995 0.1308378 -0.06900403 -0.3538113" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1308378 -0.06900403 -0.3538113 0.1553176 -0.06467698 -0.4166357" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1553176 -0.06467698 -0.4166357 0.1737822 -0.05707193 -0.4754593" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1737822 -0.05707193 -0.4754593 0.1836897 -0.04665545 -0.5283687" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_21" pos="0.1139482 -0.0887842 -0.3095398" xyaxes="0.07978959 -0.9968117 0 0.9968117 0.07978959 -0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_0" pos="0.1050365 -0.09013273 -0.3082418" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_1" pos="0.1214195 -0.08882136 -0.3082418" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_2" pos="0.1045345 -0.09236318 -0.303766" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_3" pos="0.1184206 -0.09125167 -0.303766" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_4" pos="0.1046069 -0.09391583 -0.3005814" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_5" pos="0.1158343 -0.09301714 -0.3005814" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_6" pos="0.1052952 -0.09624816 -0.2957028" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_7" pos="0.1114933 -0.09575203 -0.2957028" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_8" pos="0.1057655 -0.09784157 -0.2923698" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_9" pos="0.1080092 -0.09766197 -0.2923698" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_10" pos="0.1046069 -0.09391583 -0.3005814" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_upper_11" pos="0.1214195 -0.08882136 -0.3082418" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_0" pos="0.1062276 -0.09007571 -0.3109161" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_1" pos="0.1225673 -0.0887678 -0.3109161" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_2" pos="0.1072432 -0.09095842 -0.312886" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_3" pos="0.1232465 -0.08967744 -0.312886" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_4" pos="0.112825 -0.09355268 -0.3191003" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_5" pos="0.1238071 -0.09267363 -0.3191003" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_6" pos="0.1174623 -0.09544652 -0.3237288" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_7" pos="0.1234424 -0.09496785 -0.3237288" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_8" pos="0.121117 -0.0966299 -0.3267447" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_9" pos="0.1232048 -0.09646278 -0.3267447" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_10" pos="0.1062276 -0.09007571 -0.3109161" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_21_lower_11" pos="0.1238071 -0.09267363 -0.3191003" size=".0005" rgba="0 0 0 0" group="4" />
+          <geom type="mesh" mesh="row_p5_front_3_branch" rgba=".15 .37 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.2056022 0.012 1.498488 -0.1856719 -0.02823571 1.601877" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.1856719 -0.02823571 1.601877 -0.1576845 -0.05116539 1.642819" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.1576845 -0.05116539 1.642819 -0.1517053 -0.09012289 1.640257" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p5_front_4_arch" pos="-0.1517053 -0.09012289 1.640257">
+        <joint name="row_p5_front_4_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p5_front_4_arch" rgba=".15 .37 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.01120429 -0.05268279 -0.00778698" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.01120429 -0.05268279 -0.00778698 -0.01206119 -0.07674167 -0.01021834" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.01206119 -0.07674167 -0.01021834 -0.00986173 -0.08900252 -0.02539969" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.00986173 -0.08900252 -0.02539969 -0.01189696 -0.1062912 -0.07143667" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p5_front_4_branch" pos="-0.01189696 -0.1062912 -0.07143667">
+          <joint name="row_p5_front_4_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.00576344 -0.02616258 -0.08832415" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.00576344 -0.02616258 -0.08832415 0.01073797 -0.04796719 -0.1908109" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01073797 -0.04796719 -0.1908109 0.01517247 -0.06538911 -0.3038373" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01517247 -0.06538911 -0.3038373 0.01931582 -0.07840365 -0.4237803" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.01931582 -0.07840365 -0.4237803 0.02341691 -0.0869861 -0.5470169" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.02341691 -0.0869861 -0.5470169 0.02772462 -0.09111175 -0.6699242" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.02772462 -0.09111175 -0.6699242 0.03248783 -0.0907559 -0.7888791" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.03248783 -0.0907559 -0.7888791 0.03795543 -0.08589384 -0.9002586" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.03795543 -0.08589384 -0.9002586 0.0443763 -0.07650086 -1.00044" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p5_front_4_branch" rgba=".15 .37 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.2056022 0.012 1.512964 -0.1836982 -0.02043238 1.599203" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.1836982 -0.02043238 1.599203 -0.1621292 -0.029218 1.62346" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.1621292 -0.029218 1.62346 -0.1541904 -0.06158956 1.613398" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p5_front_5_arch" pos="-0.1541904 -0.06158956 1.613398">
+        <joint name="row_p5_front_5_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p5_front_5_arch" rgba=".15 .37 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 0.00959996 -0.04917664 -0.01143342" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.00959996 -0.04917664 -0.01143342 0.03595028 -0.06263454 -0.02188696" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.03595028 -0.06263454 -0.02188696 0.0629725 -0.06392347 -0.04509049" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="0.0629725 -0.06392347 -0.04509049 0.07458813 -0.07659321 -0.09477392" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p5_front_5_branch" pos="0.07458813 -0.07659321 -0.09477392">
+          <joint name="row_p5_front_5_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.02314892 -0.02446186 -0.06321026" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.02314892 -0.02446186 -0.06321026 0.04871943 -0.04170853 -0.1365562" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.04871943 -0.04170853 -0.1365562 0.0761511 -0.05253166 -0.2174449" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.0761511 -0.05253166 -0.2174449 0.1048835 -0.05772288 -0.3032835" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1048835 -0.05772288 -0.3032835 0.1343562 -0.05807384 -0.3914793" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1343562 -0.05807384 -0.3914793 0.1640087 -0.05437617 -0.4794394" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1640087 -0.05437617 -0.4794394 0.1932807 -0.04742152 -0.5645709" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1932807 -0.04742152 -0.5645709 0.2216117 -0.03800153 -0.644281" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2216117 -0.03800153 -0.644281 0.2484412 -0.02690783 -0.7159769" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="mesh" mesh="row_p5_front_5_branch" rgba=".15 .37 .20 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <geom type="capsule" fromto="-0.2056022 0.012 1.516229 -0.2169234 -0.05118276 1.615927" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.2169234 -0.05118276 1.615927 -0.223118 -0.1166895 1.668599" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <geom type="capsule" fromto="-0.223118 -0.1166895 1.668599 -0.2336269 -0.1784581 1.674173" size="0.014" contype="2" conaffinity="1" group="2" rgba=".12 .32 .10 1" />
+      <body name="row_p5_front_6_arch" pos="-0.2336269 -0.1784581 1.674173">
+        <joint name="row_p5_front_6_arch_bend" type="ball" range="0 9" stiffness="180" damping="7.5" armature=".0005" />
+        <geom type="mesh" mesh="row_p5_front_6_arch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        <geom type="capsule" fromto="0 0 0 -0.0244507 -0.06692187 -0.01301508" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.0244507 -0.06692187 -0.01301508 -0.05323799 -0.1226292 -0.02694827" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.05323799 -0.1226292 -0.02694827 -0.07881326 -0.1665799 -0.05363145" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <geom type="capsule" fromto="-0.07881326 -0.1665799 -0.05363145 -0.09362793 -0.1982319 -0.1048965" size="0.016" group="3" rgba="0 .7 0 0" density="700" contype="4" conaffinity="5" />
+        <body name="row_p5_front_6_branch" pos="-0.09362793 -0.1982319 -0.1048965">
+          <joint name="row_p5_front_6_branch_bend" type="ball" range="0 13" stiffness="75" damping="4.2" armature=".0005" />
+          <geom type="capsule" fromto="0 0 0 0.007275626 -0.0273741 -0.07908438" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.007275626 -0.0273741 -0.07908438 0.02747106 -0.05242556 -0.1708498" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.02747106 -0.05242556 -0.1708498 0.05701703 -0.07454817 -0.2720522" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.05701703 -0.07454817 -0.2720522 0.09234427 -0.09313568 -0.3794477" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.09234427 -0.09313568 -0.3794477 0.1298835 -0.1075819 -0.4897923" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1298835 -0.1075819 -0.4897923 0.1660655 -0.1172805 -0.599842" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1660655 -0.1172805 -0.599842 0.1973209 -0.1216253 -0.7063528" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.1973209 -0.1216253 -0.7063528 0.2200805 -0.1200101 -0.8060807" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <geom type="capsule" fromto="0.2200805 -0.1200101 -0.8060807 0.230775 -0.1118287 -0.8957817" size="0.017" group="3" rgba="0 .7 0 0" density="700" contype="1" conaffinity="1" />
+          <site name="cut_22" pos="0.1842241 -0.1511765 -0.6912289" xyaxes="-0.2700899 -0.9628351 0 0.9628351 -0.2700899 0" size=".002" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_0" pos="0.1755798 -0.149409 -0.6899314" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_1" pos="0.1917596 -0.1539477 -0.6899314" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_2" pos="0.1747751 -0.1520648 -0.6842438" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_3" pos="0.1880292 -0.1557828 -0.6842438" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_4" pos="0.1738047 -0.1553024 -0.6773161" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_5" pos="0.1831773 -0.1579315 -0.6773161" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_6" pos="0.1734587 -0.1571821 -0.6734142" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_7" pos="0.180408 -0.1591315 -0.6734142" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_8" pos="0.1738257 -0.1599079 -0.6682372" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_9" pos="0.1754296 -0.1603579 -0.6682372" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_10" pos="0.1738047 -0.1553024 -0.6773161" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_upper_11" pos="0.1917596 -0.1539477 -0.6899314" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_0" pos="0.1761961 -0.1493062 -0.6919823" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_1" pos="0.1921421 -0.1537793 -0.6919823" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_2" pos="0.1790244 -0.1521706 -0.6960702" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_3" pos="0.1904943 -0.1553881 -0.6960702" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_4" pos="0.1790244 -0.1521706 -0.6960702" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_5" pos="0.1904943 -0.1553881 -0.6960702" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_6" pos="0.1839211 -0.1569504 -0.7027934" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_7" pos="0.1877842 -0.1580341 -0.7027934" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_8" pos="0.1839211 -0.1569504 -0.7027934" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_9" pos="0.1877842 -0.1580341 -0.7027934" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_10" pos="0.1761961 -0.1493062 -0.6919823" size=".0005" rgba="0 0 0 0" group="4" />
+          <site name="cut_22_lower_11" pos="0.1921421 -0.1537793 -0.6919823" size=".0005" rgba="0 0 0 0" group="4" />
+          <body name="fruit_base_22" pos="0.192974 -0.145413 -0.683033">
+            <joint name="fruit_base_22_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+          <geom type="mesh" mesh="row_p5_front_6_branch" rgba=".18 .40 .19 1" contype="0" conaffinity="0" group="2" mass="0" />
+        </body>
+      </body>
+      <body name="pitaya_local_infill">
+        <body name="pitaya_infill_p1_1" pos="-2.253675 -0.0005983696 1.546153">
+          <geom type="mesh" mesh="pitaya_infill_p1_1" rgba=".115 .315 .105 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 0.1227981 -0.1555138 0.1447556" size="0.02031" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1227981 -0.1555138 0.1447556 0.1965516 -0.2622776 0.1435734" size="0.02031" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1965516 -0.2622776 0.1435734 0.213979 -0.2963916 0.0482187" size="0.02031" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.213979 -0.2963916 0.0482187 0.2661693 -0.3068012 -0.1307461" size="0.02031" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.2661693 -0.3068012 -0.1307461 0.3099528 -0.3126745 -0.3443159" size="0.02031" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.3099528 -0.3126745 -0.3443159 0.3009863 -0.338628 -0.54815" size="0.02031" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <body name="fruit_base_46" pos="0.297455 -0.339683 -0.239987">
+            <joint name="fruit_base_46_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+        </body>
+        <body name="pitaya_infill_p1_2" pos="-2.218346 0.01444387 1.547955">
+          <geom type="mesh" mesh="pitaya_infill_p1_2" rgba=".135 .295 .092 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 -0.1357644 -0.306738 0.1283874" size="0.01647" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1357644 -0.306738 0.1283874 -0.2021794 -0.5647261 0.1078904" size="0.01647" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.2021794 -0.5647261 0.1078904 -0.2016313 -0.5844084 0.00131015" size="0.01647" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.2016313 -0.5844084 0.00131015 -0.2430118 -0.5549613 -0.2059422" size="0.01647" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.2430118 -0.5549613 -0.2059422 -0.3032143 -0.5107891 -0.4485472" size="0.01647" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.3032143 -0.5107891 -0.4485472 -0.3562918 -0.4919097 -0.665715" size="0.01647" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <body name="fruit_base_47" pos="-0.254304 -0.537012 -0.342095">
+            <joint name="fruit_base_47_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+        </body>
+        <body name="pitaya_infill_p2_1" pos="-1.697622 0.004688004 1.572976">
+          <geom type="mesh" mesh="pitaya_infill_p2_1" rgba=".135 .295 .092 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 -0.08596625 -0.2161113 0.1360839" size="0.02145" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.08596625 -0.2161113 0.1360839 -0.1491056 -0.3834727 0.14044" size="0.02145" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1491056 -0.3834727 0.14044 -0.1267075 -0.431701 0.02494336" size="0.02145" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1267075 -0.431701 0.02494336 -0.05613261 -0.4703942 -0.2047773" size="0.02145" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.05613261 -0.4703942 -0.2047773 0.01203046 -0.4862338 -0.4704446" size="0.02145" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.01203046 -0.4862338 -0.4704446 0.02566636 -0.471164 -0.6982033" size="0.02145" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <body name="fruit_base_48" pos="-0.024651 -0.460161 -0.403003">
+            <joint name="fruit_base_48_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+        </body>
+        <body name="pitaya_infill_p3_1" pos="-1.206019 0.01234434 1.572716">
+          <geom type="mesh" mesh="pitaya_infill_p3_1" rgba=".095 .275 .094 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 0.0007435289 -0.2743666 0.1107009" size="0.01646" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.0007435289 -0.2743666 0.1107009 0.001660738 -0.4999832 0.080138" size="0.01646" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.001660738 -0.4999832 0.080138 -0.01988342 -0.5268518 0.002544834" size="0.01646" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.01988342 -0.5268518 0.002544834 -0.07673483 -0.5133894 -0.1316626" size="0.01646" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.07673483 -0.5133894 -0.1316626 -0.1442954 -0.4800638 -0.299292" size="0.01646" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1442954 -0.4800638 -0.299292 -0.1977921 -0.4528659 -0.482029" size="0.01646" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <body name="fruit_base_49" pos="-0.134212 -0.511813 -0.229238">
+            <joint name="fruit_base_49_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+        </body>
+        <body name="pitaya_infill_p3_2" pos="-1.195174 -0.001055967 1.569227">
+          <geom type="mesh" mesh="pitaya_infill_p3_2" rgba=".135 .295 .092 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 0.09572254 -0.330298 0.08076627" size="0.01830" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.09572254 -0.330298 0.08076627 0.1576441 -0.611846 0.02165083" size="0.01830" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1576441 -0.611846 0.02165083 0.1323272 -0.6488095 -0.08376484" size="0.01830" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1323272 -0.6488095 -0.08376484 0.0652931 -0.6630567 -0.2880824" size="0.01830" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.0652931 -0.6630567 -0.2880824 -0.002269604 -0.6641183 -0.5276751" size="0.01830" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.002269604 -0.6641183 -0.5276751 -0.02857189 -0.6669321 -0.7434596" size="0.01830" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <body name="fruit_base_50" pos="0.012388 -0.662353 -0.593081">
+            <joint name="fruit_base_50_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+        </body>
+        <body name="pitaya_infill_p4_1" pos="-0.7590688 0.008425372 1.532081">
+          <geom type="mesh" mesh="pitaya_infill_p4_1" rgba=".095 .275 .094 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 0.08915777 -0.1701433 0.1089209" size="0.01644" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.08915777 -0.1701433 0.1089209 0.1564054 -0.2915367 0.09632534" size="0.01644" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1564054 -0.2915367 0.09632534 0.1346773 -0.3307894 0.0327115" size="0.01644" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1346773 -0.3307894 0.0327115 0.06545797 -0.3508663 -0.06626927" size="0.01644" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.06545797 -0.3508663 -0.06626927 -0.01123047 -0.3580721 -0.1977409" size="0.01644" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.01123047 -0.3580721 -0.1977409 -0.05413033 -0.3640907 -0.3638733" size="0.01644" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <body name="fruit_base_51" pos="-0.006133 -0.353275 -0.133921">
+            <joint name="fruit_base_51_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+        </body>
+        <body name="pitaya_infill_p5_1" pos="-0.2125446 0.02131099 1.553025">
+          <geom type="mesh" mesh="pitaya_infill_p5_1" rgba=".135 .295 .092 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 0.1081208 -0.1831057 0.07533753" size="0.01621" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1081208 -0.1831057 0.07533753 0.1946706 -0.3174614 0.01446087" size="0.01621" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1946706 -0.3174614 0.01446087 0.210829 -0.3464545 -0.09630557" size="0.01621" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.210829 -0.3464545 -0.09630557 0.2218913 -0.3416424 -0.3141066" size="0.01621" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.2218913 -0.3416424 -0.3141066 0.2265196 -0.3258243 -0.5675391" size="0.01621" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.2265196 -0.3258243 -0.5675391 0.2253297 -0.3273048 -0.7896793" size="0.01621" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <body name="fruit_base_52" pos="0.215381 -0.348750 -0.543066">
+            <joint name="fruit_base_52_bend" type="ball" limited="true" range="0 0.10" stiffness="60" damping="1.0" armature="0.002" />
+            <inertial pos="0 0 0" mass="0.004" diaginertia="0.000002 0.000002 0.000002" />
+          </body>
+        </body>
+        <body name="pitaya_infill_p1_3" pos="-2.217381 0.0167304 1.584821">
+          <geom type="mesh" mesh="pitaya_infill_p1_3" rgba=".095 .275 .094 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 -0.04077595 -0.1932909 0.09196835" size="0.01699" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.04077595 -0.1932909 0.09196835 -0.05006474 -0.3378318 0.08353986" size="0.01699" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.05006474 -0.3378318 0.08353986 -0.06848796 -0.353532 -0.02179474" size="0.01699" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.06848796 -0.353532 -0.02179474 -0.1481664 -0.3144684 -0.225908" size="0.01699" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1481664 -0.3144684 -0.225908 -0.2345208 -0.261519 -0.465291" size="0.01699" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.2345208 -0.261519 -0.465291 -0.2702485 -0.2412246 -0.6809792" size="0.01699" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+        </body>
+        <body name="pitaya_infill_p1_4" pos="-2.213989 0.009383992 1.571831">
+          <geom type="mesh" mesh="pitaya_infill_p1_4" rgba=".135 .295 .092 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 -0.116024 -0.1483826 0.1096569" size="0.01784" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.116024 -0.1483826 0.1096569 -0.1902287 -0.2480153 0.1196776" size="0.01784" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1902287 -0.2480153 0.1196776 -0.1777633 -0.266086 -0.005102159" size="0.01784" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1777633 -0.266086 -0.005102159 -0.1563408 -0.2300104 -0.2582154" size="0.01784" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1563408 -0.2300104 -0.2582154 -0.148149 -0.1723134 -0.5478936" size="0.01784" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.148149 -0.1723134 -0.5478936 -0.1751618 -0.1311474 -0.7866787" size="0.01784" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+        </body>
+        <body name="pitaya_infill_p2_2" pos="-1.695289 -0.0004328822 1.572424">
+          <geom type="mesh" mesh="pitaya_infill_p2_2" rgba=".115 .315 .105 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 0.07230609 -0.1490768 0.08813106" size="0.01544" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.07230609 -0.1490768 0.08813106 0.1097246 -0.2494036 0.07044842" size="0.01544" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.1097246 -0.2494036 0.07044842 0.07913195 -0.2838995 -0.0101703" size="0.01544" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.07913195 -0.2838995 -0.0101703 0.02064074 -0.2899794 -0.1520018" size="0.01544" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.02064074 -0.2899794 -0.1520018 -0.02839126 -0.2775559 -0.3274568" size="0.01544" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.02839126 -0.2775559 -0.3274568 -0.03137394 -0.2619734 -0.5137876" size="0.01544" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+        </body>
+        <body name="pitaya_infill_p2_3" pos="-1.694055 0.01736557 1.564262">
+          <geom type="mesh" mesh="pitaya_infill_p2_3" rgba=".115 .315 .105 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 0.05277279 -0.1663363 0.1396547" size="0.02289" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.05277279 -0.1663363 0.1396547 0.06186547 -0.2839225 0.1333655" size="0.02289" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.06186547 -0.2839225 0.1333655 0.02146149 -0.3188201 0.04061744" size="0.02289" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.02146149 -0.3188201 0.04061744 -0.03936566 -0.331344 -0.1317789" size="0.02289" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.03936566 -0.331344 -0.1317789 -0.09834206 -0.3397525 -0.3386066" size="0.02289" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.09834206 -0.3397525 -0.3386066 -0.1358599 -0.3677436 -0.5393446" size="0.02289" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+        </body>
+        <body name="pitaya_infill_p3_3" pos="-1.210753 0.01030464 1.552047">
+          <geom type="mesh" mesh="pitaya_infill_p3_3" rgba=".137 .34 .109 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 -0.04334523 -0.1790552 0.09612894" size="0.02442" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.04334523 -0.1790552 0.09612894 -0.06060445 -0.3093604 0.04390749" size="0.02442" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.06060445 -0.3093604 0.04390749 -0.04432316 -0.3268535 -0.07175047" size="0.02442" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.04432316 -0.3268535 -0.07175047 -0.01688129 -0.2907126 -0.3018776" size="0.02442" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.01688129 -0.2907126 -0.3018776 0.01040153 -0.2365881 -0.5679621" size="0.02442" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.01040153 -0.2365881 -0.5679621 0.02706284 -0.205768 -0.7959124" size="0.02442" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+        </body>
+        <body name="pitaya_infill_p4_2" pos="-0.7278677 0.0009266485 1.555116">
+          <geom type="mesh" mesh="pitaya_infill_p4_2" rgba=".095 .275 .094 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 0.01571536 -0.2195296 0.1036419" size="0.01854" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.01571536 -0.2195296 0.1036419 0.01684199 -0.3903092 0.05679428" size="0.01854" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.01684199 -0.3903092 0.05679428 0.02580413 -0.4224606 -0.04056618" size="0.01854" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.02580413 -0.4224606 -0.04056618 0.05883282 -0.4228828 -0.2245854" size="0.01854" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.05883282 -0.4228828 -0.2245854 0.09378072 -0.405307 -0.4433432" size="0.01854" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="0.09378072 -0.405307 -0.4433432 0.1075948 -0.3889255 -0.6495597" size="0.01854" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+        </body>
+        <body name="pitaya_infill_p5_2" pos="-0.2164091 -0.0005370249 1.538077">
+          <geom type="mesh" mesh="pitaya_infill_p5_2" rgba=".135 .295 .092 1" contype="0" conaffinity="0" group="2" />
+          <geom type="capsule" fromto="0 0 0 -0.02815402 -0.1584291 0.066736" size="0.01663" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.02815402 -0.1584291 0.066736 -0.04436773 -0.2681081 0.02437299" size="0.01663" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.04436773 -0.2681081 0.02437299 -0.05813766 -0.2947035 -0.0473822" size="0.01663" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.05813766 -0.2947035 -0.0473822 -0.08914326 -0.2785244 -0.1668784" size="0.01663" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.08914326 -0.2785244 -0.1668784 -0.1129268 -0.2371012 -0.3194078" size="0.01663" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+          <geom type="capsule" fromto="-0.1129268 -0.2371012 -0.3194078 -0.1049075 -0.1934859 -0.4952105" size="0.01663" contype="2" conaffinity="1" group="3" rgba="0 0 0 0" />
+        </body>
+      </body>
+    </body>
+    <body name="fruit_2" pos="-2.150053 -0.600201 1.126119" xyaxes="0.0740396756 -0.314621544 -0.946325214 0.988366383 0.149565879 0.0276032788">
+      <freejoint name="fruit_2_free" />
+      <inertial pos="0 0 0" mass="0.30156556738545415" diaginertia="0.0003661165 0.0003747292 0.0002067947" />
+      <geom type="ellipsoid" size="0.04225804 0.04053323 0.06653811" name="skin_2" friction=".85 .015 .002" rgba="0.7791413 0.1168427 0.2494557 1" />
+      <geom type="mesh" mesh="row_bracts_2" material="bract_skin" euler="0 0 2.72329482775" contype="0" conaffinity="0" group="2" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06549846" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_6" pos="-1.865760 -0.831764 0.906002" xyaxes="0.04186492 0.1245212 -0.9913333 0.947863 -0.3186782 0">
+      <freejoint name="fruit_6_free" />
+      <inertial pos="0 0 0" mass="0.28209156352467263" diaginertia="0.0003061847 0.0003143633 0.0001963713" />
+      <geom type="ellipsoid" size="0.04257696 0.04083912 0.06131241" name="skin_6" friction=".85 .015 .002" rgba="0.8603049 0.09081658 0.2506906 1" />
+      <geom type="mesh" mesh="row_bracts_6" material="bract_skin" euler="0 0 5.10594501875" contype="0" conaffinity="0" group="2" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.0603544" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_7" pos="-1.425658 -0.733648 1.305738" xyaxes="0.149908426 0.537386587 -0.829905489 0.971519049 -0.235866008 0.0227588113">
+      <freejoint name="fruit_7_free" />
+      <inertial pos="0 0 0" mass="0.2711098554607906" diaginertia="0.0003051398 0.0003123811 0.0001738671" />
+      <geom type="ellipsoid" size="0.04086643 0.03919841 0.06396163" name="skin_7" friction=".85 .015 .002" rgba="0.7441895 0.07917586 0.1800786 1" />
+      <geom type="mesh" mesh="row_bracts_7" material="bract_skin" euler="0 0 4.32200420527" contype="0" conaffinity="0" group="2" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06296223" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_11" pos="-1.407427 -0.662830 0.856684" xyaxes="0.0743078128 -0.412251824 -0.908034571 0.997235285 0.0310537089 0.0675089106">
+      <freejoint name="fruit_11_free" />
+      <inertial pos="0 0 0" mass="0.2766148335789911" diaginertia="0.0002967347 0.0003046407 0.000189825" />
+      <geom type="ellipsoid" size="0.04227364 0.04054818 0.06098791" name="skin_11" friction=".85 .015 .002" rgba="0.8055564 0.1375728 0.2827794 1" />
+      <geom type="mesh" mesh="row_bracts_11" material="bract_skin" euler="0 0 2.80744587764" contype="0" conaffinity="0" group="2" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06003498" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_16" pos="-0.726591 -0.567067 1.281693" xyaxes="-0.203484239 0.484977361 -0.850524029 0.865249125 0.495610118 0.0755947222">
+      <freejoint name="fruit_16_free" />
+      <inertial pos="0 0 0" mass="0.3845917996827753" diaginertia="0.0005005899 0.0005146281 0.0003370638" />
+      <geom type="ellipsoid" size="0.04777346 0.04582352 0.06639483" name="skin_16" friction=".85 .015 .002" rgba="0.7521681 0.08184022 0.2957067 1" />
+      <geom type="mesh" mesh="row_bracts_16" material="bract_skin" euler="0 0 2.43135011311" contype="0" conaffinity="0" group="2" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06535741" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_17" pos="-0.493255 -0.691493 1.051374" xyaxes="-0.0745015634 -0.169977735 -0.982627644 0.965803345 -0.257687902 -0.0286503777">
+      <freejoint name="fruit_17_free" />
+      <inertial pos="0 0 0" mass="0.2944040855400907" diaginertia="0.0003801864 0.0003879587 0.0001866167" />
+      <geom type="ellipsoid" size="0.04062879 0.03897047 0.0702722" name="skin_17" friction=".85 .015 .002" rgba="0.6810867 0.1328414 0.2022508 1" />
+      <geom type="mesh" mesh="row_bracts_17" material="bract_skin" euler="0 0 0.447597366123" contype="0" conaffinity="0" group="2" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.0691742" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_22" pos="-0.143545 -0.575487 0.850445" xyaxes="-0.0713326233 0.564038177 -0.822661894 0.987197502 -0.0780413399 -0.13910658">
+      <freejoint name="fruit_22_free" />
+      <inertial pos="0 0 0" mass="0.3780852456241783" diaginertia="0.000478488 0.000492359 0.0003330499" />
+      <geom type="ellipsoid" size="0.04789503 0.04594013 0.06494061" name="skin_22" friction=".85 .015 .002" rgba="0.7230563 0.1252179 0.3070132 1" />
+      <geom type="mesh" mesh="row_bracts_22" material="bract_skin" euler="0 0 2.82624830967" contype="0" conaffinity="0" group="2" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06392592" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_46" pos="-1.968548 -0.387755 1.273617" xyaxes="0.4611996 -0.5800916 0.671408 -0.8622263 -0.1143989 0.4934357">
+      <freejoint name="fruit_46_free" />
+      <inertial pos="0 0 0" mass="0.3677504" diaginertia="0.0004214302 0.0004359076 0.0003476074" />
+      <geom name="skin_46" type="ellipsoid" size="0.04961335 0.04758831 0.05886589" friction=".85 .015 .002" rgba="0.7975023 0.1240546 0.2312912 1" />
+      <geom type="mesh" mesh="row_bracts_46" material="bract_skin" group="2" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.05794611" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_47" pos="-2.421214 -0.516700 1.178998" xyaxes="-0.3422008 -0.5353557 -0.7722 -0.3242588 0.8386131 -0.4377035">
+      <freejoint name="fruit_47_free" />
+      <inertial pos="0 0 0" mass="0.2326982" diaginertia="0.0002256212 0.0002314717 0.0001404717" />
+      <geom name="skin_47" type="ellipsoid" size="0.03964866 0.03803035 0.05832349" friction=".85 .015 .002" rgba="0.7368192 0.09374182 0.1851877 1" />
+      <geom type="mesh" mesh="row_bracts_47" material="bract_skin" group="2" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.05741218" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_48" pos="-1.782348 -0.448607 1.142126" xyaxes="0.1273198 0.9914009 -0.03022941 0.411601 -0.08053975 -0.9077984">
+      <freejoint name="fruit_48_free" />
+      <inertial pos="0 0 0" mass="0.2797989" diaginertia="0.0003332524 0.000340663 0.0001779339" />
+      <geom name="skin_48" type="ellipsoid" size="0.04069461 0.03903361 0.06657018" friction=".85 .015 .002" rgba="0.7910132 0.1133527 0.2423338 1" />
+      <geom type="mesh" mesh="row_bracts_48" material="bract_skin" group="2" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06553002" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_49" pos="-1.365609 -0.540247 1.315663" xyaxes="-0.8192285 0.1286553 0.5588493 -0.3461122 0.6660803 -0.6607143">
+      <freejoint name="fruit_49_free" />
+      <inertial pos="0 0 0" mass="0.2302425" diaginertia="0.0002111023 0.000217121 0.0001445109" />
+      <geom name="skin_49" type="ellipsoid" size="0.04042856 0.03877841 0.05550299" friction=".85 .015 .002" rgba="0.8285989 0.0749303 0.211214 1" />
+      <geom type="mesh" mesh="row_bracts_49" material="bract_skin" group="2" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.05463576" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_50" pos="-1.139882 -0.636169 0.942869" xyaxes="-0.6379988 0.7385207 -0.2180475 0.3067773 0.5034941 0.8077013">
+      <freejoint name="fruit_50_free" />
+      <inertial pos="0 0 0" mass="0.4036698" diaginertia="0.0004923988 0.0005093023 0.0004058605" />
+      <geom name="skin_50" type="ellipsoid" size="0.05116888 0.04908035 0.06074659" friction=".85 .015 .002" rgba="0.7701945 0.1142742 0.1964536 1" />
+      <geom type="mesh" mesh="row_bracts_50" material="bract_skin" group="2" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.05979743" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_51" pos="-0.800939 -0.286776 1.412272" xyaxes="0.8548974 0.4758514 0.206678 0.07593188 0.2793229 -0.9571902">
+      <freejoint name="fruit_51_free" />
+      <inertial pos="0 0 0" mass="0.3371775" diaginertia="0.0004453549 0.0004556432 0.0002470263" />
+      <geom name="skin_51" type="ellipsoid" size="0.04367902 0.04189621 0.06963383" friction=".85 .015 .002" rgba="0.8137986 0.07421443 0.2713938 1" />
+      <geom type="mesh" mesh="row_bracts_51" material="bract_skin" group="2" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.0685458" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+    <body name="fruit_52" pos="0.023626 -0.383827 0.980253" xyaxes="-0.9342685 -0.3559066 0.02174351 -0.1759925 0.4072348 -0.8962067">
+      <freejoint name="fruit_52_free" />
+      <inertial pos="0 0 0" mass="0.3345556" diaginertia="0.0004217653 0.0004322862 0.0002526098" />
+      <geom name="skin_52" type="ellipsoid" size="0.04434265 0.04253274 0.06703979" friction=".85 .015 .002" rgba="0.7146162 0.1252687 0.2932061 1" />
+      <geom type="mesh" mesh="row_bracts_52" material="bract_skin" group="2" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06599229" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+    </body>
+  </worldbody>
+  <contact>
+    <exclude body1="base_link" body2="shoulder_link" />
+    <exclude body1="shoulder_link" body2="upper_arm_link" />
+    <exclude body1="upper_arm_link" body2="elbow_link" />
+    <exclude body1="elbow_link" body2="wrist1_link" />
+    <exclude body1="wrist1_link" body2="wrist2_link" />
+    <exclude body1="wrist2_link" body2="wrist3_link" />
+    <exclude body1="shoulder_link" body2="wrist1_link" />
+    <exclude body1="shoulder_link" body2="wrist2_link" />
+    <exclude body1="shoulder_link" body2="wrist3_link" />
+    <exclude body1="upper_arm_link" body2="wrist1_link" />
+    <exclude body1="upper_arm_link" body2="wrist2_link" />
+    <exclude body1="upper_arm_link" body2="wrist3_link" />
+    <exclude body1="base_link" body2="elbow_link" />
+    <exclude body1="base_link" body2="wrist1_link" />
+    <exclude body1="base_link" body2="wrist2_link" />
+    <exclude body1="base_link" body2="wrist3_link" />
+    <exclude body1="wrist3_link" body2="gripper_base_link" />
+    <exclude body1="gripper_base_link" body2="gripper_right_link" />
+    <exclude body1="gripper_base_link" body2="gripper_left_link" />
+  </contact>
+  <equality>
+    <joint name="gripper_left_joint_mimic" joint1="gripper_left_joint" joint2="gripper_right_joint" polycoef="0 1 0 0 0" />
+    <weld name="attachment_2" body1="fruit_base_2" body2="fruit_2" solref=".005 1" />
+    <weld name="attachment_6" body1="fruit_base_6" body2="fruit_6" solref=".005 1" />
+    <weld name="attachment_7" body1="fruit_base_7" body2="fruit_7" solref=".005 1" />
+    <weld name="attachment_11" body1="fruit_base_11" body2="fruit_11" solref=".005 1" />
+    <weld name="attachment_16" body1="fruit_base_16" body2="fruit_16" solref=".005 1" />
+    <weld name="attachment_17" body1="fruit_base_17" body2="fruit_17" solref=".005 1" />
+    <weld name="attachment_22" body1="fruit_base_22" body2="fruit_22" solref=".005 1" />
+    <weld name="attachment_46" body1="fruit_base_46" body2="fruit_46" solref=".005 1" />
+    <weld name="attachment_47" body1="fruit_base_47" body2="fruit_47" solref=".005 1" />
+    <weld name="attachment_48" body1="fruit_base_48" body2="fruit_48" solref=".005 1" />
+    <weld name="attachment_49" body1="fruit_base_49" body2="fruit_49" solref=".005 1" />
+    <weld name="attachment_50" body1="fruit_base_50" body2="fruit_50" solref=".005 1" />
+    <weld name="attachment_51" body1="fruit_base_51" body2="fruit_51" solref=".005 1" />
+    <weld name="attachment_52" body1="fruit_base_52" body2="fruit_52" solref=".005 1" />
+  </equality>
+  <!-- MIT impedance control done in software by MujocoSimModule -->
+  <!-- Computes: tau = effort + stiffness*(q_des - q) + damping*(q_des_dot - q_dot) -->
+  <actuator>
+    <motor name="shoulder_actuator" joint="shoulder_joint" ctrlrange="-27 27" forcelimited="true" forcerange="-27 27" />
+    <motor name="upper_arm_actuator" joint="upper_arm_joint" ctrlrange="-27 27" forcelimited="true" forcerange="-27 27" />
+    <motor name="elbow_actuator" joint="elbow_joint" ctrlrange="-27 27" forcelimited="true" forcerange="-27 27" />
+    <motor name="wrist1_actuator" joint="wrist1_joint" ctrlrange="-7 7" forcelimited="true" forcerange="-7 7" />
+    <motor name="wrist2_actuator" joint="wrist2_joint" ctrlrange="-7 7" forcelimited="true" forcerange="-7 7" />
+    <motor name="wrist3_actuator" joint="wrist3_joint" ctrlrange="-7 7" forcelimited="true" forcerange="-7 7" />
+    <motor name="gripper_right_actuator" joint="gripper_right_joint" ctrlrange="-10 10" forcelimited="true" forcerange="-10 10" />
+  </actuator>
+  <sensor>
+    <jointpos name="jointpos_shoulder" joint="shoulder_joint" noise="0.0002" />
+    <jointvel name="jointvel_shoulder" joint="shoulder_joint" noise="0.002" />
+    <jointactuatorfrc name="jointactuatorfrc_shoulder" joint="shoulder_joint" noise="0.02" />
+    <jointpos name="jointpos_upper_arm" joint="upper_arm_joint" noise="0.0002" />
+    <jointvel name="jointvel_upper_arm" joint="upper_arm_joint" noise="0.002" />
+    <jointactuatorfrc name="jointactuatorfrc_upper_arm" joint="upper_arm_joint" noise="0.02" />
+    <jointpos name="jointpos_elbow" joint="elbow_joint" noise="0.0002" />
+    <jointvel name="jointvel_elbow" joint="elbow_joint" noise="0.002" />
+    <jointactuatorfrc name="jointactuatorfrc_elbow" joint="elbow_joint" noise="0.02" />
+    <jointpos name="jointpos_wrist1" joint="wrist1_joint" noise="0.0002" />
+    <jointvel name="jointvel_wrist1" joint="wrist1_joint" noise="0.002" />
+    <jointactuatorfrc name="jointactuatorfrc_wrist1" joint="wrist1_joint" noise="0.02" />
+    <jointpos name="jointpos_wrist2" joint="wrist2_joint" noise="0.0002" />
+    <jointvel name="jointvel_wrist2" joint="wrist2_joint" noise="0.002" />
+    <jointactuatorfrc name="jointactuatorfrc_wrist2" joint="wrist2_joint" noise="0.02" />
+    <jointpos name="jointpos_wrist3" joint="wrist3_joint" noise="0.0002" />
+    <jointvel name="jointvel_wrist3" joint="wrist3_joint" noise="0.002" />
+    <jointactuatorfrc name="jointactuatorfrc_wrist3" joint="wrist3_joint" noise="0.02" />
+    <jointpos name="jointpos_gripper_right" joint="gripper_right_joint" noise="0.0002" />
+    <jointvel name="jointvel_gripper_right" joint="gripper_right_joint" noise="0.002" />
+    <jointactuatorfrc name="jointactuatorfrc_gripper_right" joint="gripper_right_joint" noise="0.02" />
+  </sensor>
+</mujoco>

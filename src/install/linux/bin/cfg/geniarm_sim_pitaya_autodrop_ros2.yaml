@@ -265,9 +265,16 @@ aimrt:
 
 # Module custom configuration
 MujocoSimModule:
-  simulation_model_path: ./cfg/model/geniarm_v1.1.5_pitaya_row.xml
+  simulation_model_path: ./cfg/model/geniarm_v1.1.5_pitaya_row_autodrop.xml
   sim_executor: sim_executor
   gui_executor: gui_executor
+  # 夹住即脱落（需配合本地补丁版 libmujoco_sim_pkg.so）
+  auto_detach: true
+  auto_detach_eq_prefix: attachment_
+  auto_detach_gripper_joint: gripper_right_joint
+  auto_detach_gripper_body_prefix: gripper
+  auto_detach_close_thresh: 0.043   # 夹爪闭合阈值：qpos < 此值 视为已夹住
+  auto_detach_hold_steps: 100       # 接触持续 100 步(0.1s) 后再断开，先让夹持力建立
   subscriber_options:
     - topic: /genisys/joint_cmd
       type: joint_actuator
