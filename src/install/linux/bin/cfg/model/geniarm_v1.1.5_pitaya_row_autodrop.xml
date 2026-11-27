@@ -1,27 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <mujoco model="Geniarm v1.1.5 - Pitaya row">
-  <!--Orchard from fruit_tree_resource/pitaya_row.xml; original picker replaced by Geniarm.-->
-  <!--Short row: retain plants 1–5 and their fruit on the robot side of the original row.-->
-  <!--Robot-facing side only. Fruit spacing and pitch vary by plant; fruit_6 retains the verified contact pose.-->
-  <!--Canopy infill (seed 19327): branching and rib attachment based on UF/IFAS HS303 and doi:10.3390/agronomy13010238. Extra shoots are separated outside the common crown; fruit connects via short peduncles.-->
-  <!--Fruit attachment: INTACT cladode + berry BURIED into it (no peduncle, no notch, no see-through gap).
-      A pitaya is fused to the three-winged cladode, so the berry must penetrate the stem, not touch it
-      tangentially -- a tangent contact leaves a crescent void that reads as a gap in the render.
-      Removed the harvest leftovers that used to model a cut berry:
-        row_scar_<id> (10) / row_chip_<id> (7) / row_flesh_<id> (7)  = 24 geoms + 24 mesh assets
-        (the .obj files stay in the asset folder, now unreferenced)
-      Seating is computed, not eyeballed: for each berry take the 60 nearest vertices of its PARENT
-      cladode mesh, fit the local tangent plane (PCA), and push the berry along that plane's normal
-      until its pedicel-scar pole sits 12 mm behind the plane. Result: every berry's base crosses the
-      stem surface in a closed loop, so no background can be seen between fruit and stem from any view.
-      Typical axial/normal shift: 9-21 mm (fruit_2 20.7, fruit_6 20.4, fruit_7 16.2, fruit_11 16.4,
-      fruit_16 15.7, fruit_17 18.7, fruit_22 15.7, fruit_46 10.5, fruit_47 20.3, fruit_48 9.8,
-      fruit_49 14.8, fruit_50 12.5, fruit_51 8.7, fruit_52 9.3 mm). fruit_base_<id>, the ball-joint
-      pivot, is moved to the buried pole; welds (attachment_<id>) still derive from qpos0.
-      Joint: ball, range 0-0.10 rad (5.73 deg), stiffness 60 N*m/rad, damping 1.0, armature 2e-3,
-      identical for all 14 berries -> seated rigidly; compliance comes from the branch joints.
-      The cut_<id> / cut_<id>_upper_* / cut_<id>_lower_* sites are kept (invisible, group 4) but no
-      longer describe this junction; re-derive them when the cutting interaction is implemented.-->
   <compiler angle="radian" autolimits="true" />
   <option timestep="0.001" gravity="0 0 -9.81" iterations="120" solver="Newton" integrator="implicitfast">
     <flag energy="enable" />
@@ -66,20 +44,20 @@
     <mesh name="row_p1_front_2_arch" file="pitaya_row_assets/row_assets/row_p1_front_2_arch.obj" />
     <mesh name="row_p1_front_2_branch" file="pitaya_row_assets/row_assets/row_p1_front_2_branch.obj" />
     <mesh name="row_p1_front_3_arch" file="pitaya_row_assets/row_assets/row_p1_front_3_arch.obj" />
-    <mesh name="row_bracts_2" file="pitaya_row_assets/assets/bracts.obj" scale="0.8624091 0.8624091 1.039658" />
+    <mesh name="row_bracts_2" file="pitaya_row_assets/assets/bracts.obj" scale="0.6677154 0.6677154 0.8049494" />
     <mesh name="row_p1_front_3_branch" file="pitaya_row_assets/row_assets/row_p1_front_3_branch.obj" />
     <mesh name="row_p2_front_1_arch" file="pitaya_row_assets/row_assets/row_p2_front_1_arch.obj" />
-    <mesh name="row_bracts_6" file="pitaya_row_assets/assets/bracts.obj" scale="0.8689175 0.8689175 0.9580064" />
+    <mesh name="row_bracts_6" file="pitaya_row_assets/assets/bracts.obj" scale="0.6744949 0.6744949 0.7436500" />
     <mesh name="row_p2_front_1_branch" file="pitaya_row_assets/row_assets/row_p2_front_1_branch.obj" />
     <mesh name="row_p2_front_2_arch" file="pitaya_row_assets/row_assets/row_p2_front_2_arch.obj" />
-    <mesh name="row_bracts_7" file="pitaya_row_assets/assets/bracts.obj" scale="0.8340087 0.8340087 0.9994004" />
+    <mesh name="row_bracts_7" file="pitaya_row_assets/assets/bracts.obj" scale="0.6381323 0.6381323 0.7646799" />
     <mesh name="row_p2_front_2_branch" file="pitaya_row_assets/row_assets/row_p2_front_2_branch.obj" />
     <mesh name="row_p2_front_3_arch" file="pitaya_row_assets/row_assets/row_p2_front_3_arch.obj" />
     <mesh name="row_p2_front_3_branch" file="pitaya_row_assets/row_assets/row_p2_front_3_branch.obj" />
     <mesh name="row_p3_front_1_arch" file="pitaya_row_assets/row_assets/row_p3_front_1_arch.obj" />
     <mesh name="row_p3_front_1_branch" file="pitaya_row_assets/row_assets/row_p3_front_1_branch.obj" />
     <mesh name="row_p3_front_2_arch" file="pitaya_row_assets/row_assets/row_p3_front_2_arch.obj" />
-    <mesh name="row_bracts_11" file="pitaya_row_assets/assets/bracts.obj" scale="0.8627273 0.8627273 0.9529361" />
+    <mesh name="row_bracts_11" file="pitaya_row_assets/assets/bracts.obj" scale="0.6680469 0.6680469 0.7378995" />
     <mesh name="row_p3_front_2_branch" file="pitaya_row_assets/row_assets/row_p3_front_2_branch.obj" />
     <mesh name="row_p3_front_3_arch" file="pitaya_row_assets/row_assets/row_p3_front_3_arch.obj" />
     <mesh name="row_p3_front_3_branch" file="pitaya_row_assets/row_assets/row_p3_front_3_branch.obj" />
@@ -88,12 +66,12 @@
     <mesh name="row_p3_front_5_arch" file="pitaya_row_assets/row_assets/row_p3_front_5_arch.obj" />
     <mesh name="row_p3_front_5_branch" file="pitaya_row_assets/row_assets/row_p3_front_5_branch.obj" />
     <mesh name="row_p4_front_1_arch" file="pitaya_row_assets/row_assets/row_p4_front_1_arch.obj" />
-    <mesh name="row_bracts_16" file="pitaya_row_assets/assets/bracts.obj" scale="0.9749685 0.9749685 1.037419" />
+    <mesh name="row_bracts_16" file="pitaya_row_assets/assets/bracts.obj" scale="0.7849626 0.7849626 0.8352425" />
     <mesh name="row_p4_front_1_branch" file="pitaya_row_assets/row_assets/row_p4_front_1_branch.obj" />
     <mesh name="row_p4_front_2_arch" file="pitaya_row_assets/row_assets/row_p4_front_2_arch.obj" />
     <mesh name="row_p4_front_2_branch" file="pitaya_row_assets/row_assets/row_p4_front_2_branch.obj" />
     <mesh name="row_p4_front_3_arch" file="pitaya_row_assets/row_assets/row_p4_front_3_arch.obj" />
-    <mesh name="row_bracts_17" file="pitaya_row_assets/assets/bracts.obj" scale="0.829159 0.829159 1.098003" />
+    <mesh name="row_bracts_17" file="pitaya_row_assets/assets/bracts.obj" scale="0.6330806 0.6330806 0.8383488" />
     <mesh name="row_p4_front_3_branch" file="pitaya_row_assets/row_assets/row_p4_front_3_branch.obj" />
     <mesh name="row_p4_front_4_arch" file="pitaya_row_assets/row_assets/row_p4_front_4_arch.obj" />
     <mesh name="row_p4_front_4_branch" file="pitaya_row_assets/row_assets/row_p4_front_4_branch.obj" />
@@ -108,22 +86,22 @@
     <mesh name="row_p5_front_5_arch" file="pitaya_row_assets/row_assets/row_p5_front_5_arch.obj" />
     <mesh name="row_p5_front_5_branch" file="pitaya_row_assets/row_assets/row_p5_front_5_branch.obj" />
     <mesh name="row_p5_front_6_arch" file="pitaya_row_assets/row_assets/row_p5_front_6_arch.obj" />
-    <mesh name="row_bracts_22" file="pitaya_row_assets/assets/bracts.obj" scale="0.9774496 0.9774496 1.014697" />
+    <mesh name="row_bracts_22" file="pitaya_row_assets/assets/bracts.obj" scale="0.7875470 0.7875470 0.8175579" />
     <mesh name="row_p5_front_6_branch" file="pitaya_row_assets/row_assets/row_p5_front_6_branch.obj" />
     <mesh name="pitaya_infill_p1_1" file="pitaya_row_assets/infill/pitaya_infill_p1_1.obj" />
-    <mesh name="row_bracts_46" file="pitaya_row_assets/assets/bracts.obj" scale="1.012517 1.012517 0.9197795" />
+    <mesh name="row_bracts_46" file="pitaya_row_assets/assets/bracts.obj" scale="0.8240750 0.8240750 0.7485971" />
     <mesh name="pitaya_infill_p1_2" file="pitaya_row_assets/infill/pitaya_infill_p1_2.obj" />
-    <mesh name="row_bracts_47" file="pitaya_row_assets/assets/bracts.obj" scale="0.8091563 0.8091563 0.9113045" />
+    <mesh name="row_bracts_47" file="pitaya_row_assets/assets/bracts.obj" scale="0.6122449 0.6122449 0.6895349" />
     <mesh name="pitaya_infill_p2_1" file="pitaya_row_assets/infill/pitaya_infill_p2_1.obj" />
-    <mesh name="row_bracts_48" file="pitaya_row_assets/assets/bracts.obj" scale="0.8305023 0.8305023 1.040159" />
+    <mesh name="row_bracts_48" file="pitaya_row_assets/assets/bracts.obj" scale="0.6344798 0.6344798 0.7946515" />
     <mesh name="pitaya_infill_p3_1" file="pitaya_row_assets/infill/pitaya_infill_p3_1.obj" />
-    <mesh name="row_bracts_49" file="pitaya_row_assets/assets/bracts.obj" scale="0.8250726 0.8250726 0.8672343" />
+    <mesh name="row_bracts_49" file="pitaya_row_assets/assets/bracts.obj" scale="0.6288240 0.6288240 0.6609573" />
     <mesh name="pitaya_infill_p3_2" file="pitaya_row_assets/infill/pitaya_infill_p3_2.obj" />
-    <mesh name="row_bracts_50" file="pitaya_row_assets/assets/bracts.obj" scale="1.044263 1.044263 0.9491655" />
+    <mesh name="row_bracts_50" file="pitaya_row_assets/assets/bracts.obj" scale="0.8571430 0.8571430 0.7790859" />
     <mesh name="pitaya_infill_p4_1" file="pitaya_row_assets/infill/pitaya_infill_p4_1.obj" />
-    <mesh name="row_bracts_51" file="pitaya_row_assets/assets/bracts.obj" scale="0.8914086 0.8914086 1.088029" />
+    <mesh name="row_bracts_51" file="pitaya_row_assets/assets/bracts.obj" scale="0.6979227 0.6979227 0.8518654" />
     <mesh name="pitaya_infill_p5_1" file="pitaya_row_assets/infill/pitaya_infill_p5_1.obj" />
-    <mesh name="row_bracts_52" file="pitaya_row_assets/assets/bracts.obj" scale="0.904952 0.904952 1.047497" />
+    <mesh name="row_bracts_52" file="pitaya_row_assets/assets/bracts.obj" scale="0.7120302 0.7120302 0.8241868" />
     <mesh name="pitaya_infill_p1_3" file="pitaya_row_assets/infill/pitaya_infill_p1_3.obj" />
     <mesh name="pitaya_infill_p1_4" file="pitaya_row_assets/infill/pitaya_infill_p1_4.obj" />
     <mesh name="pitaya_infill_p2_2" file="pitaya_row_assets/infill/pitaya_infill_p2_2.obj" />
@@ -135,8 +113,13 @@
   <worldbody>
     <!-- 0.72 m pedestal on the negative-Y side of the row, beside fruit_6.
          Static reach check: with the fingers closed and fruits at their initial positions,
-         the first six qpos values below (radians, in model order) put the fingers in contact with skin_6:
-         0.00293886 1.36848657 -0.21689877 -1.15157513 0.00295356 -1.55257469 -->
+         the first six qpos values below (radians, in model order) put the closed fingertip
+         (gripper_base frame point 0 0 0.164) on skin_6 at (-1.8663 -0.8618 0.9167):
+         -0.00565272 1.51561782 -0.36742325 -1.09927511 0.00670569 -1.55257469
+         These were re-solved by position IK after the berries were resized; the previous values
+         (0.00293886 1.36848657 -0.21689877 -1.15157513 0.00295356 -1.55257469) targeted the
+         85 mm berry and now stop 40 mm short of the 66 mm one.
+         Grasp: fruit_6 needs 66.1 mm of the 90 mm jaw opening, i.e. 73 percent of the stroke. -->
     <body name="pitaya_pedestal" pos="-1.87 -1.29 0" euler="0 0 1.57079632679">
       <geom name="pitaya_pedestal_collision" type="box" pos="0 0 0.36" size="0.14 0.14 0.36" rgba=".24 .30 .35 1" />
       <body name="base_link" pos="0 0 0.72">
@@ -1367,103 +1350,103 @@
         </body>
       </body>
     </body>
-    <body name="fruit_2" pos="-2.150053 -0.600201 1.126119" xyaxes="0.0740396756 -0.314621544 -0.946325214 0.988366383 0.149565879 0.0276032788">
+    <body name="fruit_2" pos="-2.152049 -0.586121 1.121282" xyaxes="0.0740396756 -0.314621544 -0.946325214 0.988366383 0.149565879 0.0276032788">
       <freejoint name="fruit_2_free" />
-      <inertial pos="0 0 0" mass="0.30156556738545415" diaginertia="0.0003661165 0.0003747292 0.0002067947" />
-      <geom type="ellipsoid" size="0.04225804 0.04053323 0.06653811" name="skin_2" friction=".85 .015 .002" rgba="0.7791413 0.1168427 0.2494557 1" />
+      <inertial pos="0 0 0" mass="0.1399638977" diaginertia="0.0001018614 0.0001042577 0.0000575347" />
+      <geom type="ellipsoid" size="0.03271805 0.03138263 0.05151676" name="skin_2" friction=".85 .015 .002" rgba="0.7791413 0.1168427 0.2494557 1" />
       <geom type="mesh" mesh="row_bracts_2" material="bract_skin" euler="0 0 2.72329482775" contype="0" conaffinity="0" group="2" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06549846" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.006968 0.006194 0.002323" pos="0 0 0.05071182" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_6" pos="-1.865760 -0.831764 0.906002" xyaxes="0.04186492 0.1245212 -0.9913333 0.947863 -0.3186782 0">
+    <body name="fruit_6" pos="-1.861426 -0.818873 0.907804" xyaxes="0.04186492 0.1245212 -0.9913333 0.947863 -0.3186782 0">
       <freejoint name="fruit_6_free" />
-      <inertial pos="0 0 0" mass="0.28209156352467263" diaginertia="0.0003061847 0.0003143633 0.0001963713" />
-      <geom type="ellipsoid" size="0.04257696 0.04083912 0.06131241" name="skin_6" friction=".85 .015 .002" rgba="0.8603049 0.09081658 0.2506906 1" />
+      <inertial pos="0 0 0" mass="0.1319442788" diaginertia="0.0000862947 0.0000885998 0.0000553451" />
+      <geom type="ellipsoid" size="0.03305025 0.03170126 0.04759360" name="skin_6" friction=".85 .015 .002" rgba="0.8603049 0.09081658 0.2506906 1" />
       <geom type="mesh" mesh="row_bracts_6" material="bract_skin" euler="0 0 5.10594501875" contype="0" conaffinity="0" group="2" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.0603544" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.006986 0.006210 0.002329" pos="0 0 0.04684995" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_7" pos="-1.425658 -0.733648 1.305738" xyaxes="0.149908426 0.537386587 -0.829905489 0.971519049 -0.235866008 0.0227588113">
+    <body name="fruit_7" pos="-1.422901 -0.721485 1.314112" xyaxes="0.149908426 0.537386587 -0.829905489 0.971519049 -0.235866008 0.0227588113">
       <freejoint name="fruit_7_free" />
-      <inertial pos="0 0 0" mass="0.2711098554607906" diaginertia="0.0003051398 0.0003123811 0.0001738671" />
-      <geom type="ellipsoid" size="0.04086643 0.03919841 0.06396163" name="skin_7" friction=".85 .015 .002" rgba="0.7441895 0.07917586 0.1800786 1" />
+      <inertial pos="0 0 0" mass="0.1214411225" diaginertia="0.0000800202 0.0000819192 0.0000455951" />
+      <geom type="ellipsoid" size="0.03126849 0.02999222 0.04893952" name="skin_7" friction=".85 .015 .002" rgba="0.7441895 0.07917586 0.1800786 1" />
       <geom type="mesh" mesh="row_bracts_7" material="bract_skin" euler="0 0 4.32200420527" contype="0" conaffinity="0" group="2" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06296223" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.006886 0.006121 0.002295" pos="0 0 0.04817484" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_11" pos="-1.407427 -0.662830 0.856684" xyaxes="0.0743078128 -0.412251824 -0.908034571 0.997235285 0.0310537089 0.0675089106">
+    <body name="fruit_11" pos="-1.407432 -0.650299 0.850994" xyaxes="0.0743078128 -0.412251824 -0.908034571 0.997235285 0.0310537089 0.0675089106">
       <freejoint name="fruit_11_free" />
-      <inertial pos="0 0 0" mass="0.2766148335789911" diaginertia="0.0002967347 0.0003046407 0.000189825" />
-      <geom type="ellipsoid" size="0.04227364 0.04054818 0.06098791" name="skin_11" friction=".85 .015 .002" rgba="0.8055564 0.1375728 0.2827794 1" />
+      <inertial pos="0 0 0" mass="0.1284327507" diaginertia="0.0000826106 0.0000848116 0.0000528470" />
+      <geom type="ellipsoid" size="0.03273430 0.03139820 0.04722557" name="skin_11" friction=".85 .015 .002" rgba="0.8055564 0.1375728 0.2827794 1" />
       <geom type="mesh" mesh="row_bracts_11" material="bract_skin" euler="0 0 2.80744587764" contype="0" conaffinity="0" group="2" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06003498" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.006969 0.006195 0.002323" pos="0 0 0.04648767" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_16" pos="-0.726591 -0.567067 1.281693" xyaxes="-0.203484239 0.484977361 -0.850524029 0.865249125 0.495610118 0.0755947222">
+    <body name="fruit_16" pos="-0.732520 -0.557744 1.288428" xyaxes="-0.203484239 0.484977361 -0.850524029 0.865249125 0.495610118 0.0755947222">
       <freejoint name="fruit_16_free" />
-      <inertial pos="0 0 0" mass="0.3845917996827753" diaginertia="0.0005005899 0.0005146281 0.0003370638" />
-      <geom type="ellipsoid" size="0.04777346 0.04582352 0.06639483" name="skin_16" friction=".85 .015 .002" rgba="0.7521681 0.08184022 0.2957067 1" />
+      <inertial pos="0 0 0" mass="0.2007128660" diaginertia="0.0001693457 0.0001740947 0.0001140261" />
+      <geom type="ellipsoid" size="0.03846317 0.03689324 0.05345553" name="skin_16" friction=".85 .015 .002" rgba="0.7521681 0.08184022 0.2957067 1" />
       <geom type="mesh" mesh="row_bracts_16" material="bract_skin" euler="0 0 2.43135011311" contype="0" conaffinity="0" group="2" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06535741" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.007246 0.006441 0.002415" pos="0 0 0.05262029" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_17" pos="-0.493255 -0.691493 1.051374" xyaxes="-0.0745015634 -0.169977735 -0.982627644 0.965803345 -0.257687902 -0.0286503777">
+    <body name="fruit_17" pos="-0.489128 -0.675687 1.048327" xyaxes="-0.0745015634 -0.169977735 -0.982627644 0.965803345 -0.257687902 -0.0286503777">
       <freejoint name="fruit_17_free" />
-      <inertial pos="0 0 0" mass="0.2944040855400907" diaginertia="0.0003801864 0.0003879587 0.0001866167" />
-      <geom type="ellipsoid" size="0.04062879 0.03897047 0.0702722" name="skin_17" friction=".85 .015 .002" rgba="0.6810867 0.1328414 0.2022508 1" />
+      <inertial pos="0 0 0" mass="0.1310410659" diaginertia="0.0000986512 0.0001006680 0.0000484235" />
+      <geom type="ellipsoid" size="0.03102095 0.02975479 0.05365433" name="skin_17" friction=".85 .015 .002" rgba="0.6810867 0.1328414 0.2022508 1" />
       <geom type="mesh" mesh="row_bracts_17" material="bract_skin" euler="0 0 0.447597366123" contype="0" conaffinity="0" group="2" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.0691742" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.006872 0.006108 0.002291" pos="0 0 0.05281598" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_22" pos="-0.143545 -0.575487 0.850445" xyaxes="-0.0713326233 0.564038177 -0.822661894 0.987197502 -0.0780413399 -0.13910658">
+    <body name="fruit_22" pos="-0.141745 -0.565115 0.857400" xyaxes="-0.0713326233 0.564038177 -0.822661894 0.987197502 -0.0780413399 -0.13910658">
       <freejoint name="fruit_22_free" />
-      <inertial pos="0 0 0" mass="0.3780852456241783" diaginertia="0.000478488 0.000492359 0.0003330499" />
-      <geom type="ellipsoid" size="0.04789503 0.04594013 0.06494061" name="skin_22" friction=".85 .015 .002" rgba="0.7230563 0.1252179 0.3070132 1" />
+      <inertial pos="0 0 0" mass="0.1977589389" diaginertia="0.0001624732 0.0001671832 0.0001130889" />
+      <geom type="ellipsoid" size="0.03858980 0.03701471 0.05232371" name="skin_22" friction=".85 .015 .002" rgba="0.7230563 0.1252179 0.3070132 1" />
       <geom type="mesh" mesh="row_bracts_22" material="bract_skin" euler="0 0 2.82624830967" contype="0" conaffinity="0" group="2" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06392592" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.007251 0.006446 0.002417" pos="0 0 0.05150615" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_46" pos="-1.968548 -0.387755 1.273617" xyaxes="0.4611996 -0.5800916 0.671408 -0.8622263 -0.1143989 0.4934357">
+    <body name="fruit_46" pos="-1.966254 -0.378919 1.279675" xyaxes="0.4611996 -0.5800916 0.671408 -0.8622263 -0.1143989 0.4934357">
       <freejoint name="fruit_46_free" />
-      <inertial pos="0 0 0" mass="0.3677504" diaginertia="0.0004214302 0.0004359076 0.0003476074" />
-      <geom name="skin_46" type="ellipsoid" size="0.04961335 0.04758831 0.05886589" friction=".85 .015 .002" rgba="0.7975023 0.1240546 0.2312912 1" />
+      <inertial pos="0 0 0" mass="0.1982651337" diaginertia="0.0001505039 0.0001556741 0.0001241398" />
+      <geom name="skin_46" type="ellipsoid" size="0.04037969 0.03873153 0.04791021" friction=".85 .015 .002" rgba="0.7975023 0.1240546 0.2312912 1" />
       <geom type="mesh" mesh="row_bracts_46" material="bract_skin" group="2" contype="0" conaffinity="0" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.05794611" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.007325 0.006511 0.002442" pos="0 0 0.04716162" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_47" pos="-2.421214 -0.516700 1.178998" xyaxes="-0.3422008 -0.5353557 -0.7722 -0.3242588 0.8386131 -0.4377035">
+    <body name="fruit_47" pos="-2.433731 -0.518128 1.185535" xyaxes="-0.3422008 -0.5353557 -0.7722 -0.3242588 0.8386131 -0.4377035">
       <freejoint name="fruit_47_free" />
-      <inertial pos="0 0 0" mass="0.2326982" diaginertia="0.0002256212 0.0002314717 0.0001404717" />
-      <geom name="skin_47" type="ellipsoid" size="0.03964866 0.03803035 0.05832349" friction=".85 .015 .002" rgba="0.7368192 0.09374182 0.1851877 1" />
+      <inertial pos="0 0 0" mass="0.1008024867" diaginertia="0.0000559556 0.0000574066 0.0000348379" />
+      <geom name="skin_47" type="ellipsoid" size="0.03000000 0.02877551 0.04413024" friction=".85 .015 .002" rgba="0.7368192 0.09374182 0.1851877 1" />
       <geom type="mesh" mesh="row_bracts_47" material="bract_skin" group="2" contype="0" conaffinity="0" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.05741218" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.006810 0.006053 0.002270" pos="0 0 0.04344070" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_48" pos="-1.782348 -0.448607 1.142126" xyaxes="0.1273198 0.9914009 -0.03022941 0.411601 -0.08053975 -0.9077984">
+    <body name="fruit_48" pos="-1.768169 -0.450228 1.148699" xyaxes="0.1273198 0.9914009 -0.03022941 0.411601 -0.08053975 -0.9077984">
       <freejoint name="fruit_48_free" />
-      <inertial pos="0 0 0" mass="0.2797989" diaginertia="0.0003332524 0.000340663 0.0001779339" />
-      <geom name="skin_48" type="ellipsoid" size="0.04069461 0.03903361 0.06657018" friction=".85 .015 .002" rgba="0.7910132 0.1133527 0.2423338 1" />
+      <inertial pos="0 0 0" mass="0.1247604638" diaginertia="0.0000867278 0.0000886564 0.0000463067" />
+      <geom name="skin_48" type="ellipsoid" size="0.03108951 0.02982055 0.05085770" friction=".85 .015 .002" rgba="0.7910132 0.1133527 0.2423338 1" />
       <geom type="mesh" mesh="row_bracts_48" material="bract_skin" group="2" contype="0" conaffinity="0" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06553002" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.006876 0.006112 0.002292" pos="0 0 0.05006305" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_49" pos="-1.365609 -0.540247 1.315663" xyaxes="-0.8192285 0.1286553 0.5588493 -0.3461122 0.6660803 -0.6607143">
+    <body name="fruit_49" pos="-1.359573 -0.530548 1.322279" xyaxes="-0.8192285 0.1286553 0.5588493 -0.3461122 0.6660803 -0.6607143">
       <freejoint name="fruit_49_free" />
-      <inertial pos="0 0 0" mass="0.2302425" diaginertia="0.0002111023 0.000217121 0.0001445109" />
-      <geom name="skin_49" type="ellipsoid" size="0.04042856 0.03877841 0.05550299" friction=".85 .015 .002" rgba="0.8285989 0.0749303 0.211214 1" />
+      <inertial pos="0 0 0" mass="0.1019286854" diaginertia="0.0000542848 0.0000558325 0.0000371608" />
+      <geom name="skin_49" type="ellipsoid" size="0.03081238 0.02955473 0.04230127" friction=".85 .015 .002" rgba="0.8285989 0.0749303 0.211214 1" />
       <geom type="mesh" mesh="row_bracts_49" material="bract_skin" group="2" contype="0" conaffinity="0" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.05463576" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.006859 0.006097 0.002286" pos="0 0 0.04164031" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_50" pos="-1.139882 -0.636169 0.942869" xyaxes="-0.6379988 0.7385207 -0.2180475 0.3067773 0.5034941 0.8077013">
+    <body name="fruit_50" pos="-1.147570 -0.641050 0.948832" xyaxes="-0.6379988 0.7385207 -0.2180475 0.3067773 0.5034941 0.8077013">
       <freejoint name="fruit_50_free" />
-      <inertial pos="0 0 0" mass="0.4036698" diaginertia="0.0004923988 0.0005093023 0.0004058605" />
-      <geom name="skin_50" type="ellipsoid" size="0.05116888 0.04908035 0.06074659" friction=".85 .015 .002" rgba="0.7701945 0.1142742 0.1964536 1" />
+      <inertial pos="0 0 0" mass="0.2232319728" diaginertia="0.0001834568 0.0001897547 0.0001512146" />
+      <geom name="skin_50" type="ellipsoid" size="0.04200000 0.04028571 0.04986149" friction=".85 .015 .002" rgba="0.7701945 0.1142742 0.1964536 1" />
       <geom type="mesh" mesh="row_bracts_50" material="bract_skin" group="2" contype="0" conaffinity="0" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.05979743" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.007387 0.006566 0.002462" pos="0 0 0.04908241" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_51" pos="-0.800939 -0.286776 1.412272" xyaxes="0.8548974 0.4758514 0.206678 0.07593188 0.2793229 -0.9571902">
+    <body name="fruit_51" pos="-0.793182 -0.299381 1.409209" xyaxes="0.8548974 0.4758514 0.206678 0.07593188 0.2793229 -0.9571902">
       <freejoint name="fruit_51_free" />
-      <inertial pos="0 0 0" mass="0.3371775" diaginertia="0.0004453549 0.0004556432 0.0002470263" />
-      <geom name="skin_51" type="ellipsoid" size="0.04367902 0.04189621 0.06963383" friction=".85 .015 .002" rgba="0.8137986 0.07421443 0.2713938 1" />
+      <inertial pos="0 0 0" mass="0.1618266748" diaginertia="0.0001310264 0.0001340533 0.0000726768" />
+      <geom name="skin_51" type="ellipsoid" size="0.03419821 0.03280237 0.05451937" friction=".85 .015 .002" rgba="0.8137986 0.07421443 0.2713938 1" />
       <geom type="mesh" mesh="row_bracts_51" material="bract_skin" group="2" contype="0" conaffinity="0" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.0685458" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.007046 0.006264 0.002349" pos="0 0 0.05366750" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
-    <body name="fruit_52" pos="0.023626 -0.383827 0.980253" xyaxes="-0.9342685 -0.3559066 0.02174351 -0.1759925 0.4072348 -0.8962067">
+    <body name="fruit_52" pos="0.019194 -0.371806 0.986586" xyaxes="-0.9342685 -0.3559066 0.02174351 -0.1759925 0.4072348 -0.8962067">
       <freejoint name="fruit_52_free" />
-      <inertial pos="0 0 0" mass="0.3345556" diaginertia="0.0004217653 0.0004322862 0.0002526098" />
-      <geom name="skin_52" type="ellipsoid" size="0.04434265 0.04253274 0.06703979" friction=".85 .015 .002" rgba="0.7146162 0.1252687 0.2932061 1" />
+      <inertial pos="0 0 0" mass="0.1629621873" diaginertia="0.0001271848 0.0001303574 0.0000761753" />
+      <geom name="skin_52" type="ellipsoid" size="0.03488948 0.03346541 0.05274794" friction=".85 .015 .002" rgba="0.7146162 0.1252687 0.2932061 1" />
       <geom type="mesh" mesh="row_bracts_52" material="bract_skin" group="2" contype="0" conaffinity="0" />
-      <geom type="ellipsoid" size=".009 .008 .003" pos="0 0 0.06599229" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
+      <geom type="ellipsoid" size="0.007081 0.006295 0.002360" pos="0 0 0.05192375" rgba=".40 .27 .13 1" contype="0" conaffinity="0" />
     </body>
   </worldbody>
   <contact>
