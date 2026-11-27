@@ -8,7 +8,7 @@ else()
   FetchContent_Declare(
     aimrt_mujoco_sim 
     GIT_REPOSITORY "https://gh-proxy.org/https://github.com/wxnlP/aimrt_mujoco_sim.git"
-    GIT_TAG "v1.0.2-camera.1"
+    GIT_TAG "wxnlP/test_auto_detach"
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     OVERRIDE_FIND_PACKAGE)
 endif()
